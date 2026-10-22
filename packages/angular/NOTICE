@@ -1,0 +1,6 @@
+Steppy Angular adapter (@steppy/angular)
+Copyright 2026 The Steppy Authors
+
+This package is licensed under the Apache License, Version 2.0 (see LICENSE).
+It bundles no third-party code; the tour overlay it loads comes from the
+@steppy/player peer dependency.

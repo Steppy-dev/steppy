@@ -1,0 +1,61 @@
+{
+  "buildId": "demo-0001",
+  "entry": {
+    "route": "/invoices"
+  },
+  "guideUrl": "https://guide.example.com/create-invoice/fr.html",
+  "id": "create-invoice",
+  "kind": "steppy-tour",
+  "locale": "fr",
+  "schema": 1,
+  "steps": [
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "new-invoice-btn",
+      "placement": "bottom",
+      "target": "new-invoice-btn",
+      "text": "Cliquez sur **Nouvelle facture** pour ouvrir le formulaire.",
+      "title": "Nouvelle facture",
+      "waitFor": "invoice-list"
+    },
+    {
+      "advance": {
+        "on": "input"
+      },
+      "id": "invoice-title",
+      "target": "invoice-title",
+      "text": "Donnez à la facture un titre court que votre client reconnaîtra.",
+      "title": "Titre"
+    },
+    {
+      "advance": {
+        "on": "change"
+      },
+      "id": "customer-select",
+      "target": "customer-select",
+      "text": "Choisissez le client à facturer.",
+      "title": "Client"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "save-invoice-btn",
+      "target": "save-invoice-btn",
+      "text": "Cliquez sur **Enregistrer**. La facture s'ouvre sur sa propre page.",
+      "title": "Enregistrer"
+    },
+    {
+      "advance": {
+        "on": "manual"
+      },
+      "id": "invoice-detail",
+      "target": "invoice-detail",
+      "text": "Votre facture est enregistrée en brouillon. Vous pouvez l'envoyer depuis cette page.",
+      "title": "Terminé"
+    }
+  ],
+  "title": "Créer une facture"
+}

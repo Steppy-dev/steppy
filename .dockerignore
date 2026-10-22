@@ -1,0 +1,54 @@
+# Build context for the worker image (see Dockerfile). The image build only
+# needs: pyproject.toml, hatch_build.py, src/, templates/, skills/,
+# CHANGELOG.md. Everything else is excluded to keep `docker build` fast and
+# to keep local secrets/state from being sent to the Docker daemon.
+
+# VCS / editor
+.git/
+.github/
+.claude/
+
+# Secrets — never leave the host
+.auth/
+credentials.yaml
+credentials.yml
+
+# Runtime state / generated output
+.steppy/
+output/
+tests/e2e/
+
+# Python caches / envs
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node workspaces — the built player bundle is vendored at
+# src/steppy/_player_bundle/, so packages/ isn't needed for the image build.
+packages/
+node_modules/
+**/node_modules/
+
+# Project/dev files not needed to pip-install the steppy package
+tests/
+fixtures/
+scenarios/
+seed/
+config.yaml
+credentials.yaml.example
+steppy.guide.config.ts
+steppy-config.schema.json
+docker-compose*.yml
+Dockerfile
+.dockerignore
+README.md
+SECURITY.md
+CONTRIBUTING.md
+NEW_COMMANDS.md
+PROJECT.md

@@ -1,0 +1,124 @@
+{# The gap buckets. Not line coverage: this answers "which of my declared routes
+   and API endpoints has any e2e scenario actually exercised". Autoescape is ON. #}
+<!doctype html>
+<html lang="en">
+<head>
+{% include "report/_head.html.j2" %}
+</head>
+<body>
+    <header class="steppy-report-header">
+        <h1>{% include "report/_mark.html.j2" %}E2E surface coverage</h1>
+        <p class="steppy-report-meta steppy-small">
+            <span><a href="{{ root }}index.html">&larr; Run report</a></span>
+            <span>source: {{ coverage.tier }}</span>
+        </p>
+    </header>
+
+    <main class="steppy-report-main">
+
+        <section class="steppy-report-section">
+            <div class="steppy-badge-line">
+                {% if coverage.badge.percent is not none %}
+                <span class="steppy-pct">{{ coverage.badge.percent }}%</span>
+                <span class="steppy-muted">
+                    {{ coverage.badge.tested }} of {{ coverage.badge.declared }} declared
+                    {{ coverage.badge.surface if coverage.badge.surface != 'all' else 'endpoints and routes' }}
+                    a UI test could reach
+                </span>
+                {% else %}
+                <span class="steppy-pct steppy-muted">n/a</span>
+                <span class="steppy-muted">
+                    nothing declared. Configure <code>coverage.apis</code> (and optionally
+                    <code>coverage.sitemap</code>), then run <code>steppy coverage refresh</code>.
+                </span>
+                {% endif %}
+            </div>
+            <p class="steppy-small steppy-muted">
+                This is not line coverage. It answers which of the routes and API endpoints you
+                <em>declared</em> any scenario actually exercised — the denominator is the declared
+                surface minus what is marked non-UI-testable.
+            </p>
+            {% if coverage.non_ui.declared %}
+            <p class="steppy-small">
+                {{ coverage.non_ui.declared }} declared item{{ '' if coverage.non_ui.declared == 1 else 's' }}
+                discounted as <code>non_ui</code>
+                ({% for source, count in coverage.non_ui.by_source.items() %}{{ count }} from {{ source }}{% if not loop.last %}, {% endif %}{% endfor %}).
+                Committed rules live in <code>coverage.non_ui</code>; a <code>store</code> source is
+                a flag set locally with <code>steppy coverage triage set</code>.
+            </p>
+            {% endif %}
+        </section>
+
+        {% if not coverage.capabilities_strength %}
+        <div class="steppy-notice">
+            <strong>Assert strength is not shown.</strong> These numbers were rebuilt from the
+            run's raw records, and a bundle carries no <code>scenarios/*.md</code> to count assert
+            steps in — so every tested endpoint would read as weakly covered, which would be a
+            plausible-looking lie. Run <code>steppy coverage report</code> in the project for the
+            strong/weak split.
+        </div>
+        {% endif %}
+
+        {% for kind in ('endpoints', 'routes') %}
+        {% set counts = coverage.counts.get(kind) %}
+        {% if counts %}
+        <section class="steppy-report-section">
+            <h2>{{ kind | capitalize }}</h2>
+            <p class="steppy-report-meta">
+                <span><strong>{{ counts.declared }}</strong> declared</span>
+                <span><strong>{{ counts.tested }}</strong> tested{% if coverage.capabilities_strength %} ({{ counts.tested_strong }} strongly asserted){% endif %}</span>
+                <span><strong>{{ counts.declared_unreached }}</strong> never reached ({{ counts.declared_unreached_actionable }} actionable)</span>
+                <span><strong>{{ counts.discovered_uncovered }}</strong> seen but weakly covered</span>
+                {% if counts.discovered_tested %}<span><strong>{{ counts.discovered_tested }}</strong> tested but undeclared</span>{% endif %}
+            </p>
+
+            {% set unreached = bucket(kind, 'declared_unreached') | rejectattr('triage', 'equalto', 'non_ui') | list %}
+            {% if unreached %}
+            <h3 class="steppy-small">Declared but never reached &mdash; where a new scenario pays off</h3>
+            <div class="steppy-scroll">
+                <table class="steppy-report-table">
+                    <thead><tr>{% if kind == 'endpoints' %}<th>API</th><th>Method</th>{% endif %}<th>Path</th></tr></thead>
+                    <tbody>
+                        {% for row in unreached[:200] %}
+                        <tr>{% if kind == 'endpoints' %}<td>{{ row.api }}</td><td>{{ row.method }}</td>{% endif %}<td><code>{{ row.key }}</code></td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if unreached | length > 200 %}
+            <p class="steppy-small steppy-muted">&hellip; and {{ unreached | length - 200 }} more; see <a href="{{ root }}report.json">report.json</a>.</p>
+            {% endif %}
+            {% endif %}
+
+            {% set weak = bucket(kind, 'discovered_uncovered') %}
+            {% if weak %}
+            <h3 class="steppy-small">Exercised but not asserted</h3>
+            <div class="steppy-scroll">
+                <table class="steppy-report-table">
+                    <thead><tr>{% if kind == 'endpoints' %}<th>API</th><th>Method</th>{% endif %}<th>Path</th><th>Scenarios</th></tr></thead>
+                    <tbody>
+                        {% for row in weak[:200] %}
+                        <tr>{% if kind == 'endpoints' %}<td>{{ row.api }}</td><td>{{ row.method }}</td>{% endif %}<td><code>{{ row.key }}</code></td><td class="steppy-small">{{ row.scenarios | join(', ') }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </section>
+        {% endif %}
+        {% endfor %}
+
+        {% if coverage.warnings %}
+        <section class="steppy-report-section">
+            <h2>Warnings</h2>
+            <ul class="steppy-small">{% for warning in coverage.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+        </section>
+        {% endif %}
+
+    </main>
+
+    <footer class="steppy-report-footer">
+        <p><a href="{{ root }}index.html">&larr; Run report</a></p>
+    </footer>
+</body>
+</html>

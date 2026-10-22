@@ -1,0 +1,178 @@
+# Steppy CI pipeline — copy this to .gitlab-ci.yml in your project.
+#
+# Runs your Steppy scenarios on every push / merge request, and publishes a
+# browsable run report as a job artifact.
+#
+# Prerequisites in your project:
+#   - config.yaml + scenarios/ committed
+#   - credentials provided via CI/CD variables (referenced as ${VAR} in
+#     config.yaml — e.g. STEPPY_ADMIN_USERNAME / STEPPY_ADMIN_PASSWORD). Mark
+#     them Masked, and Protected if they only belong on protected branches.
+#   - your app reachable from the runner (a `services:` entry, a prior job, or
+#     apps.<role>.url pointing at a deployed environment)
+
+stages:
+  - test
+
+variables:
+  # Keep pip's cache inside the project so `cache:` below can actually reach it.
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+e2e:
+  stage: test
+  # The Playwright image already carries the browsers and their system
+  # dependencies, which is the slow half of `playwright install --with-deps`.
+  # Pin the tag to the Playwright version your steppy requires.
+  image: mcr.microsoft.com/playwright/python:v1.60.0-jammy
+  cache:
+    key:
+      files:
+        - pyproject.toml
+    paths:
+      - .cache/pip
+  script:
+    # Steppy is not on PyPI yet, so CI installs from git. Pin a tag rather than a
+    # branch: an e2e suite that silently changes its own tooling mid-week turns
+    # every unexplained failure into a two-hour bisect.
+    #
+    # The extras are what make `report.html` and `report.retries` /
+    # `steppy run --retries N` do anything — without them Steppy warns and skips
+    # those features rather than failing the run. `bundle` adds zstd compression.
+    - pip install 'steppy-dev[retry,report,bundle] @ git+https://github.com/Steppy-dev/steppy.git@v0.3.0'
+    # In-app tours (only with `tours.enabled: true`): fail fast when the tour files
+    # committed to the app no longer match the scenarios. It compares content for
+    # the build id each committed copy records, so a new commit alone never fails
+    # it. The app under test must be built with those files before the replays run.
+    # - steppy tours --check
+    - steppy generate
+    # --bundle records per-test and per-step events plus JUnit XML, which is what
+    # lets the report name the step a failure died in rather than only the test.
+    - steppy run --trace --bundle
+  after_script:
+    # after_script runs even when the run failed, which is exactly when the
+    # report matters. `steppy report` exits 0 either way — it describes
+    # rendering, not the run — so it never masks the job's real status.
+    - steppy report || true
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - output/report/
+      - output/
+    reports:
+      # Set report.junit_xml in config.yaml, or use --bundle's fixed path, and
+      # GitLab renders per-test results in the merge request widget.
+      junit: output/junit/*/*.xml
+
+# ── Publishing the report to GitLab Pages ─────────────────────────────────────
+#
+# GitLab Pages has one real advantage over GitHub's for this: it can be
+# restricted to project members (Settings → Pages → "Access Control", or
+# `pages.access_control` in gitlab.rb on self-managed). That makes publishing a
+# run report viable for client work, which is not true on GitHub Pages.
+#
+# ⚠ Still read this first. Access control is a project setting, not something
+# this file can guarantee — check it before the first deploy. A public Pages site
+# publishes your screenshots permanently. `screenshot.mask` (config.yaml) can
+# redact fields at capture time, and the report marks every page `noindex` and
+# ships a robots.txt that disallows everything, but neither is a control you
+# should rely on. `--screenshots failed` (the default) copies only the captures of
+# variants that did not pass; `--screenshots all` puts every step of every locale
+# and layout on whatever the site's audience turns out to be.
+#
+# GitLab Pages publishes whatever a job named `pages` leaves in `public/`.
+#
+# pages:
+#   stage: deploy
+#   image: alpine:latest
+#   needs:
+#     - job: e2e
+#       artifacts: true
+#   # Default branch only: a report from every merge request would publish work
+#   # in progress, and each deploy replaces the last.
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+#       when: always
+#   script:
+#     - mv output/report public
+#   artifacts:
+#     paths:
+#       - public
+#
+# A project has exactly ONE Pages site. If you also publish generated guides
+# (`steppy build`), decide the tree before anything links to it — e.g. the report
+# under public/report/ and the guides under public/guides/ — because moving the
+# report later also moves badge.json, and that URL is a contract with every
+# README that points at it.
+#
+# ── The e2e-surface coverage badge ────────────────────────────────────────────
+#
+# `steppy report` writes a shields endpoint at badge.json in the site root, so
+# once the pages job above is live the badge is served at $CI_PAGES_URL/badge.json:
+#
+#   ![e2e surface](https://img.shields.io/endpoint?url=https://<group>.gitlab.io/<project>/badge.json)
+#
+# Three prerequisites, in order — miss any one and there is no number:
+#
+#   1. badge.json is written ONLY when the run recorded coverage. Without
+#      `steppy run --coverage` the report has no coverage section and no badge
+#      file at all, and the shields URL 404s.
+#   2. A percentage needs a DECLARED surface to score against, which means a
+#      `coverage:` block in config.yaml naming `coverage.apis[].openapi` (a URL
+#      the runner can reach) and optionally `coverage.sitemap`. With coverage
+#      recorded but nothing declared, the badge honestly reads `n/a` in grey
+#      rather than 0%.
+#   3. `steppy coverage refresh` EXITS 1 when no `coverage:` block is configured,
+#      which is why these steps are not armed by default.
+#
+# Two things worth knowing before you turn it on:
+#
+#   * Recording drives CDP precise coverage, which costs runtime — recording it
+#     on default-branch pipelines only is usually the right trade.
+#   * Declare `coverage.non_ui` in config.yaml (health checks, webhook receivers,
+#     OAuth callbacks, internal cron). Triage flags set with `steppy coverage
+#     triage` live in the gitignored .steppy/coverage.db, so a fresh CI checkout
+#     has none and every one of those endpoints counts against you.
+#
+#   script:
+#     - steppy run --trace --bundle --coverage
+#   after_script:
+#     - steppy coverage refresh && steppy coverage report --json output/coverage/gaps.json || true
+#     - steppy report || true
+#
+# ── Results bundles ───────────────────────────────────────────────────────────
+#
+# Instead of (or alongside) a loose output/ tree, package the run into one
+# portable, self-describing archive:
+#
+#   after_script:
+#     - steppy bundle create || true
+#   artifacts:
+#     paths:
+#       - output/bundles/
+#
+# The archive holds output/ exactly as steppy wrote it, so `tar -xf` then
+# `steppy report`, `steppy guide` or `steppy build` works unchanged on a
+# downloaded artifact.
+#
+# ── Running in parallel ───────────────────────────────────────────────────────
+#
+# `steppy run --workers 4` needs a `parallel:` block + per-app internal_url in
+# config.yaml, a docker-compose file with healthchecks, and Docker available to
+# the runner (a docker:dind service, or a shell executor on a Docker host). Two
+# things worth knowing about the output:
+#
+#   * Failed scenarios are re-run once at reduced concurrency. One that then
+#     passes is reported as FLAKY and does NOT fail the pipeline — it lost a
+#     race, it is not broken. Pass --strict-flaky to change that, or
+#     --retry-pass 0 to turn the retry off.
+#   * If the app or auth is down, the run aborts after ~10 scenarios instead of
+#     burning the full wall clock on 300 identical failures.
+#
+# `steppy flaky` ranks repeat offenders across runs, which needs the history to
+# survive between pipelines:
+#
+#   cache:
+#     key: steppy-history
+#     paths:
+#       - .steppy/history.jsonl

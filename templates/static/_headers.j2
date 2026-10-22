@@ -1,0 +1,30 @@
+{# Response headers for the static site. Netlify and Cloudflare Pages read this
+   file; GitHub Pages, GitLab Pages and plain object storage ignore it entirely.
+   That is the same bargain `.nojekyll` makes -- meaningful where it is read,
+   harmless where it is not -- and none of it is access control. #}
+{% if public %}
+# A PDF is byte-for-byte the page it was printed from, and unlike that page it
+# cannot carry a <meta name="robots">. Without this header the published PDF is
+# the only indexable form of a handbook that is deliberately noindex, and it
+# competes with the HTML of every guide it duplicates.
+/*.pdf
+  X-Robots-Tag: noindex
+{% else %}
+# Private build. robots.txt already disallows the fetch and every *page* carries
+# a noindex meta -- but a PDF has no meta to carry, and a disallowed URL is still
+# listable from an external link. Say it for everything.
+/*
+  X-Robots-Tag: noindex
+{% endif %}
+{% if tours %}
+
+# In-app tour data (the tours `guide` target). Apps fetch these JSON files
+# cross-origin with credentials omitted, so any origin may read them; nothing
+# here is executable, and each file is pinned by the SRI hash the app bundles.
+/{{ tours.dir }}/*
+  Access-Control-Allow-Origin: *
+  X-Content-Type-Options: nosniff
+{% if public %}
+  X-Robots-Tag: noindex
+{% endif %}
+{% endif %}

@@ -1,0 +1,264 @@
+# Reusable Steppy E2E workflow.
+#
+# This file never runs for the Steppy repository itself — `workflow_call` only
+# fires when another repository calls it. Steppy's own CI is ci.yml.
+#
+# Call it from a project that holds config.yaml, scenarios/ and a compose file:
+#
+#   jobs:
+#     e2e:
+#       uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.3.0
+#       with:
+#         compose-file: docker-compose.yml
+#       secrets:
+#         steppy-env: ${{ secrets.STEPPY_ENV }}
+#
+# Pin a tag, never a branch. The ref you pin selects BOTH this recipe and, by
+# default, the Steppy version it installs — so a suite's tooling can only change
+# when someone edits that one line.
+#
+# Two properties of YOUR compose file decide whether this works, and both fail
+# the same way — every scenario red, with no error naming the cause:
+#
+#   1. `--wait` only waits on services that declare a `healthcheck:`. With none,
+#      it returns as soon as the containers exist and the run starts against a
+#      port that is not serving yet.
+#   2. The scenarios and the seed scripts run on the RUNNER, not in a container.
+#      So the app — and the database, if seed/*.py touches it — must publish its
+#      ports, and apps.<role>.url points at localhost.
+name: Steppy E2E
+
+on:
+  workflow_call:
+    inputs:
+      runs-on:
+        description: 'Runner to execute on. A self-hosted label reaches an app CI cannot.'
+        type: string
+        default: 'ubuntu-latest'
+      working-directory:
+        description: 'Directory holding config.yaml and scenarios/.'
+        type: string
+        default: '.'
+      compose-file:
+        description: 'Compose file that boots the application under test.'
+        type: string
+        default: 'docker-compose.yml'
+      compose-up:
+        description: 'Bring the stack up here. Set false when apps.<role>.url points at a deployed environment.'
+        type: boolean
+        default: true
+      wait-timeout:
+        description: 'Seconds to wait for compose healthchecks to pass.'
+        type: number
+        default: 180
+      python-version:
+        type: string
+        default: '3.12'
+      steppy-ref:
+        description: 'Git ref of Steppy to install. Defaults to the version this workflow ships with.'
+        type: string
+        default: 'v0.3.0'
+      extras:
+        description: 'Extras to install. `report` enables report.html, `retry` enables --retries.'
+        type: string
+        default: 'retry,report'
+      run-args:
+        description: 'Arguments for `steppy run`. --bundle is what lets the report name a failing STEP.'
+        type: string
+        default: '--trace --bundle'
+      report-output:
+        type: string
+        default: 'output/report'
+      screenshots:
+        description: 'Captures copied into the site: failed, all, or none.'
+        type: string
+        default: 'failed'
+      badge-surface:
+        description: 'What the coverage badge measures: all, endpoints, or routes.'
+        type: string
+        default: 'all'
+      report-title:
+        type: string
+        default: ''
+      artifact-name:
+        type: string
+        default: 'steppy-report'
+      artifact-retention-days:
+        type: number
+        default: 30
+      upload-output:
+        description: 'Also upload the raw output/ tree. Off by default — traces and videos are large.'
+        type: boolean
+        default: false
+    secrets:
+      steppy-env:
+        description: |
+          Optional dotenv-formatted KEY=VALUE lines, exported before the run.
+          This is how the ${VAR} refs in config.yaml get their values; the names
+          are yours, so they cannot be declared as individual inputs here.
+        required: false
+    outputs:
+      verdict:
+        description: 'Worst outcome across the run, in the bundle vocabulary.'
+        value: ${{ jobs.e2e.outputs.verdict }}
+      exit-code:
+        description: 'What a gate would use. 0 when every scenario passed.'
+        value: ${{ jobs.e2e.outputs.exit-code }}
+      scenarios:
+        value: ${{ jobs.e2e.outputs.scenarios }}
+      scenarios-not-passed:
+        value: ${{ jobs.e2e.outputs.scenarios-not-passed }}
+      badge-percent:
+        description: 'e2e-surface coverage, or empty when the run recorded none.'
+        value: ${{ jobs.e2e.outputs.badge-percent }}
+
+jobs:
+  e2e:
+    runs-on: ${{ inputs.runs-on }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      verdict: ${{ steps.summary.outputs.verdict }}
+      exit-code: ${{ steps.run.outputs.exit-code }}
+      scenarios: ${{ steps.summary.outputs.scenarios }}
+      scenarios-not-passed: ${{ steps.summary.outputs.scenarios-not-passed }}
+      badge-percent: ${{ steps.summary.outputs.badge-percent }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install Steppy
+        run: pip install "steppy-dev[${{ inputs.extras }}] @ git+https://github.com/Steppy-dev/steppy.git@${{ inputs.steppy-ref }}"
+
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      # Guarded in shell rather than with `if:` — the secrets context is not
+      # available to a step-level condition, and an unset optional secret is a
+      # normal state here, not a misconfiguration.
+      - name: Export scenario credentials
+        env:
+          STEPPY_ENV: ${{ secrets.steppy-env }}
+        run: |
+          if [ -n "$STEPPY_ENV" ]; then
+            printf '%s\n' "$STEPPY_ENV" >> "$GITHUB_ENV"
+            echo "exported $(printf '%s\n' "$STEPPY_ENV" | grep -c '=') credential(s)"
+          else
+            echo "no steppy-env secret provided; config.yaml \${VAR} refs must resolve some other way"
+          fi
+
+      - name: Start the application stack
+        if: inputs.compose-up
+        run: docker compose -f "${{ inputs.compose-file }}" up -d --wait --wait-timeout ${{ inputs.wait-timeout }}
+
+      - name: Generate tests
+        run: steppy generate
+
+      # The exit code is captured rather than allowed to abort the job, because
+      # everything worth having — the report, the logs, the artifacts — is
+      # produced by the steps AFTER this one. The gate at the end re-raises it.
+      - name: Run scenarios
+        id: run
+        run: |
+          set +e
+          steppy run ${{ inputs.run-args }}
+          code=$?
+          set -e
+          echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+          echo "steppy run exited $code"
+
+      # Red suite, and the first question is always "the tests or the stack?".
+      - name: Application logs
+        if: always() && inputs.compose-up && steps.run.outputs.exit-code != '0'
+        run: docker compose -f "${{ inputs.compose-file }}" logs --no-color --tail 200
+
+      # `steppy report` exits 0 even for a failing run — it describes rendering,
+      # not the run — so this never rewrites the verdict the gate below applies.
+      - name: Build the run report
+        if: always()
+        env:
+          TITLE: ${{ inputs.report-title }}
+        run: |
+          args=(--output "${{ inputs.report-output }}"
+                --screenshots "${{ inputs.screenshots }}"
+                --badge-surface "${{ inputs.badge-surface }}")
+          if [ -n "$TITLE" ]; then
+            args+=(--title "$TITLE")
+          fi
+          steppy report "${args[@]}"
+
+      - name: Summarise the run
+        id: summary
+        if: always()
+        env:
+          REPORT_DIR: ${{ inputs.report-output }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+
+          path = pathlib.Path(os.environ["REPORT_DIR"]) / "report.json"
+          data = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+          totals = data.get("totals") or {}
+          badge = (data.get("coverage") or {}).get("badge") or {}
+          percent = badge.get("percent")
+
+          out = {
+              "verdict": totals.get("verdict", "unknown"),
+              "scenarios": totals.get("scenarios", 0),
+              "scenarios-not-passed": totals.get("scenarios_not_passed", 0),
+              "badge-percent": "" if percent is None else percent,
+          }
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              for key, value in out.items():
+                  fh.write(f"{key}={value}\n")
+
+          # The verdict where a reader already is, so a green/red glance costs no
+          # artifact download. Outcomes come from the bundle's own vocabulary.
+          rows = "".join(f"| {name} | {count} |\n" for name, count in sorted((totals.get("outcomes") or {}).items()))
+          summary = [
+              f"## Steppy E2E — {out['verdict']}\n",
+              f"{out['scenarios']} scenario(s), {out['scenarios-not-passed']} not passed\n",
+          ]
+          if rows:
+              summary.append(f"\n| outcome | count |\n| --- | --- |\n{rows}")
+          if percent is not None:
+              summary.append(f"\ne2e surface: **{percent}%**\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
+              fh.write("".join(summary))
+          PY
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.working-directory }}/${{ inputs.report-output }}
+          retention-days: ${{ inputs.artifact-retention-days }}
+
+      - name: Upload results
+        if: always() && inputs.upload-output
+        uses: actions/upload-artifact@v4
+        with:
+          name: steppy-output
+          path: ${{ inputs.working-directory }}/output/
+          retention-days: ${{ inputs.artifact-retention-days }}
+
+      # `-v` so the next run starts from a clean database rather than inheriting
+      # whatever the last one's seeds left behind.
+      - name: Stop the application stack
+        if: always() && inputs.compose-up
+        run: docker compose -f "${{ inputs.compose-file }}" down -v
+
+      # Re-raise the run's verdict, after everything above has been produced.
+      # The empty guard matters: when an earlier step failed, `exit-code` is
+      # unset, the job is already failing, and a second error here would only
+      # point at the wrong cause.
+      - name: Verdict
+        if: always() && steps.run.outputs.exit-code != '' && steps.run.outputs.exit-code != '0'
+        run: |
+          echo "::error::steppy run exited ${{ steps.run.outputs.exit-code }} — see the report artifact"
+          exit 1

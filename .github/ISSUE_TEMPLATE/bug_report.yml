@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in Steppy behaves differently from what the docs say.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. A security vulnerability goes
+        through a private advisory instead (see SECURITY.md), never a public issue.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Scenarios, validate or generate
+        - Running tests (steppy run)
+        - Parallel runs (--workers)
+        - Guides, build, PDF or video
+        - In-app tours
+        - Report, bundle or coverage
+        - Recording (steppy record)
+        - "@steppy/player"
+        - "@steppy/angular"
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Include the full error. Re-running with `--verbose` (or `STEPPY_DEBUG=1`) prints the traceback.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: |
+        The command you ran, and the smallest scenario or `config.yaml` excerpt that shows the
+        problem. Use the neutral example domain if you can.
+      render: markdown
+    validations:
+      required: true
+
+  - type: input
+    id: steppy-version
+    attributes:
+      label: Steppy version
+      description: Output of `python -c "import steppy; print(steppy.__version__)"`, or the npm package version.
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version, Playwright version, and Node version if the problem involves `steppy build` or an npm package.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: redaction
+    attributes:
+      label: Before you submit
+      options:
+        - label: I removed credentials, tokens, internal URLs and personal data from the logs, config and screenshots above.
+          required: true

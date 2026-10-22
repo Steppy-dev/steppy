@@ -1,0 +1,417 @@
+{
+  "$defs": {
+    "BundleCoverage": {
+      "additionalProperties": true,
+      "description": "Pointer to the coverage records carried in this bundle.\n\n``run_id`` may legitimately differ from ``run.run_id``: a bundle created\nwith an explicit ``--run-id`` names itself after the identity its consumer\nassigned, while the records on disk keep whatever the run recorded them\nunder.",
+      "properties": {
+        "records": {
+          "default": 0,
+          "title": "Records",
+          "type": "integer"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        }
+      },
+      "title": "BundleCoverage",
+      "type": "object"
+    },
+    "BundleFile": {
+      "additionalProperties": true,
+      "description": "One archived file, content-addressed.\n\n``sha256`` is what makes uploads cheap: with locales \u00d7 layouts \u00d7 device\nscale factors, unchanged screenshots dominate a bundle, so a consumer can\nask only for digests it does not already hold.",
+      "properties": {
+        "frame": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Frame"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layout"
+        },
+        "locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locale"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "scenario": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "sha256",
+        "size"
+      ],
+      "title": "BundleFile",
+      "type": "object"
+    },
+    "BundleGit": {
+      "additionalProperties": true,
+      "description": "Where the run's code came from. Every field optional \u2014 a laptop run\noutside a repository has none of it, and that is not an error.",
+      "properties": {
+        "branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Branch"
+        },
+        "pr": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pr"
+        },
+        "sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha"
+        }
+      },
+      "title": "BundleGit",
+      "type": "object"
+    },
+    "BundleRun": {
+      "additionalProperties": true,
+      "description": "Run identity and provenance.",
+      "properties": {
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "executor": {
+          "default": "local",
+          "title": "Executor",
+          "type": "string"
+        },
+        "git": {
+          "$ref": "#/$defs/BundleGit"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "spec": {
+          "$ref": "#/$defs/BundleSpec"
+        },
+        "steppy_version": {
+          "title": "Steppy Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "steppy_version"
+      ],
+      "title": "BundleRun",
+      "type": "object"
+    },
+    "BundleSpec": {
+      "additionalProperties": true,
+      "description": "What the run was asked to do \u2014 the ``steppy run`` flags, resolved.\n\nRecorded by the run itself rather than reconstructed by the bundler: they\nare separate processes, and re-deriving this from flags a user retypes\ndrifts silently.",
+      "properties": {
+        "coverage": {
+          "default": false,
+          "title": "Coverage",
+          "type": "boolean"
+        },
+        "guide": {
+          "default": false,
+          "title": "Guide",
+          "type": "boolean"
+        },
+        "layouts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Layouts",
+          "type": "array"
+        },
+        "locales": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Locales",
+          "type": "array"
+        },
+        "no_asserts": {
+          "default": false,
+          "title": "No Asserts",
+          "type": "boolean"
+        },
+        "no_guide": {
+          "default": false,
+          "title": "No Guide",
+          "type": "boolean"
+        },
+        "scenario": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario"
+        },
+        "screenshots": {
+          "default": false,
+          "title": "Screenshots",
+          "type": "boolean"
+        },
+        "tag": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        },
+        "workers": {
+          "default": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "BundleSpec",
+      "type": "object"
+    },
+    "BundleTest": {
+      "additionalProperties": true,
+      "description": "One test result \u2014 one (scenario, locale, layout) parametrization.\n\n``outcome`` uses the ``STEPPY-EVT`` vocabulary: ``passed|failed|skipped|\nerror`` from a worker, plus ``interrupted`` and ``worker_died``, which a\ncoordinator synthesises for tests that were still in flight. Deliberately\na plain ``str`` rather than an enum \u2014 rule 2 in :mod:`steppy.contracts`.",
+      "properties": {
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "fail_tail_b64": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fail Tail B64"
+        },
+        "failed_step": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed Step"
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layout"
+        },
+        "locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locale"
+        },
+        "nodeid": {
+          "title": "Nodeid",
+          "type": "string"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "scenario": {
+          "title": "Scenario",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scenario",
+        "nodeid",
+        "outcome"
+      ],
+      "title": "BundleTest",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "The contract.",
+  "properties": {
+    "coverage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BundleCoverage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/BundleFile"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "run": {
+      "$ref": "#/$defs/BundleRun"
+    },
+    "steppy_bundle": {
+      "description": "Contract version; see ACCEPTED_BUNDLE_VERSIONS.",
+      "title": "Steppy Bundle",
+      "type": "integer"
+    },
+    "tests": {
+      "items": {
+        "$ref": "#/$defs/BundleTest"
+      },
+      "title": "Tests",
+      "type": "array"
+    },
+    "truncated": {
+      "default": false,
+      "title": "Truncated",
+      "type": "boolean"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "steppy_bundle",
+    "run"
+  ],
+  "title": "Steppy results bundle manifest",
+  "type": "object",
+  "x-steppy-bundle-accepted": [
+    1
+  ],
+  "x-steppy-bundle-version": 1
+}

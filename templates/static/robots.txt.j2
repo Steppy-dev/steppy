@@ -1,0 +1,7 @@
+User-agent: *
+{% if public %}
+Allow: /
+Sitemap: {{ sitemap_url }}
+{% else %}
+Disallow: /
+{% endif %}

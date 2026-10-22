@@ -1,0 +1,284 @@
+# Steppy CI workflow — copy this to .github/workflows/steppy.yml in your project.
+#
+# Brings your application stack up with Docker Compose, runs your Steppy
+# scenarios against it, and publishes a browsable run report as a build artifact.
+#
+# Prerequisites in your repo:
+#   - config.yaml + scenarios/ committed
+#   - a docker-compose.yml that boots your app (see the two notes on the compose
+#     step below — healthchecks and published ports are both load-bearing)
+#   - credentials provided via repository secrets (referenced as ${VAR} in
+#     config.yaml — e.g. STEPPY_ADMIN_USERNAME / STEPPY_ADMIN_PASSWORD)
+#
+# If your app already runs somewhere the runner can reach, drop the compose steps
+# and point apps.<role>.url at that deployment instead.
+#
+# This file is the OWNED copy: every trap is documented beside the step it applies
+# to, and it is yours to edit. If you would rather not own it, Steppy also ships
+# the same recipe as a reusable workflow — pin a tag, never a branch:
+#
+#   jobs:
+#     e2e:
+#       uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.3.0
+#       with:
+#         compose-file: docker-compose.yml
+#       secrets:
+#         steppy-env: ${{ secrets.STEPPY_ENV }}
+#
+# That form exposes verdict / exit-code / badge-percent as job outputs, but it IS
+# the job — you cannot interleave your own steps into it. Keep this file if you
+# need to (building an image before the run, for instance).
+name: Steppy E2E
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Steppy
+        # Steppy is not on PyPI yet, so CI installs from git. Pin a tag rather
+        # than a branch: an e2e suite that silently changes its own tooling
+        # mid-week turns every unexplained failure into a two-hour bisect.
+        #
+        # The extras are what make `report.html` and `report.retries` /
+        # `steppy run --retries N` actually do something — without them Steppy
+        # warns and skips those features rather than failing the run.
+        run: pip install 'steppy-dev[retry,report] @ git+https://github.com/Steppy-dev/steppy.git@v0.3.0'
+
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
+      # In-app tours (only with `tours.enabled: true` in config.yaml): fail fast
+      # when the tour files committed to the app no longer match the scenarios.
+      # No browser, no app. It compares content for the build id each committed
+      # copy records, so a new commit alone never fails it. The app must then be
+      # BUILT with those files (`docker compose up --build` below) before the
+      # tour replays run against it.
+      # - name: Check the in-app tour files are current
+      #   run: steppy tours --check
+
+      # Two things decide whether this step actually leaves you with a running
+      # app, and both are properties of YOUR compose file, not of this workflow:
+      #
+      #   1. `--wait` only waits on services that declare a `healthcheck:`. With
+      #      no healthchecks it returns as soon as the containers are created,
+      #      the scenarios start against a port that is not serving yet, and the
+      #      run dies wholesale. This is the most common first-run failure.
+      #   2. The scenarios and your seed scripts run HERE, on the runner — not
+      #      inside a container. So the app (and the database, if seeds touch it)
+      #      must publish its ports, and apps.<role>.url points at localhost.
+      - name: Start the application stack
+        run: docker compose up -d --wait --wait-timeout 180
+
+      - name: Generate tests
+        run: steppy generate
+
+      - name: Run scenarios
+        env:
+          # Map your repository secrets onto the ${VAR} refs in config.yaml.
+          STEPPY_ADMIN_USERNAME: ${{ secrets.STEPPY_ADMIN_USERNAME }}
+          STEPPY_ADMIN_PASSWORD: ${{ secrets.STEPPY_ADMIN_PASSWORD }}
+        # --bundle records per-test and per-step events plus JUnit XML, which is
+        # what lets the report below name the step a failure died in instead of
+        # only the test. It changes the pytest invocation, so it is opt-in.
+        run: steppy run --trace --bundle
+
+      # When the suite goes red, the question is almost always "was it the tests
+      # or the stack?" — and the stack's own logs are the fastest way to know.
+      - name: Application logs
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      # A browsable report of this run: outcomes, failure causes grouped so one
+      # broken selector across forty scenarios reads as one row, the failing step
+      # named, and its screenshot. Self-contained and relative — open index.html
+      # straight out of the downloaded artifact.
+      #
+      # `if: always()` because a failing run is exactly when you want it, and
+      # `steppy report` exits 0 either way: it describes rendering, not the run.
+      - name: Build the run report
+        if: always()
+        run: steppy report
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: steppy-report
+          path: output/report/
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: steppy-output
+          path: output/
+
+      # `-v` so the next run starts from a clean database rather than inheriting
+      # whatever the last one's seeds left behind.
+      - name: Stop the application stack
+        if: always()
+        run: docker compose down -v
+
+# ── Publishing the report to GitHub Pages ─────────────────────────────────────
+#
+# ⚠ READ THIS FIRST. GitHub Pages is PUBLIC — on a public repo there is no access
+# control, and a published screenshot is permanent and indexable. Your captures
+# show your app with real-looking data in it. `screenshot.mask` (config.yaml) can
+# redact fields at capture time, but a leak cannot be taken back.
+#
+#   * This is for SHOWCASE and open-source repos, where the stack under test is
+#     seeded with throwaway data. For client work, keep the artifact upload above
+#     and read the report from there.
+#   * The report marks every page `noindex` and ships a `robots.txt` that
+#     disallows everything, so it will not be indexed by a well-behaved crawler.
+#     That is a courtesy, not a control.
+#   * `--screenshots failed` (the default) copies only the captures of variants
+#     that did not pass. Use `--screenshots all` deliberately, knowing it puts
+#     every step of every locale and layout on the public internet — and that on
+#     a large suite it is also what pushes the site towards Pages' size limit.
+#
+# One-time setup: repository Settings → Pages → Source: "GitHub Actions".
+#
+# Publish as an ARTIFACT, never by committing to a gh-pages branch: screenshots
+# pushed on every run grow the repository's history forever and cannot be pruned
+# without a rewrite.
+#
+#   permissions:
+#     contents: read
+#     pages: write
+#     id-token: write
+#
+#   jobs:
+#     # ... the e2e job above ...
+#
+#     publish-report:
+#       # Default branch only. A report from every PR would publish work in
+#       # progress, and PR runs from forks cannot get an id-token anyway.
+#       if: always() && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+#       needs: e2e
+#       runs-on: ubuntu-latest
+#       environment:
+#         name: github-pages
+#         url: ${{ steps.deploy.outputs.page_url }}
+#       steps:
+#         - uses: actions/download-artifact@v4
+#           with:
+#             name: steppy-report
+#             path: site
+#         - uses: actions/configure-pages@v5
+#         - uses: actions/upload-pages-artifact@v3
+#           with:
+#             path: site
+#         - id: deploy
+#           uses: actions/deploy-pages@v4
+#
+# A repository has exactly ONE Pages site. If you also publish generated guides
+# (`steppy build`), decide the tree before anything links to it — e.g. the report
+# under site/report/ and the guides under site/guides/ — because moving the
+# report later also moves badge.json, and that URL is a contract with every
+# README that points at it.
+#
+# ── The e2e-surface coverage badge ────────────────────────────────────────────
+#
+# `steppy report` writes a shields endpoint at badge.json in the site root, so
+# once the Pages job above is live the badge is served at <page_url>/badge.json:
+#
+#   ![e2e surface](https://img.shields.io/endpoint?url=https://<owner>.github.io/<repo>/badge.json)
+#
+# Three prerequisites, in order — miss any one and there is no number:
+#
+#   1. badge.json is written ONLY when the run recorded coverage. Without
+#      `steppy run --coverage` the report has no coverage section and no badge
+#      file at all, and the shields URL 404s.
+#   2. A percentage needs a DECLARED surface to score against, which means a
+#      `coverage:` block in config.yaml naming `coverage.apis[].openapi` (a URL
+#      the runner can reach — your compose stack serving /openapi.json qualifies)
+#      and optionally `coverage.sitemap`. With coverage recorded but nothing
+#      declared, the badge honestly reads `n/a` in grey rather than 0%.
+#   3. `steppy coverage refresh` EXITS 1 when no `coverage:` block is configured,
+#      which is why these steps are not armed by default. Add them once you have
+#      declared a surface.
+#
+# Two things worth knowing before you turn it on:
+#
+#   * Recording drives CDP precise coverage, which costs runtime. On free
+#     runners, recording it on default-branch pushes only — and not on every PR
+#     — is usually the right trade.
+#   * Declare `coverage.non_ui` in config.yaml (health checks, webhook receivers,
+#     OAuth callbacks, internal cron). Triage flags set with `steppy coverage
+#     triage` live in the gitignored .steppy/coverage.db, so a fresh CI checkout
+#     has none and every one of those endpoints counts against you.
+#
+#   - name: Run scenarios
+#     run: steppy run --trace --bundle --coverage
+#
+#   - name: Refresh the declared surface
+#     if: always()
+#     run: steppy coverage refresh && steppy coverage report --json output/coverage/gaps.json
+#
+# ── Results bundles ───────────────────────────────────────────────────────────
+#
+# Instead of uploading a loose output/ tree, package the run into one portable,
+# self-describing archive. The run step already passes --bundle, so the event
+# records and JUnit XML a bundle needs are captured; add the packaging step:
+#
+#   - name: Package results
+#     if: always()
+#     run: steppy bundle create
+#
+#   - name: Upload results
+#     if: always()
+#     uses: actions/upload-artifact@v4
+#     with:
+#       name: steppy-bundle
+#       path: output/bundles/
+#
+# The archive holds output/ exactly as steppy wrote it, so `tar -xf` then
+# `steppy report` / `steppy guide` / `steppy build` works unchanged on a
+# downloaded artifact. Adding the `bundle` extra to the install line above gets
+# zstd compression; without it bundles are .tar.gz.
+
+# ── Running in parallel ───────────────────────────────────────────────────────
+#
+# For a large suite, swap the run step for `steppy run --workers 4 --trace`. Note
+# what that changes about the compose steps above: the coordinator brings up ONE
+# FULL STACK PER WORKER and tears them down itself, so you drop the explicit
+# `docker compose up` and give it `parallel.compose_file` instead. Four copies of
+# your app on one hosted runner is a lot — this earns its keep on a large suite
+# or a beefy self-hosted runner, not on a thirty-scenario suite.
+#
+# It needs a `parallel:` block + per-app `internal_url` in config.yaml,
+# healthchecks on your compose services, and Docker Compose 2.20+ on the runner
+# (ubuntu-latest has it). Two things worth knowing about the CI output:
+#
+#   * Failed scenarios are automatically re-run once at reduced concurrency. One
+#     that then passes is reported as FLAKY and does NOT fail the build — it lost
+#     a race, it is not broken. Pass --strict-flaky if you would rather CI go red
+#     on flakes, or --retry-pass 0 to turn the retry off entirely.
+#   * If the app or auth is down, the run aborts after ~10 scenarios instead of
+#     burning the full wall clock on 300 identical failures.
+#
+# `steppy flaky` ranks repeat offenders across runs, which is only useful if the
+# history survives between builds. Cache it around the run step:
+#
+#   - uses: actions/cache@v4
+#     with:
+#       path: .steppy/history.jsonl
+#       key: steppy-history-${{ github.run_id }}
+#       restore-keys: steppy-history-
+#
+# ...then add a reporting step after the run:
+#
+#   - name: Flakiest scenarios
+#     if: always()
+#     run: steppy flaky --last 20 --min-rate 0.1

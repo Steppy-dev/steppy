@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="{{ html_lang | default(default_locale, true) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ pick_locale(entry.title, default_locale, default_locale) }} — {{ pick_locale(site_title, default_locale, default_locale) }}</title>
+    {% include "static/_seo_head.html.j2" %}
+    <link rel="stylesheet" href="../assets/guides.css">
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      /* Wider than the 900px editorial column the guide pages use, on purpose:
+         this page is an app-like widget rather than prose, and the player's
+         sidebar template spends a fixed 340px of it on the step rail before the
+         screenshot gets any. At 1024px a 1440px-wide desktop capture rendered at
+         44%; here it reaches ~73%. */
+      .steppy-interactive-shell {
+        max-width: min(1440px, 100vw - 32px);
+        margin: 0 auto;
+        padding: 24px 16px;
+      }
+      .steppy-interactive-header {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .steppy-interactive-header h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 600;
+      }
+      .steppy-interactive-back {
+        color: #2563eb;
+        text-decoration: none;
+        font-size: 14px;
+      }
+      .steppy-interactive-back:hover { text-decoration: underline; }
+      steppy-guide { display: block; }
+    </style>
+</head>
+<body>
+    <div class="steppy-interactive-shell">
+        <header class="steppy-interactive-header">
+            <a class="steppy-interactive-back" href="{{ index_href }}">‹ {{ pick_locale(site_title, default_locale, default_locale) }}</a>
+            <h1>{{ pick_locale(entry.title, default_locale, default_locale) }}</h1>
+            {% include "static/_mode_links.html.j2" %}
+{% if layouts | length > 1 %}
+            <nav class="steppy-layout-switch" aria-label="Layout">
+                <ul>
+                    {% for layout in layouts %}
+                    <li>
+                        <button type="button" data-layout="{{ layout }}" {% if layout == default_layout %}aria-current="true"{% endif %}>{{ layout | capitalize }}</button>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+{% endif %}
+        </header>
+        <steppy-guide src="./guide.json" locale="{{ default_locale }}"{% if default_layout %} variant="{{ default_layout }}"{% endif %}{% if layouts | length > 1 %} hide-layout-switcher{% endif %}{% if cursor_mode %} cursor="{{ cursor_mode }}"{% endif %} template="{{ default_template }}"></steppy-guide>
+    </div>
+{% if layouts | length > 1 %}
+    <script>
+      (function () {
+        const persistKey = 'steppy:active-layout';
+        const layouts = {{ layouts | tojson }};
+        const guide = document.querySelector('steppy-guide');
+        const persisted = (function () {
+          try { return localStorage.getItem(persistKey); } catch (_) { return null; }
+        })();
+        const initial = (persisted && layouts.indexOf(persisted) !== -1)
+          ? persisted
+          : {{ default_layout | tojson }};
+        function applyLayout(name) {
+          if (layouts.indexOf(name) === -1) return;
+          if (guide) guide.setAttribute('variant', name);
+          document.querySelectorAll('.steppy-layout-switch button').forEach(function (b) {
+            if (b.getAttribute('data-layout') === name) {
+              b.setAttribute('aria-current', 'true');
+            } else {
+              b.removeAttribute('aria-current');
+            }
+          });
+          try { localStorage.setItem(persistKey, name); } catch (_) {}
+        }
+        applyLayout(initial);
+        document.querySelectorAll('.steppy-layout-switch button').forEach(function (b) {
+          b.addEventListener('click', function () { applyLayout(b.getAttribute('data-layout')); });
+        });
+      })();
+    </script>
+{% endif %}
+    <script type="module" src="../assets/steppy-player.js"></script>
+</body>
+</html>

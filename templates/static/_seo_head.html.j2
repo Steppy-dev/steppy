@@ -1,0 +1,37 @@
+{# Shared SEO <head> fragment. Rendered with a `seo` context dict built by
+   BuildAssembler._seo_for_page(). Private mode → only a noindex robots meta;
+   public mode → canonical + hreflang alternates + description + optional OG. #}
+{% if seo %}
+{% if seo.robots %}
+    <meta name="robots" content="{{ seo.robots }}">
+{% endif %}
+{% if seo.description %}
+    <meta name="description" content="{{ seo.description | e }}">
+{% endif %}
+{% if seo.canonical %}
+    <link rel="canonical" href="{{ seo.canonical | e }}">
+{% endif %}
+{% for alt in seo.alternates %}
+    <link rel="alternate" hreflang="{{ alt.hreflang | e }}" href="{{ alt.href | e }}">
+{% endfor %}
+{% if seo.og %}
+    <meta property="og:type" content="{{ seo.og.type }}">
+    <meta property="og:title" content="{{ seo.og.title | e }}">
+{% if seo.og.description %}
+    <meta property="og:description" content="{{ seo.og.description | e }}">
+{% endif %}
+    <meta property="og:url" content="{{ seo.og.url | e }}">
+{% if seo.og.site_name %}
+    <meta property="og:site_name" content="{{ seo.og.site_name | e }}">
+{% endif %}
+{% if seo.og.locale %}
+    <meta property="og:locale" content="{{ seo.og.locale | e }}">
+{% endif %}
+{% if seo.og.image %}
+    <meta property="og:image" content="{{ seo.og.image | e }}">
+    <meta name="twitter:card" content="summary_large_image">
+{% else %}
+    <meta name="twitter:card" content="summary">
+{% endif %}
+{% endif %}
+{% endif %}

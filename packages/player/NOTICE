@@ -1,0 +1,9 @@
+Steppy player (@steppy/player)
+Copyright 2026 The Steppy Authors
+
+This package is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Its bundles in dist/ include Lit (BSD-3-Clause, Copyright Google LLC);
+steppy-player.js and steppy-video.js also include Zod (MIT, Copyright
+Colin McDonnell), and steppy-tour.js includes Lit only. Their full license
+texts are in THIRD_PARTY_LICENSES.txt.

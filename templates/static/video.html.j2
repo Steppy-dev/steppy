@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="{{ html_lang | default(default_locale, true) }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ pick_locale(entry.title, default_locale, default_locale) }} — {{ pick_locale(site_title, default_locale, default_locale) }}</title>
+    {% include "static/_seo_head.html.j2" %}
+    <link rel="stylesheet" href="../assets/guides.css">
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      .steppy-video-shell {
+        max-width: 1024px;
+        margin: 0 auto;
+        padding: 24px 16px;
+      }
+      .steppy-video-header {
+        display: flex;
+        align-items: baseline;
+        gap: 16px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .steppy-video-header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+      .steppy-video-back { color: #2563eb; text-decoration: none; font-size: 14px; }
+      .steppy-video-back:hover { text-decoration: underline; }
+      .steppy-video-player {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        background: #000;
+        border-radius: 8px;
+      }
+      .steppy-video-switch ul {
+        list-style: none;
+        display: flex;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+      }
+      .steppy-video-switch button {
+        font: inherit;
+        font-size: 13px;
+        padding: 4px 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 999px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .steppy-video-switch button[aria-current='true'] {
+        background: #0f172a;
+        border-color: #0f172a;
+        color: #fff;
+      }
+      .steppy-video-downloads {
+        margin-top: 12px;
+        font-size: 13px;
+        color: #64748b;
+      }
+      .steppy-video-downloads a { color: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="steppy-video-shell">
+        <header class="steppy-video-header">
+            <a class="steppy-video-back" href="{{ index_href }}">‹ {{ pick_locale(site_title, default_locale, default_locale) }}</a>
+            <h1>{{ pick_locale(entry.title, default_locale, default_locale) }}</h1>
+            {% include "static/_mode_links.html.j2" %}
+{% if variants | length > 1 %}
+            <nav class="steppy-video-switch" aria-label="Version">
+                <ul>
+                    {% for variant in variants %}
+                    <li>
+                        <button type="button" data-variant="{{ variant.key }}" {% if loop.first %}aria-current="true"{% endif %}>{{ variant.label }}</button>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+{% endif %}
+        </header>
+
+        <video
+            id="steppy-video-player"
+            class="steppy-video-player"
+            controls
+            preload="metadata"
+            playsinline
+            poster="{{ variants[0].poster }}"
+        >
+            <source src="{{ variants[0].src }}" type="video/mp4">
+            {% for variant in variants %}
+            <track kind="captions" srclang="{{ variant.locale }}" label="{{ variant.label }}" src="{{ variant.captions }}"{% if loop.first %} default{% endif %}>
+            {% endfor %}
+        </video>
+
+        <p class="steppy-video-downloads">
+            <a id="steppy-video-download" href="{{ variants[0].src }}" download>Download MP4</a>
+        </p>
+    </div>
+{% if variants | length > 1 %}
+    <script>
+      (function () {
+        // Swapping <source> alone does nothing once the element has loaded — the
+        // src has to move onto the <video> itself, followed by load().
+        const variants = {{ variants | tojson }};
+        const player = document.getElementById('steppy-video-player');
+        const download = document.getElementById('steppy-video-download');
+        function apply(key) {
+          const variant = variants.find(function (v) { return v.key === key; });
+          if (!variant || !player) return;
+          player.pause();
+          player.setAttribute('src', variant.src);
+          player.setAttribute('poster', variant.poster);
+          player.load();
+          if (download) download.setAttribute('href', variant.src);
+          document.querySelectorAll('.steppy-video-switch button').forEach(function (b) {
+            if (b.getAttribute('data-variant') === key) {
+              b.setAttribute('aria-current', 'true');
+            } else {
+              b.removeAttribute('aria-current');
+            }
+          });
+        }
+        document.querySelectorAll('.steppy-video-switch button').forEach(function (b) {
+          b.addEventListener('click', function () { apply(b.getAttribute('data-variant')); });
+        });
+      })();
+    </script>
+{% endif %}
+</body>
+</html>

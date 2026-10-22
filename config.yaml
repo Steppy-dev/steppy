@@ -1,0 +1,316 @@
+# yaml-language-server: $schema=./steppy-config.schema.json
+#
+# Global configuration for Steppy
+#
+# This is a neutral example config. Replace the roles, URLs, and locales with
+# your own project's. A "role" is one front-end app / persona you test (here:
+# admin, editor, viewer) — use whatever names fit your product.
+#
+# Credentials use ${ENV_VAR} references so no secrets live in this committed
+# file. Set the vars in your environment/CI, or override the whole `credentials`
+# block via a gitignored `credentials.yaml` next to this file (see
+# credentials.yaml.example and SECURITY.md). ${VAR:-default} supplies a fallback.
+apps:
+  admin:
+    name: "Demo App — Admin"
+    url: "http://localhost:3000"
+    auth:
+      mode: form
+      credentials:
+        username: "${STEPPY_ADMIN_USERNAME}"
+        password: "${STEPPY_ADMIN_PASSWORD}"
+    # Per-locale localStorage values. Set when STEPPY_LOCALES drives a
+    # parametrized run (e.g. `steppy run --guide`) so the app renders in the
+    # right language before screenshots are captured.
+    i18n:
+      localstorage:
+        key: "app-language"
+        values:
+          en: "en"
+          fr: "fr"
+  editor:
+    name: "Demo App — Editor"
+    url: "http://localhost:3001"
+    auth:
+      mode: form
+      credentials:
+        username: "${STEPPY_EDITOR_USERNAME}"
+        password: "${STEPPY_EDITOR_PASSWORD}"
+  viewer:
+    name: "Demo App — Viewer"
+    url: "http://localhost:3002"
+    auth:
+      mode: form
+      credentials:
+        username: "${STEPPY_VIEWER_USERNAME}"
+        password: "${STEPPY_VIEWER_PASSWORD}"
+
+# Auth settings
+auth:
+  storage_state_dir: "./.auth"
+  storage_state_ttl: 3600  # seconds (1 hour)
+  # `form` = the generic hosted-login form-fill (works against any IdP with a
+  # fillable login form: Auth0, Keycloak, …). The legacy key `auth0:` and
+  # `mode: auth0` are still accepted as deprecated aliases.
+  form:
+    # Or name an IdP preset to fill the three selectors at once:
+    #   preset: keycloak      # -> #username / #password / #kc-login
+    #   preset: auth0         # -> the Auth0 defaults
+    username_selector: "input[name='username'], input[name='email'], #username"
+    password_selector: "input[name='password'], #password"
+    submit_selector: "button[type='submit'], button[name='action'][value='default']"
+    post_login_url_pattern: "**/callback**"
+    consent_selector: null
+    # TOTP/MFA (optional): set totp_selector here and a per-app
+    # credentials.totp_secret (env-ref) to auto-fill a time-based one-time code
+    # after the password submit. The auth0/keycloak presets fill a starter
+    # totp_selector too. totp_submit_selector defaults to submit_selector.
+    #   totp_selector: "#otp"
+    #   totp_submit_selector: null
+
+# Supported locales for guide generation. Add any locale code here — it flows
+# through capture, guide assembly, and the build with no code change.
+locales:
+  - en
+  - fr
+
+# Default locale for E2E test runs
+default_locale: en
+
+# Screenshot settings
+screenshot:
+  viewport:
+    width: 1280
+    height: 720
+  format: png
+  full_page: false
+  highlight: true
+  highlight_color: "rgba(255, 0, 0, 0.3)"
+  highlight_border: "2px solid red"
+  # Named layouts (viewports) for multi-device guide capture. When present,
+  # `steppy run --guide` (or `--layouts desktop,mobile`) parametrizes captures
+  # over each. `device_scale_factor` > 1 keeps narrow layouts crisp. Omit this
+  # block for single-viewport capture.
+  layouts:
+    desktop:
+      width: 1280
+      height: 720
+    mobile:
+      width: 390
+      height: 844
+      device_scale_factor: 2
+  # Redaction: elements matching these selectors are covered with a solid box in
+  # every screenshot (Playwright native mask). Use it to keep secrets/PII out of
+  # published guides. Empty = no masking. See SECURITY.md.
+  # mask:
+  #   - "input[name='password']"
+  #   - ".customer-name"
+  # mask_color: "#000000"
+
+# Security toggles. Defaults are the locked-down posture, so this block is
+# optional. See SECURITY.md.
+# security:
+#   # Allow `capture from.type=shell` (runs a shell command with page-derived
+#   # values — a command-injection vector, hence opt-in). Default: false.
+#   allow_shell_capture: false
+
+# Timing defaults
+timing:
+  navigation_wait: 2000
+  action_wait: 500
+  sqs_wait: 5000
+  step_timeout: 30000
+
+# Where artifacts are written and read back. Resolved against the project root;
+# an absolute value wins. `screenshots_dir` is honoured by the capture side (the
+# generated conftest, at runtime) and by every reader — `steppy guide`,
+# `steppy build`, `steppy bundle`. `guides_dir` is `steppy guide`'s output.
+#
+# Pointing either outside `output/` works, but only `output/` is archived by
+# `steppy bundle`, uploaded by the shipped CI workflow, gitignored by `steppy
+# init`, and mounted back to the host by `steppy run --workers N`. Each of those
+# warns instead of failing quietly.
+output:
+  screenshots_dir: "./output/screenshots"
+  guides_dir: "./output/guides"
+  # tours_dir: "./output/tours"   # in-app tours: <tours_dir>/<build-id>/ (see `tours:`)
+
+# CI reporting artifacts. Optional — all off by default, so omitting this block
+# keeps `steppy run` unchanged. See the CI workflow template shipped in the
+# package (templates/ci/github-actions.yml) and the README CI section.
+# report:
+#   junit_xml: "./output/reports/junit.xml"   # native JUnit for CI systems
+#   html: "./output/reports/report.html"      # needs: pip install 'steppy-dev[report]'
+#   trace: on-failure                          # off | on | on-failure
+#                                              # (`steppy run --trace` forces on-failure)
+#   video: on-failure                          # off | on | on-failure -> output/videos/
+#                                              # (`steppy run --video` forces on-failure)
+#   retries: 2                                 # rerun each failed test N times
+#                                              # needs: pip install 'steppy-dev[retry]'
+#                                              # (`steppy run --retries N` overrides)
+
+# Parallel execution (`steppy run --workers N`, N >= 2). Optional — the whole
+# block is ignored by single-worker runs. Every setting below has a working
+# default; only `internal_url` (per app, above) is mandatory.
+# parallel:
+#   workers: auto                # int, or "auto" = min(cpu//2, scenarios, 8)
+#   compose_file: docker-compose.yml
+#
+#   # Scenario-level retry pass. After the queue drains, the FAILED scenarios
+#   # are re-run at reduced concurrency in the still-running stacks. One that
+#   # then passes is reported as FLAKY (contention) rather than failed, and does
+#   # NOT fail the build — pass `steppy run --strict-flaky` if it should.
+#   # This is different from `report.retries` above, which reruns in-process,
+#   # immediately, under the same contention that probably caused the flake.
+#   retry:
+#     passes: 1                  # 0 disables; `--retry-pass N` overrides
+#     workers: 1                 # 1 = serial retries, zero cross-worker contention
+#
+#   # Abort early when nearly everything is failing (the app or auth is down)
+#   # instead of paying the full wall clock to learn it. Conservative on purpose:
+#   # BOTH thresholds must be met. `--no-fail-fast` disables for one run.
+#   circuit_breaker:
+#     enabled: true
+#     min_completed: 10          # don't judge before this many scenarios reported
+#     fail_ratio: 0.9            # ...and at least this fraction of them failed
+#
+#   # Give each worker a PRIVATE .auth dir instead of sharing the project's one
+#   # read-write across all N (which is a race on the storage-state file). Costs
+#   # N logins instead of 1. Turn on when each stack has its own database.
+#   # Mutually exclusive with `pre_auth` below.
+#   isolate_auth: false
+#
+#   # One-off in-network login before workers claim, for `mode: storage-state`
+#   # auth (Playwright storage state is origin-bound, so a host-captured session
+#   # does not authenticate workers reaching the app at internal_url).
+#   pre_auth:
+#     command: python auth_login.py --internal
+#     timeout: 600
+
+# Component-driver selectors for the component actions (`select-option`,
+# `confirm`, `toggle`, `pick-date`/`pick-time`, `expand`). Each block is
+# OPTIONAL — the defaults target PrimeNG, so they work out-of-the-box for
+# PrimeNG apps with no config. For another UI kit, name a `preset:` (built-in:
+# `primeng`, `material`, `primevue`, `mui`, `vuetify`, `shadcn`) to adopt a whole
+# kit at once, and/or override individual selectors (an explicit selector always
+# wins over the preset). Non-primeng presets are best-effort starters — verify
+# them against your app.
+#
+# dropdown:            # select-option
+#   preset: material   # or omit for PrimeNG defaults
+#   trigger: "p-select"
+#   overlay: ".p-select-overlay"
+#   option: ".p-select-option, .p-select-list-container li"
+#   filter: ".p-select-filter-container input, .p-select-filter"
+#   settle: api        # api = wait for networkidle after typing; none = no wait
+#
+# dialog:              # confirm
+#   overlay: ".p-confirmdialog, p-confirmdialog"
+#   accept: "button.p-confirmdialog-accept-button, button.p-confirm-dialog-accept"
+#   reject: "button.p-confirmdialog-reject-button, button.p-confirm-dialog-reject"
+#   danger: "button.p-button-danger, button.p-confirmdialog-accept-button"
+#
+# toggle:              # toggle (switch + segmented button)
+#   switch: 'input[role="switch"]'
+#   segment: ".p-togglebutton"
+#
+# datepicker:          # pick-date / pick-time
+#   panel: ".p-datepicker-panel"
+#   day_cell: ".p-datepicker-day-cell:not(.p-datepicker-other-month)"
+#   trigger: "button.p-datepicker-dropdown, button.p-datepicker-trigger"
+#
+# fieldset:            # expand (collapsible section)
+#   toggle: ".p-fieldset-toggle-button, .p-fieldset-legend"
+#   content: ".p-toggleable-content, .p-fieldset-content-container"
+
+# Coverage map settings (steppy run --coverage / steppy coverage ...). Optional —
+# recording only happens when --coverage is passed. `base_urls` must mirror each
+# OpenAPI servers[].url (including path prefixes like /api) and should include
+# Docker-internal internal_url origins so parallel-worker records classify.
+# coverage:
+#   apis:
+#     - name: orders-api
+#       openapi: "http://localhost:8080/openapi.json"   # URL or path; JSON or YAML
+#       base_urls: ["http://localhost:8080", "http://orders-backend:8080"]
+#   sitemap: null                        # optional sitemap.xml (URL or path)
+#   sourcemap_dir: "../app/dist"         # local build output holding *.js.map
+#   store_path: "./.steppy/coverage.db"  # survives output/ cleanup (triage flags)
+#   records_dir: "./output/coverage"     # raw per-run records (worker-writable)
+#   api_resource_types: [xhr, fetch]
+#   route_param_patterns: []             # extra full-segment regexes -> :id
+#   module_ignore: ["node_modules/", "webpack/"]
+#   # Endpoints/routes no UI test can ever reach. Declare them HERE rather than
+#   # only with `steppy coverage triage set`: that flag lives in
+#   # .steppy/coverage.db, which is gitignored, so CI starts with an empty store
+#   # and every endpoint counts against you. Grammar is `[<METHOD> ]<glob>`;
+#   # `*` crosses `/`, a pattern applies across every API above, and a
+#   # method-qualified pattern never matches a route. `steppy coverage report`
+#   # warns about a pattern that matches nothing.
+#   non_ui:
+#     - "GET /health"
+#     - "/webhooks/*"
+#     - "POST /internal/cron/*"
+
+# Narrated video export (steppy build --video / steppy guide --video). Optional —
+# rendering only happens when --video is passed AND (for `build`) the guide
+# declares modes: ['video']. Requires ffmpeg on PATH, including with
+# tts.provider: none — a silent captioned video still has to be encoded.
+# Run `steppy video check` to verify the toolchain before a long render.
+# video:
+#   fps: 24                  # cost knob: a render is frames x screenshot latency
+#   width: 1280              # height follows the capture aspect (mobile -> portrait).
+#                            # NOTE: cursor travel is timed over display distance,
+#                            # so changing width changes the video's duration.
+#   captions: band           # band | off
+#   crf: 23                  # libx264 quality, lower = bigger + better
+#   preset: medium           # libx264 speed/size tradeoff
+#   intro_ms: 1200           # title card
+#   outro_ms: 1500
+#   min_step_ms: 1500        # floor on a step's on-screen time
+#   narration_pad_ms: 400    # breathing room after the voiceover
+#   ffmpeg_path: null        # default: whatever `ffmpeg` resolves to on PATH
+#   cache: true              # skip a re-render whose inputs are unchanged
+#   branding:
+#     logo: "./assets/logo.png"   # embedded as a data URI (the page has no network)
+#     accent: "#d24f2c"
+#   stamp:
+#     enabled: false         # burn a provenance line into every frame
+#     text: "{version} · {date}"
+#     version: ${STEPPY_RELEASE:-dev}
+#   tts:
+#     # none (default: captions only, no install/network/bill) | piper | espeak |
+#     # http | elevenlabs | openai | azure | google | <entry-point name>.
+#     # Swapping providers is a config edit and nothing else.
+#     provider: none
+#     voice:                 # per-locale is the normal case for a multilingual guide
+#       fr: fr_FR-siwis-medium
+#       nl: nl_NL-mls-medium
+#     api_key: ${ELEVENLABS_API_KEY}   # never a literal — see SECURITY.md
+#     speed: 1.0
+#     # Any unsupported vendor, described directly — no preset, no code:
+#     # http:
+#     #   url: "https://vendor.example/v1/speak"
+#     #   headers: { Authorization: "Bearer {api_key}" }
+#     #   json: { text: "{text}", lang: "{locale}", voice: "{voice}" }
+#     #   response: binary   # or: json + audio_path + encoding: base64
+
+# In-app tours: guided popovers over your live app, compiled from scenarios that
+# opt in with `tour: true` — and replayed in CI, so a renamed test-id fails the
+# build instead of breaking a tour in production. Off by default; with the block
+# absent or `enabled: false` nothing tour-related is written. See docs/tours.md.
+# tours:
+#   enabled: true
+#   default: false                 # opt every scenario in (a scenario's `tour:` wins)
+#   build_id: git-sha              # git-sha | git-sha:<repo-path> | literal | "${APP_BUILD_ID:-git-sha}"
+#   locales: [fr, nl]              # default: `locales` above
+#   default_locale: fr
+#   guide_base_url: https://guide.example.com/   # "Open the full guide" links + the trusted origin
+#   test_id_attribute: data-testid
+#   replay: true                   # append test_<slug>__tour to each tour's scenario test
+#   layouts:                       # for layout-specific steps; keys must be screenshot.layouts
+#     desktop: "(min-width: 768px)"
+#     mobile: "(max-width: 767.98px)"
+#   targets:
+#     - type: app-assets           # a flat copy your app serves (never inside a build outputDir)
+#       path: ../invoice-app/public/tours
+#     - type: guide                # `steppy build` (static) republishes at <site>/tours/<build-id>/

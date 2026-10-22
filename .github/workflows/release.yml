@@ -1,0 +1,200 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches all package versions
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PROJECT_VERSION=$(grep -E '^version = ' pyproject.toml | head -1 | sed -E 's/version = "(.*)"/\1/')
+          TYPES_VERSION=$(python -c "import json;print(json.load(open('packages/steppy/package.json'))['version'])")
+          PLAYER_VERSION=$(python -c "import json;print(json.load(open('packages/player/package.json'))['version'])")
+          ANGULAR_VERSION=$(python -c "import json;print(json.load(open('packages/angular/package.json'))['version'])")
+          echo "Tag:     $TAG_VERSION"
+          echo "pyproject.toml:              $PROJECT_VERSION"
+          echo "packages/steppy/package.json: $TYPES_VERSION"
+          echo "packages/player/package.json: $PLAYER_VERSION"
+          echo "packages/angular/package.json: $ANGULAR_VERSION"
+          fail=0
+          for name_ver in "pyproject.toml=$PROJECT_VERSION" "packages/steppy=$TYPES_VERSION" "packages/player=$PLAYER_VERSION" "packages/angular=$ANGULAR_VERSION"; do
+            name="${name_ver%%=*}"; ver="${name_ver##*=}"
+            if [ "$TAG_VERSION" != "$ver" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match $name version $ver"
+              fail=1
+            fi
+          done
+          [ "$fail" = 0 ]
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/player/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install player workspace
+        run: npm --prefix packages/player ci
+
+      - name: Build player bundles
+        run: npm --prefix packages/player run build
+
+      # The tour overlay ships through npm only: its size budget and the
+      # package's contents are checked here, before anything is released.
+      - name: Tour overlay size budget and npm pack contents
+        run: |
+          npm --prefix packages/player run size:tour
+          npm --prefix packages/player run check:pack
+
+      - name: Vendor player bundles into Python package
+        run: |
+          cp packages/player/dist/steppy-player.js          src/steppy/_player_bundle/
+          cp packages/player/dist/steppy-player.js.map      src/steppy/_player_bundle/
+          cp packages/player/dist/steppy-cursor-legacy.js   src/steppy/_player_bundle/
+          cp packages/player/dist/steppy-cursor-legacy.js.map src/steppy/_player_bundle/
+          cp packages/player/dist/steppy-video.js           src/steppy/_player_bundle/
+          cp packages/player/dist/steppy-video.js.map       src/steppy/_player_bundle/
+          ls -la src/steppy/_player_bundle/
+
+      - name: Install build tools
+        run: pip install --upgrade build twine
+
+      - name: Build wheel + sdist
+        run: python -m build
+
+      # The README becomes the PyPI project page; a description PyPI cannot
+      # render is refused at upload, after the GitHub Release already exists.
+      - name: Check the metadata PyPI will render
+        run: twine check --strict dist/*
+
+      - name: Verify wheel contains vendored bundles
+        run: |
+          WHEEL=$(ls dist/*.whl | head -1)
+          echo "Inspecting $WHEEL"
+          python -m zipfile -l "$WHEEL" | tee /tmp/wheel-contents.txt
+          for f in steppy-player.js steppy-cursor-legacy.js steppy-video.js THIRD_PARTY_LICENSES.txt; do
+            if ! grep -q "steppy/_player_bundle/$f" /tmp/wheel-contents.txt; then
+              echo "::error::$f missing from wheel"
+              exit 1
+            fi
+          done
+          for f in LICENSE NOTICE; do
+            if ! grep -q "dist-info/licenses/$f" /tmp/wheel-contents.txt; then
+              echo "::error::$f missing from wheel"
+              exit 1
+            fi
+          done
+          # The tour replay helper is copied next to conftest.py by `generate`;
+          # the tour overlay itself is never vendored (it ships through npm).
+          if ! grep -q "steppy/templates/_steppy_tours.py" /tmp/wheel-contents.txt; then
+            echo "::error::templates/_steppy_tours.py missing from wheel"
+            exit 1
+          fi
+          if grep -q "steppy-tour.js" /tmp/wheel-contents.txt; then
+            echo "::error::steppy-tour.js must not be vendored into the wheel"
+            exit 1
+          fi
+
+      # The PyPI job publishes these exact files rather than building again.
+      - name: Keep the distributions for the PyPI job
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            dist/*.whl dist/*.tar.gz
+
+      - name: PyPI publishing is off
+        if: vars.PYPI_PUBLISH != 'true'
+        run: echo "::notice::The PYPI_PUBLISH repository variable is not 'true'; steppy-dev is not published to PyPI"
+
+  # steppy-dev on PyPI, through Trusted Publishing: PyPI trusts this workflow
+  # in this repository and the `pypi` environment, so no token is stored.
+  # Skipped until the PYPI_PUBLISH repository variable is 'true', which is set
+  # once the trusted publisher exists (CONTRIBUTING.md, "Releasing").
+  publish-pypi:
+    needs: build-and-release
+    if: vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/steppy-dev/
+    permissions:
+      id-token: write  # Trusted Publishing
+    # Every step here can mint the token that uploads to PyPI, so each action
+    # is pinned to a commit rather than a tag its owner could move.
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: python-dist
+          path: dist/
+
+      - name: Publish steppy-dev
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+
+  # @steppy/player (the guide player and the in-app tour overlay) and
+  # @steppy/angular. Skipped until an NPM_TOKEN secret exists; the player
+  # goes first because the adapter names it as a peer at the same version.
+  publish-npm:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # npm provenance
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - name: No npm token
+        if: env.NODE_AUTH_TOKEN == ''
+        run: echo "::notice::NPM_TOKEN is not set; the npm packages are not published"
+
+      - uses: actions/checkout@v4
+        if: env.NODE_AUTH_TOKEN != ''
+
+      - uses: actions/setup-node@v4
+        if: env.NODE_AUTH_TOKEN != ''
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Build the player and the Angular adapter
+        if: env.NODE_AUTH_TOKEN != ''
+        run: |
+          npm --prefix packages/player ci
+          npm --prefix packages/player run build
+          npm --prefix packages/player run check:pack
+          npm --prefix packages/angular ci
+          npm --prefix packages/angular run build
+
+      - name: Publish @steppy/player
+        if: env.NODE_AUTH_TOKEN != ''
+        run: npm publish ./packages/player --provenance --ignore-scripts
+
+      - name: Publish @steppy/angular
+        if: env.NODE_AUTH_TOKEN != ''
+        run: npm publish ./packages/angular/dist --provenance

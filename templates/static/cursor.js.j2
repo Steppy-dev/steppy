@@ -1,0 +1,10 @@
+/* Steppy cursor animation driver — shared across all static guide pages.
+   Reads window.__STEPPY_STEPS__ (per-step frame data with bbox + viewport)
+   and window.__STEPPY_TIMINGS__ (cursor timing overrides), then animates
+   each step's cursor when its section scrolls into view.
+
+   This file is now a thin wrapper around the vendored IIFE bundle built
+   from packages/player/src/cursor/. To regenerate the bundle:
+     npm --prefix packages/player run build:iife
+   then copy dist/steppy-cursor-legacy.js into src/steppy/_player_bundle/. */
+{{ cursor_iife | safe }}

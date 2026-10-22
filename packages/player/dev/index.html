@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Steppy Player — Dev Harness</title>
+    <style>
+      :root {
+        --bg: #f4f1ea;
+        --surface: #fbf9f4;
+        --fg: #1f1d1a;
+        --muted: #8a857c;
+        --border: #e1ddd1;
+        --accent: #d24f2c;
+        font-family: system-ui, -apple-system, sans-serif;
+        color: var(--fg);
+        background: var(--bg);
+      }
+      body {
+        margin: 0 auto;
+        padding: 24px;
+        max-width: 1280px;
+      }
+      header h1 {
+        margin: 0 0 4px;
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      header p {
+        margin: 0 0 16px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 16px;
+        padding: 10px 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+      }
+      .group {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .group > .label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .seg {
+        display: inline-flex;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 2px;
+        gap: 2px;
+      }
+      .seg button {
+        font: inherit;
+        font-size: 13px;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        padding: 4px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+      .seg button[aria-current='true'] {
+        background: var(--fg);
+        color: var(--surface);
+      }
+      steppy-guide {
+        display: block;
+        max-width: 1100px;
+      }
+      .log {
+        background: #2a2722;
+        color: #e7e1d6;
+        padding: 12px;
+        margin-top: 16px;
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 12px;
+        max-height: 200px;
+        overflow: auto;
+        border-radius: 8px;
+      }
+      .log-row {
+        display: flex;
+        gap: 8px;
+      }
+      .log-row .name {
+        color: var(--accent);
+        min-width: 140px;
+      }
+      .log-row .detail {
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Steppy Player — Dev Harness</h1>
+      <p>
+        Loads <code>./fixture-manifest.json</code> through
+        <code>&lt;steppy-guide&gt;</code>. The toolbar drives the
+        <code>template</code>, <code>locale</code>, and <code>variant</code>
+        attributes (the player also has its own built-in switchers). Run
+        <code>npm run build</code> first so <code>../dist/steppy-player.js</code>
+        exists.
+      </p>
+    </header>
+
+    <div class="toolbar">
+      <div class="group">
+        <span class="label">Presentation</span>
+        <div class="seg" id="template-seg">
+          <button data-template="sidebar">Sidebar</button>
+          <button data-template="overlay" aria-current="true">Overlay</button>
+          <button data-template="inline">Inline</button>
+        </div>
+      </div>
+      <div class="group">
+        <span class="label">Language</span>
+        <div class="seg" id="locale-seg">
+          <button data-locale="fr" aria-current="true">FR</button>
+          <button data-locale="nl">NL</button>
+        </div>
+      </div>
+      <div class="group">
+        <span class="label">Affichage</span>
+        <div class="seg" id="layout-seg">
+          <button data-layout="desktop" aria-current="true">Desktop</button>
+          <button data-layout="mobile">Mobile</button>
+        </div>
+      </div>
+    </div>
+
+    <steppy-guide
+      id="player"
+      src="./fixture-manifest.json"
+      locale="fr"
+      variant="desktop"
+      template="overlay"
+    ></steppy-guide>
+
+    <div class="log" id="log"></div>
+
+    <script type="module" src="../dist/steppy-player.js"></script>
+    <script>
+      const player = document.getElementById('player');
+
+      // Wire each segmented control to a steppy-guide attribute.
+      function wireSeg(segId, attr, key) {
+        const seg = document.getElementById(segId);
+        seg.addEventListener('click', (e) => {
+          const btn = e.target.closest('button');
+          if (!btn) return;
+          const value = btn.dataset[key];
+          player.setAttribute(attr, value);
+          seg.querySelectorAll('button').forEach((b) =>
+            b.toggleAttribute('aria-current', b === btn),
+          );
+        });
+      }
+      wireSeg('template-seg', 'template', 'template');
+      wireSeg('locale-seg', 'locale', 'locale');
+      wireSeg('layout-seg', 'variant', 'layout');
+
+      // Event log.
+      const log = document.getElementById('log');
+      const append = (name, detail) => {
+        const row = document.createElement('div');
+        row.className = 'log-row';
+        const ts = new Date().toLocaleTimeString();
+        row.innerHTML = `<span class="name">${name}</span><span class="detail">${ts} — ${JSON.stringify(detail)}</span>`;
+        log.prepend(row);
+      };
+      for (const name of [
+        'steppy:ready',
+        'steppy:step',
+        'steppy:hotspot',
+        'steppy:locale',
+        'steppy:variant',
+        'steppy:complete',
+        'steppy:error',
+      ]) {
+        player.addEventListener(name, (e) => append(name, e.detail));
+      }
+    </script>
+  </body>
+</html>

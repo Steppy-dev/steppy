@@ -1,0 +1,22 @@
+{# The "other renderings of this guide" row, shared by all three of them.
+
+   Every mode presents the same steps in a different shell, and they canonical to
+   one another -- so without this row the non-canonical ones are emitted, told to
+   a crawler where the real page is, and reachable by a human only by typing the
+   URL. Built by BuildAssembler._mode_links, which also decides when there is
+   nothing to show (a guide with one rendering gets no row at all). #}
+{% if mode_links %}
+<nav class="steppy-mode-links" aria-label="Guide format">
+    <ul>
+        {% for link in mode_links %}
+        <li>
+            {% if link.active %}
+            <span aria-current="true">{{ link.label }}</span>
+            {% else %}
+            <a href="{{ link.href }}">{{ link.label }}</a>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}

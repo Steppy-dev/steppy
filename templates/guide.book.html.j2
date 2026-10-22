@@ -1,0 +1,145 @@
+{# guide.book.html.j2 — the "handbook": every guide for one (role, locale, layout)
+   in a single self-contained document, designed to be read on screen and
+   printed to PDF (`steppy guide --handbook`, `steppy build --handbook`).
+
+   The guide bodies are pre-rendered `guide.fragment.html.j2` fragments passed in
+   as `guides[].html`, and the styling is the shared static stylesheet
+   (`guides_css`) so a handbook always looks like the site it came from — there
+   is no fourth copy of the guide CSS to keep in sync.
+
+   Chromium's print-to-PDF cannot emit PDF bookmarks or resolve page numbers in
+   a table of contents, so the TOC links to in-document anchors only. #}
+<!DOCTYPE html>
+<html lang="{{ html_lang | default(locale, true) | default('en', true) }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <title>{{ title }}</title>
+    <style>
+{{ guides_css }}
+
+/* ── Handbook ────────────────────────────────────────────────────────── */
+
+.steppy-book {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 16px;
+}
+
+.steppy-book-cover {
+    text-align: center;
+    padding: 64px 0 48px;
+    border-bottom: 3px solid #3498db;
+    margin-bottom: 32px;
+}
+
+.steppy-book-cover h1 {
+    font-size: 40px;
+    color: #2c3e50;
+    margin: 0 0 12px;
+}
+
+.steppy-book-subtitle {
+    font-size: 18px;
+    color: #7f8c8d;
+    margin: 0 0 20px;
+}
+
+.steppy-book-toc {
+    margin-bottom: 32px;
+}
+
+.steppy-book-toc h2 {
+    font-size: 22px;
+    color: #2c3e50;
+    margin: 0 0 12px;
+}
+
+.steppy-book-toc ol {
+    margin: 0;
+    padding-left: 24px;
+    line-height: 2;
+}
+
+.steppy-book-toc a {
+    color: #2c3e50;
+    text-decoration: none;
+}
+
+.steppy-book-toc a:hover {
+    text-decoration: underline;
+}
+
+.steppy-book-section {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #7f8c8d;
+    margin: 0 0 8px;
+}
+
+.steppy-book-guide {
+    margin-bottom: 48px;
+}
+
+@media print {
+    .steppy-book {
+        padding: 0;
+        max-width: none;
+    }
+
+    /* Cover and contents each own a page; every guide starts on a fresh one.
+       Adjacent forced breaks collapse into one, so the first guide does not
+       get a blank page after the cover/contents break. */
+    .steppy-book-cover,
+    .steppy-book-toc {
+        page-break-after: always;
+    }
+
+    .steppy-book-section,
+    .steppy-book-guide {
+        page-break-before: always;
+    }
+
+    /* A section heading already opened the page its first guide starts on. */
+    .steppy-book-section + .steppy-book-guide {
+        page-break-before: auto;
+    }
+}
+    </style>
+</head>
+<body>
+    <div class="steppy-book">
+        <header class="steppy-book-cover">
+            <h1>{{ title }}</h1>
+            {% if subtitle %}
+            <p class="steppy-book-subtitle">{{ subtitle }}</p>
+            {% endif %}
+            {% if role %}
+            <div class="steppy-role-badge">{{ role }}</div>
+            {% endif %}
+        </header>
+
+        {% if guides | length > 1 %}
+        <nav class="steppy-book-toc" aria-label="{{ toc_label | default('Contents', true) }}">
+            <h2>{{ toc_label | default('Contents', true) }}</h2>
+            <ol>
+                {% for guide in guides %}
+                <li><a href="#{{ guide.slug }}">{{ guide.title }}</a></li>
+                {% endfor %}
+            </ol>
+        </nav>
+        {% endif %}
+
+        {% for guide in guides %}
+        {% if guide.section %}
+        <h2 class="steppy-book-section">{{ guide.section }}</h2>
+        {% endif %}
+        <section class="steppy-book-guide" id="{{ guide.slug }}">
+            {{ guide.html | safe }}
+        </section>
+        {% endfor %}
+    </div>
+</body>
+</html>

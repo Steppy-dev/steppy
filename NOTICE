@@ -1,0 +1,13 @@
+Steppy
+Copyright 2026 The Steppy Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The wheel bundles pre-built JavaScript (src/steppy/_player_bundle/) compiled
+from packages/player/, which includes Lit (BSD-3-Clause, Copyright Google LLC)
+and Zod (MIT, Copyright Colin McDonnell). Their full license texts ship
+beside the bundles in src/steppy/_player_bundle/THIRD_PARTY_LICENSES.txt.
+
+Steppy invokes, but does not bundle or link, the following tools as separate
+processes when the corresponding features are used: Playwright/Chromium
+(Apache-2.0), ffmpeg (LGPL/GPL, depending on the build) and Piper (GPL-3.0).

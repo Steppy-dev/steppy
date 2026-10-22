@@ -1,0 +1,61 @@
+{
+  "buildId": "demo-0001",
+  "entry": {
+    "route": "/invoices"
+  },
+  "guideUrl": "https://guide.example.com/create-invoice/en.html",
+  "id": "create-invoice",
+  "kind": "steppy-tour",
+  "locale": "en",
+  "schema": 1,
+  "steps": [
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "new-invoice-btn",
+      "placement": "bottom",
+      "target": "new-invoice-btn",
+      "text": "Click **New invoice** to open the invoice form.",
+      "title": "New invoice",
+      "waitFor": "invoice-list"
+    },
+    {
+      "advance": {
+        "on": "input"
+      },
+      "id": "invoice-title",
+      "target": "invoice-title",
+      "text": "Give the invoice a short title your customer will recognise.",
+      "title": "Title"
+    },
+    {
+      "advance": {
+        "on": "change"
+      },
+      "id": "customer-select",
+      "target": "customer-select",
+      "text": "Choose the customer to bill.",
+      "title": "Customer"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "save-invoice-btn",
+      "target": "save-invoice-btn",
+      "text": "Click **Save**. The invoice opens on its own page.",
+      "title": "Save"
+    },
+    {
+      "advance": {
+        "on": "manual"
+      },
+      "id": "invoice-detail",
+      "target": "invoice-detail",
+      "text": "Your invoice is saved as a draft. You can send it from this page.",
+      "title": "Done"
+    }
+  ],
+  "title": "Create an invoice"
+}

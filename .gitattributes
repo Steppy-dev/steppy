@@ -1,0 +1,22 @@
+# LF everywhere, on every OS. Several guard tests compare files byte for byte
+# (the _totp_now / _base_language / sanitise_nodeid mirrors, the generated
+# JSON schemas, the vendored bundles), and a CRLF checkout on Windows turns
+# those into diffs nobody made.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.mp4 binary
+*.wav binary
+*.zip binary
+
+# Build outputs committed on purpose (so `pip install git+...` needs no Node).
+# Collapsed in diffs and left out of GitHub's language statistics.
+src/steppy/_player_bundle/*.js linguist-generated=true
+src/steppy/_player_bundle/*.js.map linguist-generated=true
+fixtures/demo-guide/public/assets/**/steppy-player.js linguist-generated=true

@@ -1,0 +1,76 @@
+{
+  "buildId": "demo-0001",
+  "entry": {
+    "route": "/invoices"
+  },
+  "id": "remove-inactive-customers",
+  "kind": "steppy-tour",
+  "locale": "fr",
+  "schema": 1,
+  "steps": [
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "nav-customers",
+      "layouts": [
+        "desktop"
+      ],
+      "target": "nav-customers",
+      "text": "Ouvrez **Clients** dans l'en-tête.",
+      "title": "Clients"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "menu-btn",
+      "layouts": [
+        "mobile"
+      ],
+      "target": "menu-btn",
+      "text": "Ouvrez le **Menu**.",
+      "title": "Menu"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "drawer-customers",
+      "layouts": [
+        "mobile"
+      ],
+      "target": "drawer-customers",
+      "text": "Choisissez **Clients**.",
+      "title": "Clients"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "remove-inactive-btn",
+      "target": "remove-inactive-btn",
+      "text": "En bas de la liste, cliquez sur **Retirer les clients inactifs**.",
+      "title": "Retirer les clients inactifs"
+    },
+    {
+      "advance": {
+        "on": "manual"
+      },
+      "id": "confirm",
+      "target": null,
+      "text": "Cliquez sur **Oui** pour les retirer.",
+      "title": "Confirmer"
+    },
+    {
+      "advance": {
+        "on": "manual"
+      },
+      "id": "the-inactive-customers-are-removed",
+      "target": null,
+      "text": "Les clients que vous facturez encore restent dans la liste.",
+      "title": "Terminé"
+    }
+  ],
+  "title": "Retirer les clients inactifs"
+}

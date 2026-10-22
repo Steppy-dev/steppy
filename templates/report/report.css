@@ -1,0 +1,401 @@
+/* Steppy run report.
+ *
+ * Deliberately NOT templates/static/guides.css. That file is 641 lines of
+ * guide-site chrome plus the @media print rules that ARE the PDF layout; a run
+ * report inherits none of it and would only be at risk from changes to it.
+ *
+ * This file is loaded through the Jinja loader (so a project can override it at
+ * templates/report/report.css and get the same three-rung precedence as every
+ * other template). Two consequences, and this comment learned the first one the
+ * hard way by containing an example of it:
+ *
+ *   1. It is parsed as a template, so a Jinja delimiter anywhere in it -- even
+ *      inside a CSS comment -- is a syntax error. Do not write one, not even to
+ *      warn about writing one.
+ *   2. The report's environment has autoescape ON, so a value interpolated here
+ *      would come out HTML-escaped. Use CSS custom properties instead; there is
+ *      nothing this file needs from Python.
+ */
+
+/* Brand palette (Pin #15332A, Lichen #E4E9E1, Balise #D2561A, Granite #5B6B64).
+ * Balise as-is is 4.0:1 on the light ground, below AA for link text, so links
+ * use a deepened Balise in light mode and a lightened one in dark mode; the
+ * unaltered Balise appears only in the mark, where 3:1 is the bar. The status
+ * colours below are deliberately NOT brand colours: an orange that reads as
+ * brand must never be mistaken for fail or warn. */
+:root {
+    --bg: #e4e9e1;
+    --surface: #fbfcfa;
+    --border: #c9d3cb;
+    --text: #15332a;
+    --muted: #5b6b64;
+    --accent: #a8410e;
+    --brand-check: #d2561a;
+    --pass: #1a7f45;
+    --pass-bg: #e6f4ec;
+    --fail: #c02b2b;
+    --fail-bg: #fdeaea;
+    --warn: #9a6200;
+    --warn-bg: #fdf3e0;
+    --neutral-bg: #dce3da;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --radius: 8px;
+}
+
+/* The dark palette, defined once and applied from two places.
+ *
+ * A host has three theme states, not two: it may stamp data-theme="dark" or
+ * "light" on the root element, or stamp nothing at all and leave only the OS
+ * preference. So the media query is guarded on :not([data-theme="light"]) -- an
+ * explicit light choice has to beat a dark OS -- and the same tokens are
+ * repeated under [data-theme="dark"] so an explicit dark choice beats a light
+ * OS. Published to Pages only the media query ever fires; the stamped selectors
+ * are what make the page correct when it is embedded somewhere that themes it.
+ *
+ * Every colour in this file comes from these tokens. A colour whose only
+ * definition sits inside one of these blocks would go undefined in the
+ * unstamped state, which is how a page ends up painting one theme's text on the
+ * other theme's ground. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #0e231c;
+        --surface: #15332a;
+        --border: #2b4a40;
+        --text: #e4e9e1;
+        --muted: #a9b5ac;
+        --accent: #f09a6a;
+        --pass: #58c98a;
+        --pass-bg: #16301f;
+        --fail: #ff8a8a;
+        --fail-bg: #3a1c1c;
+        --warn: #e0b055;
+        --warn-bg: #33280f;
+        --neutral-bg: #1f3d33;
+    }
+}
+
+:root[data-theme="dark"] {
+    --bg: #0e231c;
+    --surface: #15332a;
+    --border: #2b4a40;
+    --text: #e4e9e1;
+    --muted: #a9b5ac;
+    --accent: #f09a6a;
+    --pass: #58c98a;
+    --pass-bg: #16301f;
+    --fail: #ff8a8a;
+    --fail-bg: #3a1c1c;
+    --warn: #e0b055;
+    --warn-bg: #33280f;
+    --neutral-bg: #1f3d33;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+a { color: var(--accent); }
+
+/* A report is a lot of links — every scenario name, every slug under a failure
+ * cause. Keyboard focus needs to be visible against either ground, so it is
+ * drawn from the token set like everything else. */
+:where(a, button, summary):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+.steppy-report-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px;
+}
+
+.steppy-report-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 4px;
+    font-size: 20px;
+}
+
+/* The steppy mark: brackets in the text colour, the check in Balise. Drawn
+ * inline (not an <img>) so the brackets follow the theme without a second file. */
+.steppy-mark {
+    flex: none;
+    width: 28px;
+    height: 28px;
+}
+
+.steppy-mark .steppy-mark-brackets { stroke: var(--text); }
+.steppy-mark .steppy-mark-check { stroke: var(--brand-check); }
+
+.steppy-report-main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+.steppy-report-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 20px;
+}
+
+.steppy-report-section > h2 {
+    margin: 0 0 12px;
+    font-size: 16px;
+}
+
+.steppy-report-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.steppy-report-meta div { display: flex; gap: 6px; }
+.steppy-report-meta dt { font-weight: 600; }
+.steppy-report-meta dd { margin: 0; }
+
+/* ── outcome chips ─────────────────────────────────────────────────────── */
+
+.steppy-chip {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--neutral-bg);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.steppy-chip[data-outcome="passed"] { background: var(--pass-bg); color: var(--pass); }
+.steppy-chip[data-outcome="skipped"] { background: var(--neutral-bg); color: var(--muted); }
+.steppy-chip[data-outcome="failed"],
+.steppy-chip[data-outcome="error"],
+.steppy-chip[data-outcome="worker_died"] { background: var(--fail-bg); color: var(--fail); }
+.steppy-chip[data-outcome="interrupted"],
+.steppy-chip[data-outcome="unknown"] { background: var(--warn-bg); color: var(--warn); }
+
+.steppy-verdict {
+    font-size: 22px;
+    font-weight: 700;
+}
+.steppy-verdict[data-outcome="passed"] { color: var(--pass); }
+.steppy-verdict[data-outcome="failed"],
+.steppy-verdict[data-outcome="error"],
+.steppy-verdict[data-outcome="worker_died"] { color: var(--fail); }
+
+.steppy-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
+    align-items: baseline;
+    margin: 0 0 6px;
+}
+
+/* ── tables ────────────────────────────────────────────────────────────── */
+
+.steppy-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    /* Counts and sizes sit in columns and get compared down the column, so the
+     * digits have to share a width. */
+    font-variant-numeric: tabular-nums;
+}
+
+.steppy-report-table th,
+.steppy-report-table td {
+    text-align: left;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+.steppy-report-table th {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+}
+
+.steppy-report-table tr:last-child td { border-bottom: 0; }
+
+.steppy-scroll {
+    overflow-x: auto;
+}
+
+/* ── failure causes ────────────────────────────────────────────────────── */
+
+.steppy-cause {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 12px;
+}
+
+.steppy-cause-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: baseline;
+}
+
+.steppy-cause-count {
+    font-weight: 700;
+    color: var(--fail);
+}
+
+.steppy-cause-headline {
+    font-family: var(--mono);
+    font-size: 13px;
+    word-break: break-word;
+}
+
+.steppy-fingerprint {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+}
+
+pre.steppy-tail {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.45;
+    white-space: pre;
+}
+
+/* ── steps ─────────────────────────────────────────────────────────────── */
+
+.steppy-steps { list-style: none; margin: 0; padding: 0; }
+
+.steppy-step {
+    display: flex;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.steppy-step:last-child { border-bottom: 0; }
+
+.steppy-step-num {
+    flex: 0 0 3.2em;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.steppy-step[data-status="running"] .steppy-step-num { color: var(--fail); font-weight: 700; }
+
+.steppy-step-body { flex: 1 1 auto; min-width: 0; }
+.steppy-step-title { font-weight: 600; }
+
+.steppy-step-facts {
+    color: var(--muted);
+    font-size: 12.5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+}
+
+.steppy-step-action { font-family: var(--mono); }
+
+.steppy-shots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* width:auto + max-width:100% renders at min(intrinsic, container), which is the
+ * same rule the guide stage uses: it respects a dense capture's real pixels and
+ * never upscales a low-res one. */
+.steppy-shots img {
+    width: auto;
+    max-width: 100%;
+    max-height: 420px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+}
+
+.steppy-variant {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+}
+
+.steppy-variant-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+
+.steppy-variant-head h3 { margin: 0; font-size: 15px; }
+
+.steppy-nodeid {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    word-break: break-all;
+}
+
+/* ── notices ───────────────────────────────────────────────────────────── */
+
+.steppy-notice {
+    border-left: 3px solid var(--warn);
+    background: var(--warn-bg);
+    color: var(--warn);
+    padding: 10px 14px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+    font-size: 13.5px;
+}
+
+.steppy-notice ul { margin: 6px 0 0; padding-left: 18px; }
+
+.steppy-muted { color: var(--muted); }
+.steppy-small { font-size: 13px; }
+
+.steppy-report-footer {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 24px 32px;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.steppy-badge-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: baseline;
+}
+
+.steppy-pct { font-size: 26px; font-weight: 700; }
+
+@media (max-width: 640px) {
+    .steppy-report-main { padding: 14px; }
+    .steppy-report-section { padding: 14px; }
+}

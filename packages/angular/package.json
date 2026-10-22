@@ -1,0 +1,49 @@
+{
+  "name": "@steppy/angular",
+  "version": "0.3.0",
+  "description": "Angular adapter for the Steppy in-app tour overlay: provideSteppyTours(), <steppy-tours> and the SteppyTours service",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Steppy-dev/steppy.git",
+    "directory": "packages/angular"
+  },
+  "keywords": ["angular", "steppy", "product-tour", "onboarding", "playwright"],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "ng": "ng",
+    "build": "ng build",
+    "test": "ng test --no-watch && ng test --no-watch --configuration zone",
+    "prepublishOnly": "node -e \"if (!require('fs').existsSync('fesm2022')) { console.error('Publish the built package: npm publish ./dist'); process.exit(1); }\""
+  },
+  "peerDependencies": {
+    "@angular/common": ">=20.0.0 <23.0.0",
+    "@angular/core": ">=20.0.0 <23.0.0",
+    "@angular/router": ">=20.0.0 <23.0.0",
+    "@steppy/player": "0.3.0",
+    "rxjs": "^7.4.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^21.2.27",
+    "@angular/cli": "^21.2.27",
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/compiler-cli": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "@steppy/player": "file:../player",
+    "jsdom": "^28.0.0",
+    "ng-packagr": "^21.2.0",
+    "rxjs": "~7.8.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8",
+    "zone.js": "~0.16.0"
+  }
+}

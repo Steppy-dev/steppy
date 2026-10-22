@@ -1,0 +1,10 @@
+{
+  "name": "demo-guide-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "steppy": "file:../../packages/steppy",
+    "tsx": "^4.0.0"
+  }
+}

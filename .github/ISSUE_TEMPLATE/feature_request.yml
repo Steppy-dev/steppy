@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest a new capability or a change to an existing one.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and what gets in the way today? A scenario excerpt helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: How it could work from your side, such as a new step field, action, config key or command.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+      description: "For example an `action: custom` block or a `call` helper you had to write."
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Scenarios, validate or generate
+        - Running tests (steppy run)
+        - Parallel runs (--workers)
+        - Guides, build, PDF or video
+        - In-app tours
+        - Report, bundle or coverage
+        - Recording (steppy record)
+        - "@steppy/player"
+        - "@steppy/angular"
+        - Something else

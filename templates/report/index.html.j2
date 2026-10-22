@@ -1,0 +1,203 @@
+{# Run report landing page. Rendered with autoescape ON — every value below comes
+   from a bundle, and a failure tail is arbitrary page content. #}
+<!doctype html>
+<html lang="en">
+<head>
+{% include "report/_head.html.j2" %}
+</head>
+<body>
+    <header class="steppy-report-header">
+        <h1>{% include "report/_mark.html.j2" %}{{ title }}</h1>
+        <p class="steppy-report-meta steppy-small">
+            <span>{{ report.run.run_id }}</span>
+            <span>{{ report.run.created_at }}</span>
+            <span>steppy {{ report.run.steppy_version }}</span>
+            <span>{{ report.run.executor }}</span>
+        </p>
+    </header>
+
+    <main class="steppy-report-main">
+
+        <section class="steppy-report-section">
+            <div class="steppy-counts">
+                <span class="steppy-verdict" data-outcome="{{ report.totals.verdict }}">{{ report.totals.verdict | upper }}</span>
+                <span class="steppy-muted">
+                    {{ report.totals.scenarios }} scenario{{ '' if report.totals.scenarios == 1 else 's' }},
+                    {{ report.totals.tests }} test{{ '' if report.totals.tests == 1 else 's' }}
+                </span>
+                {% for outcome, count in report.totals.outcomes.items() %}
+                <span class="steppy-chip" data-outcome="{{ outcome }}">{{ count }} {{ outcome }}</span>
+                {% endfor %}
+            </div>
+            <dl class="steppy-report-meta">
+                {% if report.run.git.branch or report.run.git.sha %}
+                <div><dt>Commit</dt><dd>{{ report.run.git.branch or '(detached)' }}{% if report.run.git.sha %} @ {{ report.run.git.sha[:8] }}{% endif %}{% if report.run.git.pr %} (PR #{{ report.run.git.pr }}){% endif %}</dd></div>
+                {% endif %}
+                {% if report.dimensions.locales %}
+                <div><dt>Locales</dt><dd>{{ report.dimensions.locales | join(', ') }}</dd></div>
+                {% endif %}
+                {% if report.dimensions.layouts %}
+                <div><dt>Layouts</dt><dd>{{ report.dimensions.layouts | join(', ') }}</dd></div>
+                {% endif %}
+                {% if report.run.spec.workers and report.run.spec.workers > 1 %}
+                <div><dt>Workers</dt><dd>{{ report.run.spec.workers }}</dd></div>
+                {% endif %}
+                {% if report.run.spec.guide %}<div><dt>Mode</dt><dd>guide capture</dd></div>{% endif %}
+                {# Named for what it is: under --workers N this is not wall clock,
+                   and a bundle carries no finished_at to compute that from. #}
+                <div><dt>Test time</dt><dd>{{ report.totals.duration_ms_sum | duration }}</dd></div>
+            </dl>
+        </section>
+
+        {% if report.truncated %}
+        <div class="steppy-notice">
+            <strong>Truncated.</strong> The size budget dropped artifacts that belonged in this
+            bundle, so something below may be missing. Screenshots and their sidecars are never
+            dropped — see the warnings for what was.
+        </div>
+        {% endif %}
+
+        {% if not report.capabilities.step_timeline and report.totals.tests %}
+        <div class="steppy-notice">
+            No per-step timeline was recorded for this run, so the pages below show outcomes
+            without step detail. Either the run did not pass <code>--bundle</code> (which sets
+            <code>STEPPY_STEP_EVENTS=1</code>), it set <code>STEPPY_STEP_EVENTS=0</code>, or the
+            tests were generated before per-step markers existed — re-run
+            <code>steppy generate</code> in that case.
+        </div>
+        {% endif %}
+
+        {% if not report.totals.tests %}
+        <div class="steppy-notice">
+            This run recorded <strong>no test outcomes</strong>. The scenarios below were
+            reconstructed from the captures on disk. Add <code>--bundle</code> to the run
+            (<code>steppy run --bundle</code>) so outcomes, failure tails and step boundaries are
+            written down.
+        </div>
+        {% endif %}
+
+        {% if report.failure_causes %}
+        <section class="steppy-report-section">
+            <h2>Failure causes ({{ report.failure_causes | length }} distinct)</h2>
+            <p class="steppy-small steppy-muted">
+                Grouped by normalised failure text, biggest first. One broken selector across
+                forty scenarios is one row here, not forty tracebacks. The tail shown is the
+                first occurrence's — the rest are the same failure.
+            </p>
+            {% for cause in report.failure_causes %}
+            <div class="steppy-cause">
+                <div class="steppy-cause-head">
+                    <span class="steppy-cause-count">&times;{{ cause.count }}</span>
+                    <span class="steppy-cause-headline">{{ cause.headline }}</span>
+                    <span class="steppy-fingerprint">{{ cause.fingerprint }}</span>
+                </div>
+                <p class="steppy-small steppy-muted">
+                    {% for slug in cause.scenarios[:8] %}<a href="{{ scenario_href(slug) }}">{{ slug }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+                    {% if cause.scenarios | length > 8 %} and {{ cause.scenarios | length - 8 }} more{% endif %}
+                </p>
+                {% if cause.exemplar_tail %}
+                <pre class="steppy-tail">{{ cause.exemplar_tail }}</pre>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        <section class="steppy-report-section">
+            <h2>Scenarios</h2>
+            <div class="steppy-scroll">
+                <table class="steppy-report-table">
+                    <thead>
+                        <tr>
+                            <th>Scenario</th>
+                            {% if matrix_columns %}{% for column in matrix_columns %}<th>{{ column.label }}</th>{% endfor %}
+                            {% else %}<th>Outcome</th>{% endif %}
+                            <th>Test time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for scenario in report.scenarios %}
+                        <tr>
+                            <td><a href="{{ scenario.href }}">{{ scenario.slug }}</a></td>
+                            {% if matrix_columns %}
+                            {% for column in matrix_columns %}
+                            {% set cell = matrix_cell(scenario, column) %}
+                            <td>{% if cell %}<span class="steppy-chip" data-outcome="{{ cell }}">{{ cell }}</span>{% else %}<span class="steppy-muted">&mdash;</span>{% endif %}</td>
+                            {% endfor %}
+                            {% else %}
+                            <td><span class="steppy-chip" data-outcome="{{ scenario.outcome }}">{{ scenario.outcome }}</span></td>
+                            {% endif %}
+                            <td class="steppy-muted">{{ scenario.duration_ms_sum | duration }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        {% if report.coverage.tier != 'none' %}
+        <section class="steppy-report-section">
+            <h2>E2E surface coverage</h2>
+            <div class="steppy-badge-line">
+                {% if report.coverage.badge.percent is not none %}
+                <span class="steppy-pct">{{ report.coverage.badge.percent }}%</span>
+                <span class="steppy-muted">
+                    {{ report.coverage.badge.tested }} of {{ report.coverage.badge.declared }}
+                    declared endpoints and routes a UI test could reach
+                </span>
+                {% else %}
+                <span class="steppy-pct steppy-muted">n/a</span>
+                <span class="steppy-muted">nothing declared — configure <code>coverage.apis</code> and run <code>steppy coverage refresh</code></span>
+                {% endif %}
+            </div>
+            <p class="steppy-small"><a href="coverage.html">Full gap report</a></p>
+        </section>
+        {% endif %}
+
+        {% if report.artifacts.by_kind %}
+        <section class="steppy-report-section">
+            <h2>Artifacts in this run</h2>
+            <p class="steppy-small steppy-muted">
+                What the run produced, by kind. Traces and videos are listed rather than copied
+                here — a Playwright trace needs <code>playwright show-trace</code> to open, so a
+                link would be a dead end.
+            </p>
+            <div class="steppy-scroll">
+                <table class="steppy-report-table">
+                    <thead><tr><th>Kind</th><th>Files</th><th>Size</th></tr></thead>
+                    <tbody>
+                        {% for kind, group in report.artifacts.by_kind.items() %}
+                        <tr><td>{{ kind }}</td><td>{{ group.count }}</td><td>{{ group.bytes | filesize }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if report.warnings or report.coverage.warnings %}
+        <section class="steppy-report-section">
+            <h2>Warnings</h2>
+            <ul class="steppy-small">
+                {% for warning in report.warnings %}<li>{{ warning }}</li>{% endfor %}
+                {% for warning in report.coverage.warnings %}<li>{{ warning }}</li>{% endfor %}
+            </ul>
+        </section>
+        {% endif %}
+
+    </main>
+
+    <footer class="steppy-report-footer">
+        <p>
+            Generated by Steppy {{ report.generated_by }} from {{ report.source.kind }}
+            <code>{{ report.source.label }}</code>.
+            Machine-readable: <a href="report.json">report.json</a>{% if report.coverage.tier != 'none' %},
+            <a href="badge.json">badge.json</a>{% endif %}.
+        </p>
+        <p>
+            This page is marked <code>noindex</code>. It is a run report, not documentation —
+            and a published Pages site means published screenshots.
+        </p>
+    </footer>
+</body>
+</html>

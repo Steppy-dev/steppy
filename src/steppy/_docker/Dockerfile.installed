@@ -1,0 +1,53 @@
+# Worker image built from an INSTALLED steppy (wheel), not a repo checkout.
+#
+# The repo-root Dockerfile COPYs pyproject.toml / hatch_build.py / src /
+# templates / skills / CHANGELOG.md and pip-installs the package from source.
+# None of those exist when steppy was installed as a wheel (pip install
+# git+..., pip install <dir>, or from an index), so that Dockerfile cannot be
+# used off a checkout-less machine. This one can.
+#
+# The coordinator synthesizes the build context under its run tmp dir:
+#
+#   <ctx>/Dockerfile           <- this file, copied verbatim
+#   <ctx>/pkg/steppy/          <- copy of the installed package
+#   <ctx>/pkg/steppy_dev-<v>.dist-info/   <- so importlib.metadata still works
+#   <ctx>/requirements.txt     <- runtime deps read from installed metadata
+#
+# This is functionally equivalent to the repo build because the worker only
+# ever runs `python -m steppy worker` -> pytest on the ALREADY generated test
+# files bind-mounted from the project. It never generates code, so it needs
+# the package plus its runtime deps and nothing from the repo.
+#
+# Base image: parameterized so `parallel.worker_base_image` can override it.
+# The default is kept in lockstep with the repo Dockerfile's FROM line and
+# with DEFAULT_PLAYWRIGHT_BASE in steppy/_parallel/image.py — the drift guard
+# is tests/test_parallel_worker_image.py.
+ARG PLAYWRIGHT_BASE=mcr.microsoft.com/playwright/python:v1.60.0-noble
+FROM ${PLAYWRIGHT_BASE}
+
+# Matches the coordinator's compose override (`working_dir: /steppy/project`)
+# so cwd-relative paths work for pytest exactly like the host single-worker path.
+WORKDIR /steppy/project
+
+# Deps first — this layer is the expensive one and is cached across rebuilds
+# triggered by a steppy source change (the common case on editable installs).
+COPY requirements.txt /tmp/steppy-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/steppy-requirements.txt && rm /tmp/steppy-requirements.txt
+
+# The package itself goes on PYTHONPATH rather than through pip — there is no
+# sdist/pyproject to install from, and `python -m steppy` only needs the
+# package importable. The copied .dist-info sits alongside it so
+# importlib.metadata.version("steppy-dev") keeps working.
+COPY pkg /steppy/pkg
+ENV PYTHONPATH=/steppy/pkg
+
+# `steppy ...` console-script shim. pip creates this in the repo-built image;
+# `parallel.pre_auth` commands may shell out to it, so keep the two images
+# interchangeable.
+RUN printf '#!/bin/sh\nexec python -m steppy "$@"\n' > /usr/local/bin/steppy \
+ && chmod +x /usr/local/bin/steppy
+
+# Worker entrypoint reads STEPPY_WORKER_ID, STEPPY_COORD_DIR, etc. from the
+# coordinator-injected env and loops claiming scenarios until the queue is
+# empty, then exits with 0 (success) or 1 (any scenario failed).
+ENTRYPOINT ["python", "-m", "steppy", "worker"]

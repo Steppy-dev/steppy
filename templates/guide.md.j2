@@ -1,0 +1,18 @@
+# {{ title }}
+
+> Guide pour l'application **{{ role }}**
+
+{% for step in steps %}
+## Étape {{ step.index }} : {{ step.title }}
+
+{% if step.subtitle %}
+*{{ step.subtitle }}*
+
+{% endif %}
+{% if step.text %}
+{{ step.text }}
+
+{% endif %}
+![Étape {{ step.index }}]({{ step.screenshot }})
+
+{% endfor %}

@@ -1,0 +1,218 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ruff comes from the `dev` dependency group (pyproject.toml), never from
+      # whatever happens to be on PATH — see CONTRIBUTING.md for why that matters.
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Lint
+        run: uv run --only-group dev ruff check .
+
+      - name: Format
+        run: uv run --only-group dev ruff format --check .
+
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package (editable) + extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[report,retry,bundle]'
+
+      - name: Run unit tests
+        run: python -m pytest tests/ --ignore=tests/e2e -q
+
+  player:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/player/package-lock.json
+
+      - name: Install player workspace
+        run: npm --prefix packages/player ci
+
+      - name: Run player tests
+        run: npm --prefix packages/player test
+
+      # The bundles under src/steppy/_player_bundle/ are committed so that
+      # `pip install git+...` needs no Node toolchain. The build is reproducible,
+      # so a mismatch means someone changed packages/player/src/ without
+      # rebuilding and re-vendoring — and every git install would ship the old player.
+      - name: Vendored bundles match the source
+        run: |
+          npm --prefix packages/player run build
+          fail=0
+          for f in steppy-player.js steppy-cursor-legacy.js steppy-video.js; do
+            for g in "$f" "$f.map"; do
+              if ! cmp -s "packages/player/dist/$g" "src/steppy/_player_bundle/$g"; then
+                echo "::error file=src/steppy/_player_bundle/$g::stale vendored bundle — run the player build and copy dist/ into src/steppy/_player_bundle/"
+                fail=1
+              fi
+            done
+          done
+          exit $fail
+
+      # The in-app tour overlay (dist/steppy-tour.js) ships to apps through
+      # npm, not the wheel, so it is not compared above. It has a size budget
+      # instead; the build above already produced it.
+      - name: Tour overlay size budget
+        run: npm --prefix packages/player run size:tour
+
+      # Publish-readiness: every file package.json points at is in the tarball.
+      - name: npm pack contents
+        run: npm --prefix packages/player run check:pack
+
+  # In-app tours in a real browser: the overlay in the demo app (top layer,
+  # focus, keyboard, remote loading with CORS and SRI, a built guide site as
+  # the remote origin) and the generated tour replays — including the one this
+  # feature exists for: a renamed test-id fails the build, naming tour, step
+  # and test-id. happy-dom covers the logic; only Chromium covers this.
+  tour-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: packages/player/package-lock.json
+
+      - name: Build the tour overlay
+        run: |
+          npm --prefix packages/player ci
+          npm --prefix packages/player run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package (editable) + Chromium
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          playwright install chromium --with-deps
+
+      - name: Run the tour browser tests
+        env:
+          STEPPY_TOUR_E2E: '1'
+        run: python -m pytest tests/integration/test_tour_replay_it.py tests/integration/test_tour_player_it.py -q
+
+      - name: Keep the failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tour-e2e-failure
+          path: |
+            /tmp/pytest-of-*/pytest-*/**/tests/e2e/**
+            /tmp/pytest-of-*/pytest-*/**/output/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # @steppy/angular: the zoneless and the zone.js unit suites, the
+  # ng-packagr build, and what `npm publish ./dist` would ship. The adapter
+  # type-checks against the overlay's declarations, so the player is built first.
+  angular-adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            packages/player/package-lock.json
+            packages/angular/package-lock.json
+
+      - name: Build the player
+        run: |
+          npm --prefix packages/player ci
+          npm --prefix packages/player run build
+
+      - name: Test and build the adapter
+        run: |
+          npm --prefix packages/angular ci
+          npm --prefix packages/angular test
+          npm --prefix packages/angular run build
+          npm pack --dry-run ./packages/angular/dist
+
+  # In-app tours in a real Angular + PrimeNG + ngx-translate app, through the
+  # adapter: the plain demo's scenarios and their generated replays run
+  # unchanged against it, plus the router bridge, zone hygiene and i18n.
+  tour-angular-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            packages/player/package-lock.json
+            packages/angular/package-lock.json
+            fixtures/tour-demo-angular/app/package-lock.json
+
+      - name: Build the player, the adapter and the demo
+        run: |
+          npm --prefix packages/player ci
+          npm --prefix packages/player run build
+          npm --prefix packages/angular ci
+          npm --prefix packages/angular run build
+          npm --prefix fixtures/tour-demo-angular/app ci
+          npm --prefix fixtures/tour-demo-angular/app run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install package (editable) + Chromium
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          playwright install chromium --with-deps
+
+      - name: Run the Angular tour browser tests
+        env:
+          STEPPY_TOUR_ANGULAR_E2E: '1'
+        run: python -m pytest tests/integration/test_tour_angular_it.py -q
+
+      - name: Keep the failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tour-angular-e2e-failure
+          path: |
+            /tmp/pytest-of-*/pytest-*/**/tests/e2e/**
+            /tmp/pytest-of-*/pytest-*/**/output/**
+          if-no-files-found: ignore
+          retention-days: 7

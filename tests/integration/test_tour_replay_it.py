@@ -1,0 +1,159 @@
+"""Opt-in browser integration test: the generated tour replays (spec M4).
+
+Skipped unless ``STEPPY_TOUR_E2E=1`` (needs Playwright Chromium and the
+built overlay, ``npm --prefix packages/player run build``). The real loop:
+
+    steppy generate (fixtures/tour-demo/project, in a temp copy)
+    -> tests/e2e/test_editor--*.py with test_<slug>__tour replays
+    -> pytest against the demo app (fixtures/tour-demo/serve.py)
+
+A renamed test-id in the app must fail the replay with a message naming the
+tour, the step and the test-id — the CI signal the feature exists for.
+
+Each demo scenario declares ``layouts: [desktop, mobile]``, so every replay
+runs at 1280x800 and at 390x844; on the narrow one the customers tour goes
+through the app's menu drawer instead of its header link.
+
+Run it:  STEPPY_TOUR_E2E=1 python -m pytest tests/integration/test_tour_replay_it.py -q
+"""
+
+import importlib.util
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from typer.testing import CliRunner
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("STEPPY_TOUR_E2E") != "1",
+    reason="browser integration test — set STEPPY_TOUR_E2E=1 to run",
+)
+
+ROOT = Path(__file__).resolve().parents[2]
+DEMO = ROOT / "fixtures" / "tour-demo"
+
+
+def _serve_module():
+    spec = importlib.util.spec_from_file_location("tour_demo_serve", DEMO / "serve.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+serve = _serve_module()
+
+
+def _require_bundle() -> None:
+    bundle = Path(os.environ.get("STEPPY_TOUR_BUNDLE") or serve.DEFAULT_BUNDLE)
+    if not bundle.is_file():
+        pytest.fail(serve.BUILD_HINT)
+
+
+def _generated(tmp_path_factory, name: str, edit=None) -> Path:
+    _require_bundle()
+    from steppy.cli import app
+
+    root = tmp_path_factory.mktemp(name)
+    shutil.copytree(DEMO / "project", root, dirs_exist_ok=True)
+    if edit:
+        edit(root)
+    cwd = os.getcwd()
+    os.chdir(root)
+    try:
+        result = CliRunner().invoke(app, ["generate", "-o", "tests/e2e"])
+    finally:
+        os.chdir(cwd)
+    assert result.exit_code == 0, result.output
+    assert (root / "app-assets" / "tours" / "tours.manifest.json").is_file()
+    return root
+
+
+@pytest.fixture(scope="module")
+def project(tmp_path_factory) -> Path:
+    return _generated(tmp_path_factory, "tour-demo")
+
+
+def _last_step_advances_on_visible(root: Path) -> None:
+    # Step 4's target (the status) is on screen before the step is reached, so
+    # the overlay passes it in the same pass, without ever drawing its popover.
+    scenario = root / "scenarios" / "editor--send-invoice.md"
+    text = scenario.read_text(encoding="utf-8")
+    marker = "### 4. The invoice is sent\n- role: editor\n- action: assert\n"
+    assert marker in text
+    scenario.write_text(text.replace(marker, marker + "- tour-advance: visible\n"), encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def visible_project(tmp_path_factory) -> Path:
+    return _generated(tmp_path_factory, "tour-demo-visible", _last_step_advances_on_visible)
+
+
+def _run(project: Path, url: str, *args: str, **env: str) -> subprocess.CompletedProcess:
+    environ = {k: v for k, v in os.environ.items() if not k.startswith("STEPPY_") or k == "STEPPY_TOUR_BUNDLE"}
+    environ.update({"TOUR_DEMO_URL": url, **env})
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "tests/e2e", "-q", "-p", "no:cacheprovider", *args],
+        cwd=project,
+        env=environ,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+
+
+def _demo(project: Path, **config):
+    return serve.DemoServer(tours_dir=project / "app-assets" / "tours", config=config or None)
+
+
+def test_the_scenarios_and_their_replays_pass(project):
+    with _demo(project) as demo:
+        proc = _run(project, demo.url, "-rA")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "12 passed" in proc.stdout
+    passed = {line.rsplit("::", 1)[-1] for line in proc.stdout.splitlines() if line.startswith("PASSED ")}
+    tours = ("create_invoice", "send_invoice", "remove_inactive_customers")
+    assert {f"test_editor__{t}__tour[default-{size}]" for t in tours for size in ("desktop", "mobile")} <= passed
+
+
+def test_a_renamed_test_id_fails_the_replay_naming_tour_step_and_test_id(project):
+    with _demo(project, testIdOverrides={"invoice-title": "invoice-name"}, targetTimeout=1500) as demo:
+        proc = _run(project, demo.url, "-k", "create_invoice__tour")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 1, out
+    assert "[tour create-invoice] step 'invoice-title'" in out
+    assert 'test-id "invoice-title"' in out
+    assert "target-timeout" in out
+
+
+def test_the_strict_build_id_check_is_opt_in(project):
+    with _demo(project) as demo:
+        proc = _run(project, demo.url, "-k", "create_invoice__tour", STEPPY_TOUR_EXPECT_BUILD_ID="other-0002")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 1, out
+    assert "the app serves tours built for 'demo-0001', expected 'other-0002'" in out
+
+
+def test_the_kill_switch_keeps_an_auto_started_tour_off_ordinary_tests(project):
+    # The app starts a tour on every page load; the scenario tests must not see it,
+    # and the replay still drives its own.
+    with _demo(project, autoStart="create-invoice") as demo:
+        proc = _run(project, demo.url, "-k", "create_invoice")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "4 passed" in proc.stdout
+
+
+def test_guide_runs_skip_the_replays(project):
+    with _demo(project) as demo:
+        proc = _run(project, demo.url, "--collect-only", STEPPY_GUIDE_MODE="1")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "__tour" not in proc.stdout.split("collected")[0]
+
+
+def test_a_visible_step_whose_target_is_already_there_replays(visible_project):
+    with _demo(visible_project) as demo:
+        proc = _run(visible_project, demo.url, "-k", "send_invoice__tour")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "2 passed" in proc.stdout

@@ -1,0 +1,859 @@
+{
+  "$defs": {
+    "BundleGit": {
+      "additionalProperties": true,
+      "description": "Where the run's code came from. Every field optional \u2014 a laptop run\noutside a repository has none of it, and that is not an error.",
+      "properties": {
+        "branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Branch"
+        },
+        "pr": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pr"
+        },
+        "sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha"
+        }
+      },
+      "title": "BundleGit",
+      "type": "object"
+    },
+    "BundleRun": {
+      "additionalProperties": true,
+      "description": "Run identity and provenance.",
+      "properties": {
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "executor": {
+          "default": "local",
+          "title": "Executor",
+          "type": "string"
+        },
+        "git": {
+          "$ref": "#/$defs/BundleGit"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "spec": {
+          "$ref": "#/$defs/BundleSpec"
+        },
+        "steppy_version": {
+          "title": "Steppy Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "created_at",
+        "steppy_version"
+      ],
+      "title": "BundleRun",
+      "type": "object"
+    },
+    "BundleSpec": {
+      "additionalProperties": true,
+      "description": "What the run was asked to do \u2014 the ``steppy run`` flags, resolved.\n\nRecorded by the run itself rather than reconstructed by the bundler: they\nare separate processes, and re-deriving this from flags a user retypes\ndrifts silently.",
+      "properties": {
+        "coverage": {
+          "default": false,
+          "title": "Coverage",
+          "type": "boolean"
+        },
+        "guide": {
+          "default": false,
+          "title": "Guide",
+          "type": "boolean"
+        },
+        "layouts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Layouts",
+          "type": "array"
+        },
+        "locales": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Locales",
+          "type": "array"
+        },
+        "no_asserts": {
+          "default": false,
+          "title": "No Asserts",
+          "type": "boolean"
+        },
+        "no_guide": {
+          "default": false,
+          "title": "No Guide",
+          "type": "boolean"
+        },
+        "scenario": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario"
+        },
+        "screenshots": {
+          "default": false,
+          "title": "Screenshots",
+          "type": "boolean"
+        },
+        "tag": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tag"
+        },
+        "workers": {
+          "default": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "BundleSpec",
+      "type": "object"
+    },
+    "ReportArtifactGroup": {
+      "additionalProperties": true,
+      "properties": {
+        "bytes": {
+          "default": 0,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "count": {
+          "default": 0,
+          "title": "Count",
+          "type": "integer"
+        }
+      },
+      "title": "ReportArtifactGroup",
+      "type": "object"
+    },
+    "ReportArtifacts": {
+      "additionalProperties": true,
+      "description": "What the run produced, by kind \u2014 an inventory, not a copy.\n\nThe bundle manifest is the file list; duplicating it here would double the\nsize of every report for no reader.",
+      "properties": {
+        "by_kind": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ReportArtifactGroup"
+          },
+          "title": "By Kind",
+          "type": "object"
+        },
+        "bytes": {
+          "default": 0,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "deduped": {
+          "default": 0,
+          "title": "Deduped",
+          "type": "integer"
+        },
+        "files": {
+          "default": 0,
+          "title": "Files",
+          "type": "integer"
+        }
+      },
+      "title": "ReportArtifacts",
+      "type": "object"
+    },
+    "ReportBadge": {
+      "additionalProperties": true,
+      "description": "The e2e-surface number, and the shields payload derived from it.\n\n``percent is None`` means *not measured* \u2014 nothing declared \u2014 which renders as\n``n/a`` in grey rather than ``0%``. A badge reading 0% invites someone to go\nfix a number that is not broken.",
+      "properties": {
+        "color": {
+          "default": "lightgrey",
+          "title": "Color",
+          "type": "string"
+        },
+        "declared": {
+          "default": 0,
+          "title": "Declared",
+          "type": "integer"
+        },
+        "label": {
+          "default": "e2e surface",
+          "title": "Label",
+          "type": "string"
+        },
+        "percent": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percent"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ratio"
+        },
+        "surface": {
+          "default": "all",
+          "title": "Surface",
+          "type": "string"
+        },
+        "tested": {
+          "default": 0,
+          "title": "Tested",
+          "type": "integer"
+        }
+      },
+      "title": "ReportBadge",
+      "type": "object"
+    },
+    "ReportCapabilities": {
+      "additionalProperties": true,
+      "description": "What this report could and could not know. See the module docstring.",
+      "properties": {
+        "attempts": {
+          "default": false,
+          "title": "Attempts",
+          "type": "boolean"
+        },
+        "coverage": {
+          "default": "none",
+          "title": "Coverage",
+          "type": "string"
+        },
+        "screenshots": {
+          "default": "none",
+          "title": "Screenshots",
+          "type": "string"
+        },
+        "step_timeline": {
+          "default": false,
+          "title": "Step Timeline",
+          "type": "boolean"
+        },
+        "strength_reliable": {
+          "default": true,
+          "title": "Strength Reliable",
+          "type": "boolean"
+        }
+      },
+      "title": "ReportCapabilities",
+      "type": "object"
+    },
+    "ReportCoverage": {
+      "additionalProperties": true,
+      "description": "The coverage section, or the reason there isn't one.\n\n``tier`` records where the numbers came from: ``bundled`` (a\n``coverage/gaps.json`` that travelled with the run), ``store`` (the project's\nlive ``.steppy/coverage.db`` \u2014 live-tree input only, since reading it for\nsomeone else's bundle would attribute this machine's map to their run),\n``records`` (rebuilt from raw records, with strength suppressed), or ``none``.",
+      "properties": {
+        "badge": {
+          "$ref": "#/$defs/ReportBadge"
+        },
+        "buckets": {
+          "additionalProperties": true,
+          "title": "Buckets",
+          "type": "object"
+        },
+        "counts": {
+          "additionalProperties": true,
+          "title": "Counts",
+          "type": "object"
+        },
+        "e2e_surface": {
+          "additionalProperties": true,
+          "title": "E2E Surface",
+          "type": "object"
+        },
+        "href": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Href"
+        },
+        "non_ui": {
+          "$ref": "#/$defs/ReportNonUi"
+        },
+        "tier": {
+          "default": "none",
+          "title": "Tier",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "title": "ReportCoverage",
+      "type": "object"
+    },
+    "ReportFailureCause": {
+      "additionalProperties": true,
+      "description": "One distinct failure, and everything that hit it.\n\nThis is the primitive that makes a Steppy report readable where a JUnit report\nis not: forty scenarios dying from one broken selector collapse into one row\ninstead of forty tracebacks. Grouping is ``_parallel/fingerprint``, unchanged \u2014\nthe same code the parallel console summary uses.",
+      "properties": {
+        "count": {
+          "default": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "exemplar_tail": {
+          "default": "",
+          "title": "Exemplar Tail",
+          "type": "string"
+        },
+        "fingerprint": {
+          "title": "Fingerprint",
+          "type": "string"
+        },
+        "headline": {
+          "default": "",
+          "title": "Headline",
+          "type": "string"
+        },
+        "occurrences": {
+          "items": {
+            "$ref": "#/$defs/ReportFailureOccurrence"
+          },
+          "title": "Occurrences",
+          "type": "array"
+        },
+        "scenarios": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Scenarios",
+          "type": "array"
+        }
+      },
+      "required": [
+        "fingerprint"
+      ],
+      "title": "ReportFailureCause",
+      "type": "object"
+    },
+    "ReportFailureOccurrence": {
+      "additionalProperties": true,
+      "properties": {
+        "layout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layout"
+        },
+        "locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locale"
+        },
+        "nodeid": {
+          "title": "Nodeid",
+          "type": "string"
+        },
+        "scenario": {
+          "title": "Scenario",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scenario",
+        "nodeid"
+      ],
+      "title": "ReportFailureOccurrence",
+      "type": "object"
+    },
+    "ReportNonUi": {
+      "additionalProperties": true,
+      "description": "How much of the declared surface was discounted, and on whose authority.",
+      "properties": {
+        "by_source": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Source",
+          "type": "object"
+        },
+        "declared": {
+          "default": 0,
+          "title": "Declared",
+          "type": "integer"
+        },
+        "tested": {
+          "default": 0,
+          "title": "Tested",
+          "type": "integer"
+        }
+      },
+      "title": "ReportNonUi",
+      "type": "object"
+    },
+    "ReportScenario": {
+      "additionalProperties": true,
+      "description": "One scenario and every variant of it that ran.\n\n``outcome`` is the **worst** across variants: a flow that fails only in Dutch\non mobile is a failing flow.",
+      "properties": {
+        "duration_ms_sum": {
+          "default": 0,
+          "title": "Duration Ms Sum",
+          "type": "integer"
+        },
+        "failure_log": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Log"
+        },
+        "href": {
+          "default": "",
+          "title": "Href",
+          "type": "string"
+        },
+        "outcome": {
+          "default": "unknown",
+          "title": "Outcome",
+          "type": "string"
+        },
+        "outcomes": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Outcomes",
+          "type": "object"
+        },
+        "slug": {
+          "title": "Slug",
+          "type": "string"
+        },
+        "variants": {
+          "items": {
+            "$ref": "#/$defs/ReportVariant"
+          },
+          "title": "Variants",
+          "type": "array"
+        }
+      },
+      "required": [
+        "slug"
+      ],
+      "title": "ReportScenario",
+      "type": "object"
+    },
+    "ReportSourceInfo": {
+      "additionalProperties": true,
+      "description": "Where the rendered run came from, for the page footer and for support.\n\n``kind`` is ``tree`` (the project's live ``output/``), ``archive`` (a\n``.tar.zst``/``.tar.gz``) or ``dir`` (an unpacked bundle). ``label`` is a\n*display* string \u2014 a bundle filename or a relative tree path, never an\nabsolute one, because this file gets published.",
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "ReportSourceInfo",
+      "type": "object"
+    },
+    "ReportStep": {
+      "additionalProperties": true,
+      "description": "One step of one attempt.\n\n``step`` is the **scenario** step number and the sequence is **sparse**: a step\nskipped by ``only-in:`` or ``layouts:`` emits no events, so gaps are expected\nand must never be renumbered. There is no total-step count anywhere in a\nbundle, so this is \"step 7\", never \"step 7 of 12\".\n\n``status`` is ``passed`` when the step closed and ``running`` when it opened and\nnever did \u2014 which is precisely the failing step. ``duration_ms`` is ``None``\nthere, because the end is unknown rather than zero.",
+      "properties": {
+        "action": {
+          "default": "",
+          "title": "Action",
+          "type": "string"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "offset_ms": {
+          "default": 0,
+          "title": "Offset Ms",
+          "type": "integer"
+        },
+        "screenshots": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Screenshots",
+          "type": "array"
+        },
+        "status": {
+          "default": "passed",
+          "title": "Status",
+          "type": "string"
+        },
+        "step": {
+          "title": "Step",
+          "type": "integer"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "step"
+      ],
+      "title": "ReportStep",
+      "type": "object"
+    },
+    "ReportTotals": {
+      "additionalProperties": true,
+      "description": "Run-level arithmetic.\n\n``duration_ms_sum`` is the **sum of test durations**, not wall clock. Under\n``--workers N`` those differ by roughly N, and a bundle carries no\n``finished_at`` to compute the real elapsed time from \u2014 so the field is named\nfor what it actually is rather than implying a number it cannot know.",
+      "properties": {
+        "duration_ms_sum": {
+          "default": 0,
+          "title": "Duration Ms Sum",
+          "type": "integer"
+        },
+        "exit_code": {
+          "default": 0,
+          "title": "Exit Code",
+          "type": "integer"
+        },
+        "outcomes": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Outcomes",
+          "type": "object"
+        },
+        "scenarios": {
+          "default": 0,
+          "title": "Scenarios",
+          "type": "integer"
+        },
+        "scenarios_not_passed": {
+          "default": 0,
+          "title": "Scenarios Not Passed",
+          "type": "integer"
+        },
+        "tests": {
+          "default": 0,
+          "title": "Tests",
+          "type": "integer"
+        },
+        "verdict": {
+          "default": "passed",
+          "title": "Verdict",
+          "type": "string"
+        }
+      },
+      "title": "ReportTotals",
+      "type": "object"
+    },
+    "ReportVariant": {
+      "additionalProperties": true,
+      "description": "One (locale, layout) execution of one scenario.\n\n``attempts`` is recoverable only for in-process pytest ``--reruns``: the\nparallel coordinator's retry pass runs a fresh process, which truncates the\nJSONL and takes attempt 1 with it. So ``1`` can mean \"ran once\" or \"the earlier\nattempts were overwritten\", and the report says which when it can.",
+      "properties": {
+        "attempt_outcomes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Attempt Outcomes",
+          "type": "array"
+        },
+        "attempts": {
+          "default": 1,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Ms"
+        },
+        "fail_tail": {
+          "default": "",
+          "title": "Fail Tail",
+          "type": "string"
+        },
+        "failed_step": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed Step"
+        },
+        "failed_step_title": {
+          "default": "",
+          "title": "Failed Step Title",
+          "type": "string"
+        },
+        "failure_screenshot": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Screenshot"
+        },
+        "fingerprint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fingerprint"
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layout"
+        },
+        "locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locale"
+        },
+        "nodeid": {
+          "title": "Nodeid",
+          "type": "string"
+        },
+        "outcome": {
+          "default": "unknown",
+          "title": "Outcome",
+          "type": "string"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/ReportStep"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "trace_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trace Path"
+        },
+        "video_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Video Path"
+        }
+      },
+      "required": [
+        "nodeid"
+      ],
+      "title": "ReportVariant",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "description": "The whole document. See the module docstring for the two invariants.",
+  "properties": {
+    "artifacts": {
+      "$ref": "#/$defs/ReportArtifacts"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/ReportCapabilities"
+    },
+    "coverage": {
+      "$ref": "#/$defs/ReportCoverage"
+    },
+    "dimensions": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": "Dimensions",
+      "type": "object"
+    },
+    "failure_causes": {
+      "items": {
+        "$ref": "#/$defs/ReportFailureCause"
+      },
+      "title": "Failure Causes",
+      "type": "array"
+    },
+    "generated_by": {
+      "default": "",
+      "title": "Generated By",
+      "type": "string"
+    },
+    "run": {
+      "$ref": "#/$defs/BundleRun"
+    },
+    "scenarios": {
+      "items": {
+        "$ref": "#/$defs/ReportScenario"
+      },
+      "title": "Scenarios",
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/ReportSourceInfo"
+    },
+    "steppy_report": {
+      "description": "Contract version; see ACCEPTED_REPORT_VERSIONS.",
+      "title": "Steppy Report",
+      "type": "integer"
+    },
+    "totals": {
+      "$ref": "#/$defs/ReportTotals"
+    },
+    "truncated": {
+      "default": false,
+      "title": "Truncated",
+      "type": "boolean"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "steppy_report",
+    "source",
+    "run"
+  ],
+  "title": "Steppy run report model",
+  "type": "object",
+  "x-steppy-report-accepted": [
+    1
+  ],
+  "x-steppy-report-version": 1
+}

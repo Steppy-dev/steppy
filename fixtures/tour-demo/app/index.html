@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="/" />
+    <link rel="icon" href="data:," />
+    <title>Invoice demo</title>
+    <link rel="stylesheet" href="/app.css" />
+    <!-- The overlay bundle (packages/player/dist), served by serve.py from this origin. -->
+    <script type="module" src="/steppy-tour.js"></script>
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <div id="app-shell">
+      <header class="shell-header">
+        <!-- Phones: the navigation moves into a drawer behind this button. -->
+        <button type="button" class="menu-btn" data-testid="menu-btn" aria-expanded="false">
+          <span aria-hidden="true">☰</span> <span data-i18n="menu">Menu</span>
+        </button>
+        <a href="/invoices" data-link data-testid="nav-invoices" class="brand" data-i18n="invoices">Invoices</a>
+        <nav class="nav-links">
+          <a href="/customers" data-link data-testid="nav-customers" data-i18n="customers">Customers</a>
+        </nav>
+        <span class="spacer"></span>
+        <button type="button" data-testid="start-tour-btn" data-tour="create-invoice" data-i18n="tourCreate">
+          Tour: create an invoice
+        </button>
+        <button type="button" data-testid="start-send-tour-btn" data-tour="send-invoice" data-i18n="tourSend">
+          Tour: send an invoice
+        </button>
+        <button type="button" data-testid="start-customers-tour-btn" data-tour="remove-inactive-customers" data-i18n="tourCustomers">
+          Tour: remove inactive customers
+        </button>
+        <label class="locale">
+          <span data-i18n="language">Language</span>
+          <select data-testid="locale-select">
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+          </select>
+        </label>
+      </header>
+      <main id="view"></main>
+      <!-- Mounted once in the shell, as an app framework would. -->
+      <steppy-tour-host fallback-manifest="/assets/tours/tours.manifest.json" locale="en"></steppy-tour-host>
+    </div>
+    <aside class="event-log" aria-label="Tour events">
+      <h2>Tour events</h2>
+      <ol id="event-log" data-testid="event-log"></ol>
+    </aside>
+  </body>
+</html>

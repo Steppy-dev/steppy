@@ -1,0 +1,110 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Steppy specific
+.auth/
+output/
+tests/e2e/
+credentials.yaml
+pytest_out.txt
+# Coverage map store (sqlite). Holds manual triage flags — deliberately outside
+# output/ so artifact cleanup never wipes them. Commit it instead if you want
+# team-shared triage.
+.steppy/
+
+# packages/player TS workspace
+packages/player/node_modules/
+packages/player/dist/
+packages/player/coverage/
+packages/player/.vite/
+
+# packages/react + packages/vue framework wrappers (dist covered by dist/ above)
+packages/react/node_modules/
+packages/vue/node_modules/
+
+# packages/angular (dist covered by dist/ above) and the Angular tour demo:
+# the Angular CLI's build cache.
+packages/angular/node_modules/
+**/.angular/
+packages/player/schema/*.json
+
+# Test fixtures: the demo build fixture vendors a Node toolchain (tsx/esbuild)
+# for manual `steppy build` runs. The automated suite builds BuildConfig directly
+# and never shells out to npx, so these binaries don't belong in git — run
+# `npm --prefix fixtures/demo-guide install` before a manual fixture build.
+fixtures/**/node_modules/
+
+# Demo-fixture build output: `steppy build` writes dist-static/ from
+# steppy.guide.config.static.ts. It is regenerable, and a committed copy goes
+# stale against its own source the moment the config changes.
+fixtures/demo-guide/dist-static/
+
+# In-app tour demo: `steppy generate` / `steppy tours` run inside
+# fixtures/tour-demo/project write the generated suite and the app-assets copy
+# of the tour files (output/ is already covered above). The committed copy of
+# what the compiler emits for this project is contracts/fixtures/tours/valid/.
+fixtures/tour-demo/project/tests/
+fixtures/tour-demo/project/app-assets/tours/
+
+# Vendored player build artifacts: committed so `pip install git+...` works
+# without a Node toolchain. Rebuild + commit whenever packages/player/src/ changes.
+# CSS is still gitignored because no bundle currently produces it.
+src/steppy/_player_bundle/*.css
+
+# Bundled template + skill trees (FLAWS §4.1, §7.1): generated from the canonical
+# repo-root templates/ and skills/ by the hatchling build hook (hatch_build.py)
+# for the wheel, sdist, and editable installs. The sources of truth are
+# templates/ and skills/; do NOT edit or commit these generated copies.
+src/steppy/templates/
+src/steppy/skills/
+src/steppy/CHANGELOG.md
+
+# OS
+.DS_Store
+Thumbs.db
+uv.lock
+
+# Private planning docs: they name client projects, quote their scenarios and
+# carry local machine paths. Kept on disk for the author, never published.
+COMMERCIALIZATION.md
+STEPPY-CLOUD-PLAN.md
+FLAWS.md
+SCENARIO-AUTHORING-PLAN.md
+NEW_COMMANDS.md
+MIGRATION.md
+PROJECT.md
+# The local deny-list the publication guards read (tests/_private_terms.py).
+private-terms.txt
+
+# Claude Code: per-user permission allowlist (the shared settings.json may be committed)
+.claude/settings.local.json

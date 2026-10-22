@@ -1,0 +1,76 @@
+{
+  "buildId": "demo-0001",
+  "entry": {
+    "route": "/invoices"
+  },
+  "id": "remove-inactive-customers",
+  "kind": "steppy-tour",
+  "locale": "en",
+  "schema": 1,
+  "steps": [
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "nav-customers",
+      "layouts": [
+        "desktop"
+      ],
+      "target": "nav-customers",
+      "text": "Open **Customers** in the header.",
+      "title": "Customers"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "menu-btn",
+      "layouts": [
+        "mobile"
+      ],
+      "target": "menu-btn",
+      "text": "Open the **Menu**.",
+      "title": "Menu"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "drawer-customers",
+      "layouts": [
+        "mobile"
+      ],
+      "target": "drawer-customers",
+      "text": "Choose **Customers**.",
+      "title": "Customers"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "remove-inactive-btn",
+      "target": "remove-inactive-btn",
+      "text": "At the end of the list, click **Remove inactive customers**.",
+      "title": "Remove inactive customers"
+    },
+    {
+      "advance": {
+        "on": "manual"
+      },
+      "id": "confirm",
+      "target": null,
+      "text": "Click **Yes** to remove them.",
+      "title": "Confirm"
+    },
+    {
+      "advance": {
+        "on": "manual"
+      },
+      "id": "the-inactive-customers-are-removed",
+      "target": null,
+      "text": "The customers you still bill stay on the list.",
+      "title": "Done"
+    }
+  ],
+  "title": "Remove inactive customers"
+}

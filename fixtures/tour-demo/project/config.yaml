@@ -1,0 +1,40 @@
+# Fixture project for the in-app tours demo (fixtures/tour-demo/app).
+#
+# `steppy generate` from this directory compiles the two `tour:` scenarios
+# into ./output/tours/<build-id>/ and ./app-assets/tours/, and appends a tour
+# replay to each scenario's test. The integration tests point TOUR_DEMO_URL at
+# a local server for fixtures/tour-demo/app; contracts/fixtures/tours/valid/ is
+# this project's output with the default build id.
+
+apps:
+  editor:
+    name: Invoice demo
+    url: "${TOUR_DEMO_URL:-http://127.0.0.1:8770}"
+    auth:
+      mode: bypass
+
+locales: [en, fr]
+default_locale: en
+
+timing:
+  navigate_wait: load
+
+# Every scenario runs at both sizes (its frontmatter `layouts:`). On a phone
+# the app hides its header links behind a menu button and a drawer, so a tour
+# has steps for one size only; `tours.layouts` tells the overlay which.
+screenshot:
+  layouts:
+    desktop: {width: 1280, height: 800}
+    mobile: {width: 390, height: 844}
+
+tours:
+  enabled: true
+  build_id: "${STEPPY_TOUR_BUILD_ID:-demo-0001}"
+  guide_base_url: "https://guide.example.com/"
+  layouts:
+    desktop: "(min-width: 768px)"
+    mobile: "(max-width: 767.98px)"
+  targets:
+    - type: app-assets
+      path: ./app-assets/tours
+    - type: guide

@@ -1,0 +1,485 @@
+[
+  {
+    "name": "valid-tour",
+    "rule": "baseline",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "ok",
+    "python": "accept"
+  },
+  {
+    "name": "valid-manifest",
+    "rule": "baseline",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "ok",
+    "python": "accept"
+  },
+  {
+    "name": "selector-as-target",
+    "rule": "7.1 targets are test-ids, never selectors",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.target": "[data-testid=\"new-invoice-btn\"]"
+    }
+  },
+  {
+    "name": "test-id-with-space",
+    "rule": "7.1 strict test-id pattern",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.target": "new invoice"
+    }
+  },
+  {
+    "name": "waitfor-selector",
+    "rule": "7.1 waitFor is a test-id",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.waitFor": "#invoice-list"
+    }
+  },
+  {
+    "name": "route-protocol-relative",
+    "rule": "7.1 routes are same-origin relative paths",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "entry.route": "//evil.example/x"
+    }
+  },
+  {
+    "name": "route-backslash",
+    "rule": "7.1 routes are same-origin relative paths",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "entry.route": "/\\evil.example/x"
+    }
+  },
+  {
+    "name": "route-javascript",
+    "rule": "7.1 no javascript: URLs",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "entry.route": "javascript:alert(1)"
+    }
+  },
+  {
+    "name": "route-data",
+    "rule": "7.1 no data: URLs",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "entry.route": "data:text/html,x"
+    }
+  },
+  {
+    "name": "route-absolute",
+    "rule": "7.1 no absolute URLs",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "entry.route": "https://evil.example/x"
+    }
+  },
+  {
+    "name": "route-dot-segment",
+    "rule": "7.1 no dot segments",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "entry.route": "/a/../b"
+    }
+  },
+  {
+    "name": "guide-url-other-origin",
+    "rule": "7.1 guideUrl only to the guide origin",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "accept",
+    "set": {
+      "guideUrl": "https://evil.example/x"
+    }
+  },
+  {
+    "name": "guide-url-javascript",
+    "rule": "7.1 guideUrl is http(s)",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "guideUrl": "javascript:alert(1)"
+    }
+  },
+  {
+    "name": "advance-unknown",
+    "rule": "7.1 unknown advance.on rejects the file",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.advance.on": "hover"
+    }
+  },
+  {
+    "name": "advance-script",
+    "rule": "7.1 no executable step types",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.advance.on": "script"
+    }
+  },
+  {
+    "name": "placement-unknown",
+    "rule": "contract enum",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.placement": "middle"
+    }
+  },
+  {
+    "name": "click-without-target",
+    "rule": "targeted advance needs a target",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.target": null
+    }
+  },
+  {
+    "name": "duplicate-step-id",
+    "rule": "step ids are unique",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.1.id": "new-invoice-btn"
+    }
+  },
+  {
+    "name": "empty-title",
+    "rule": "title is non-empty",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "title": ""
+    }
+  },
+  {
+    "name": "text-too-long",
+    "rule": "7.1 size caps",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  },
+  {
+    "name": "kind-wrong",
+    "rule": "kind marker",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "kind": "something-else"
+    }
+  },
+  {
+    "name": "schema-2",
+    "rule": "7.1 unknown major is schema-unsupported",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "schema-unsupported",
+    "python": "reject",
+    "set": {
+      "schema": 2
+    }
+  },
+  {
+    "name": "schema-string",
+    "rule": "schema is an integer",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "schema": "1"
+    }
+  },
+  {
+    "name": "build-id-mismatch",
+    "rule": "7.1 tour buildId equals the manifest's",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "accept",
+    "set": {
+      "buildId": "other-0002"
+    }
+  },
+  {
+    "name": "locale-mismatch",
+    "rule": "file locale equals the manifest slot",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "accept",
+    "set": {
+      "locale": "fr"
+    }
+  },
+  {
+    "name": "unknown-step-key",
+    "rule": "unknown keys are ignored by the player (forward compat)",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "ok",
+    "python": "reject",
+    "set": {
+      "steps.0.html": "<b>x</b>"
+    }
+  },
+  {
+    "name": "unknown-top-key",
+    "rule": "unknown keys are ignored by the player (forward compat)",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "ok",
+    "python": "reject",
+    "set": {
+      "generatedAt": "2026-10-10T00:00:00Z"
+    }
+  },
+  {
+    "name": "not-json",
+    "rule": "invalid JSON",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "raw": "not json {"
+  },
+  {
+    "name": "html-body",
+    "rule": "an SPA fallback page is a load failure",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "load-failed",
+    "python": "reject",
+    "raw": "<!doctype html><html><body>app</body></html>"
+  },
+  {
+    "name": "manifest-file-traversal",
+    "rule": "7.1 file names cannot traverse",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "tours.0.files.en": "../escape.json"
+    }
+  },
+  {
+    "name": "manifest-default-locale",
+    "rule": "defaultLocale in locales",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "defaultLocale": "nl"
+    }
+  },
+  {
+    "name": "manifest-test-id-attribute",
+    "rule": "attribute name pattern",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "testIdAttribute": "data-x\"]"
+    }
+  },
+  {
+    "name": "manifest-guide-origin-path",
+    "rule": "guideOrigin is an origin",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "guideOrigin": "https://guide.example.com/docs"
+    }
+  },
+  {
+    "name": "manifest-integrity",
+    "rule": "integrity is sha384 SRI",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "tours.0.integrity.en": "md5-abc"
+    }
+  },
+  {
+    "name": "manifest-schema-9",
+    "rule": "7.1 unknown major is schema-unsupported",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "schema-unsupported",
+    "python": "reject",
+    "set": {
+      "schema": 9
+    }
+  },
+  {
+    "name": "manifest-build-id",
+    "rule": "build id grammar",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "buildId": ".."
+    }
+  },
+  {
+    "name": "manifest-unknown-key",
+    "rule": "unknown keys are ignored by the player",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "ok",
+    "python": "reject",
+    "set": {
+      "generatedAt": "2026-10-10T16:40:00Z"
+    }
+  },
+  {
+    "name": "manifest-route-encoded-dot-segment",
+    "rule": "7.1 routes cannot climb out of the base, not even as %2e",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "tours.0.entry.route": "/invoices/%2e%2e"
+    }
+  },
+  {
+    "name": "manifest-build-id-device-dotted",
+    "rule": "a build id is a path segment: no Windows device name before an extension",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "buildId": "con.v2"
+    }
+  },
+  {
+    "name": "manifest-locales-case-duplicate",
+    "rule": "locales are distinct ignoring case (one file on NTFS/APFS)",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "locales": [
+        "en",
+        "fr",
+        "FR"
+      ]
+    }
+  },
+  {
+    "name": "manifest-locales-separator-duplicate",
+    "rule": "locales are distinct ignoring case and -/_",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "locales": [
+        "en",
+        "fr",
+        "fr-BE",
+        "fr_be"
+      ]
+    }
+  },
+  {
+    "name": "manifest-integrity-missing",
+    "rule": "every tour lists the SRI hash of every file",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "delete": [
+      "tours.0.integrity"
+    ]
+  },
+  {
+    "name": "manifest-integrity-locale-missing",
+    "rule": "every file has its SRI hash",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "delete": [
+      "tours.0.integrity.fr"
+    ]
+  },
+  {
+    "name": "manifest-files-case-variant",
+    "rule": "file keys are exactly the listed locales",
+    "kind": "manifest",
+    "base": "tours.manifest.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "tours.0.files.FR": "create-invoice.FR.json"
+    }
+  }
+]

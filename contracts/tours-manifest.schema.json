@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "ManifestTour": {
+      "properties": {
+        "entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TourEntry"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "files": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "object"
+        },
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "integrity": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Integrity",
+          "type": "object"
+        },
+        "role": {
+          "pattern": "^[A-Za-z0-9_-]{1,64}$",
+          "title": "Role",
+          "type": "string"
+        },
+        "steps": {
+          "title": "Steps",
+          "type": "integer"
+        },
+        "title": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Title",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "title",
+        "entry",
+        "steps",
+        "files",
+        "integrity"
+      ],
+      "title": "ManifestTour",
+      "type": "object"
+    },
+    "TourEntry": {
+      "properties": {
+        "route": {
+          "maxLength": 512,
+          "pattern": "^/$|^(?:/(?::[A-Za-z_][A-Za-z0-9_]{0,63}|[A-Za-z0-9._~%!$&()*+,;=@-]{1,128})){1,32}$",
+          "title": "Route",
+          "type": "string"
+        }
+      },
+      "required": [
+        "route"
+      ],
+      "title": "TourEntry",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "buildId": {
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$",
+      "title": "Buildid",
+      "type": "string"
+    },
+    "defaultLocale": {
+      "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{1,8}){0,5}$",
+      "title": "Defaultlocale",
+      "type": "string"
+    },
+    "guideOrigin": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Guideorigin"
+    },
+    "kind": {
+      "const": "steppy-tours-manifest",
+      "title": "Kind",
+      "type": "string"
+    },
+    "layouts": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Layouts"
+    },
+    "locales": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Locales",
+      "type": "array"
+    },
+    "schema": {
+      "title": "Schema",
+      "type": "integer"
+    },
+    "testIdAttribute": {
+      "pattern": "^data-[a-z0-9-]+$",
+      "title": "Testidattribute",
+      "type": "string"
+    },
+    "tours": {
+      "items": {
+        "$ref": "#/$defs/ManifestTour"
+      },
+      "title": "Tours",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "kind",
+    "buildId",
+    "defaultLocale",
+    "locales",
+    "testIdAttribute",
+    "tours"
+  ],
+  "title": "Steppy in-app tours manifest (tours.manifest.json)",
+  "type": "object",
+  "x-steppy-tour-schema": 1
+}

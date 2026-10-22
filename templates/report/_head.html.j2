@@ -1,0 +1,14 @@
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {# Always private. A run report has no SEO value, and ADR 0013 is emphatic
+       that a published Pages site means permanently indexed screenshots — so
+       there is deliberately no config knob to turn this off. The guides site
+       keeps its own SeoConfig for the case where publishing IS the point.
+
+       This meta is the real control: robots.txt only stops the fetch, and a
+       crawler that never fetches the page never learns it is noindex. #}
+    <meta name="robots" content="noindex,nofollow,noarchive">
+    <title>{{ page_title }}</title>
+    <link rel="stylesheet" href="{{ root }}assets/report.css">
+    {# The app icon from docs/brand/steppy-icon.svg, inlined so the report stays one self-contained tree. #}
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220.00 0.00 200.00 200.00%22 width=%22200%22 height=%22200%22 role=%22img%22 aria-label=%22steppy%22%3E%3Ctitle%3Esteppy%3C/title%3E%3Crect width=%22200%22 height=%22200%22 rx=%2250%22 fill=%22%2315332A%22/%3E%3Cg transform=%22translate%2815 15%29 scale%280.85%29%22%3E%3Cpath d=%22M68 40H42V160H68M132 40H158V160H132%22 fill=%22none%22 stroke=%22%23E4E9E1%22 stroke-width=%2218%22 stroke-linejoin=%22miter%22/%3E%3Cpath d=%22M74 102L95 123L130 80%22 fill=%22none%22 stroke=%22%23D2561A%22 stroke-width=%2220%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/g%3E%3C/svg%3E">

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="{{ html_lang | default(locale, true) | default('fr', true) }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <style>
+        :root {
+            /* Cursor design tokens — override these to retheme the guided tour. */
+            --steppy-cursor-size: 24px;
+            --steppy-cursor-color: #0f172a;
+            --steppy-cursor-accent: #2563eb;
+            --steppy-cursor-ring: rgba(37, 99, 235, 0.55);
+            --steppy-cursor-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            --steppy-z-screenshot: 1;
+            --steppy-z-cursor: 10;
+            --steppy-z-ripple: 11;
+            --steppy-z-glyph: 12;
+            --steppy-z-tooltip: 20;
+            /* Print/PDF: cap how tall a screenshot may render. Chromium cannot
+               split an image across a page break — an uncapped full-page or
+               mobile capture is clipped instead. Scaled down, it fits. */
+            --steppy-print-max-image-height: 180mm;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .role-badge {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 30px;
+        }
+
+        .step {
+            margin-bottom: 50px;
+            page-break-inside: avoid;
+        }
+
+        .step h2 {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background-color: #3498db;
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 18px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .step-subtitle {
+            font-size: 18px;
+            color: #7f8c8d;
+            font-weight: 500;
+            margin-top: -10px;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+
+        .step-content {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 20px;
+            line-height: 1.8;
+        }
+
+        .steppy-stage {
+            position: relative;
+            line-height: 0;
+        }
+
+        .steppy-stage img {
+            /* width:auto caps display at the screenshot's intrinsic pixel width
+               so dense captures fill the column and low-res captures render at
+               native size instead of upscaled/blurry. max-width keeps responsive. */
+            width: auto;
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: block;
+            position: relative;
+            z-index: var(--steppy-z-screenshot);
+        }
+
+        .steppy-cursor {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: var(--steppy-cursor-size);
+            height: var(--steppy-cursor-size);
+            pointer-events: none;
+            z-index: var(--steppy-z-cursor);
+            opacity: 0;
+            transition: opacity 200ms ease-in-out;
+            background: var(--steppy-cursor-color);
+            clip-path: polygon(0 0, 0 75%, 25% 55%, 45% 95%, 60% 85%, 40% 50%, 75% 40%);
+            filter: drop-shadow(var(--steppy-cursor-shadow));
+            transform-origin: 0 0;
+        }
+
+        .steppy-cursor.visible {
+            opacity: 1;
+        }
+
+        .steppy-cursor.pulse {
+            animation: steppy-pulse-anim 200ms ease-in-out;
+        }
+
+        @keyframes steppy-pulse-anim {
+            0%, 100% { transform: scale(1); }
+            50%      { transform: scale(1.25); }
+        }
+
+        .steppy-ripple {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 12px;
+            height: 12px;
+            margin-left: -6px;
+            margin-top: -6px;
+            border-radius: 50%;
+            border: 2px solid var(--steppy-cursor-ring);
+            background: transparent;
+            z-index: var(--steppy-z-ripple);
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .steppy-ripple.fire {
+            animation: steppy-ripple-anim 500ms ease-out forwards;
+        }
+
+        @keyframes steppy-ripple-anim {
+            0%   { width: 12px; height: 12px; margin-left: -6px; margin-top: -6px; opacity: 0.9; }
+            100% { width: 72px; height: 72px; margin-left: -36px; margin-top: -36px; opacity: 0; }
+        }
+
+        .steppy-kbd {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: #111827;
+            color: #fff;
+            font: 12px/1 ui-monospace, Menlo, Consolas, monospace;
+            padding: 5px 7px;
+            border-radius: 4px;
+            z-index: var(--steppy-z-glyph);
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            transition: opacity 150ms ease-in-out;
+        }
+
+        .steppy-kbd.visible {
+            opacity: 1;
+        }
+
+        @media print {
+            body {
+                background-color: white;
+                padding: 0;
+                /* Keep the step badges / role chip coloured even when the
+                   viewer disables background graphics. */
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .container {
+                box-shadow: none;
+                padding: 20px;
+            }
+
+            .step {
+                page-break-inside: avoid;
+            }
+
+            .steppy-stage img {
+                max-height: var(--steppy-print-max-image-height);
+                box-shadow: none;
+                page-break-inside: avoid;
+            }
+
+            .steppy-cursor,
+            .steppy-ripple,
+            .steppy-kbd {
+                display: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .step h2 {
+                font-size: 20px;
+            }
+
+            .step-number {
+                width: 30px;
+                height: 30px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{{ title }}</h1>
+        <div class="role-badge">{{ role }}</div>
+
+        {% for step in steps %}
+        <div class="step" data-step-index="{{ step.index }}">
+            <h2>
+                <span class="step-number">{{ step.index }}</span>
+                <span>{{ step.title }}</span>
+            </h2>
+            {% if step.subtitle %}
+            <div class="step-subtitle">{{ step.subtitle }}</div>
+            {% endif %}
+            {% if step.text %}
+            <div class="step-content">
+                {{ step.text | markdown }}
+            </div>
+            {% endif %}
+            {% for frame in step.frames %}
+            <div class="steppy-stage" data-frame-index="{{ loop.index0 }}">
+                <img src="{{ frame.screenshot }}" alt="Étape {{ step.index }}" loading="lazy">
+                <div class="steppy-cursor" aria-hidden="true"></div>
+                <div class="steppy-ripple" aria-hidden="true"></div>
+                <div class="steppy-kbd" aria-hidden="true"></div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+      window.__STEPPY_STEPS__ = {{ steps | tojson }};
+      window.__STEPPY_TIMINGS__ = {{ cursor_timings | tojson }};
+    </script>
+    <!--
+      Cursor IIFE — sourced from packages/player/src/cursor/legacy-iife.ts and
+      bundled to src/steppy/_player_bundle/steppy-cursor-legacy.js. Inlining
+      keeps the standalone HTML self-contained (the spec's "works offline").
+    -->
+    <script>{{ cursor_iife | safe }}</script>
+</body>
+</html>

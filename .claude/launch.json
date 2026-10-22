@@ -1,0 +1,41 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "player-dev",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8099",
+        "--directory",
+        "packages/player"
+      ],
+      "port": 8099
+    },
+    {
+      "name": "tour-demo",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "fixtures/tour-demo/serve.py",
+        "--port",
+        "8770"
+      ],
+      "port": 8770
+    },
+    {
+      "name": "tour-demo-angular",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "fixtures/tour-demo/serve.py",
+        "--port",
+        "8772",
+        "--style-src",
+        "'unsafe-inline'",
+        "--app-dir",
+        "fixtures/tour-demo-angular/app/dist/tour-demo-angular/browser"
+      ],
+      "port": 8772
+    }
+  ]
+}

@@ -1,0 +1,1995 @@
+{
+  "$defs": {
+    "AppAssetsTourTarget": {
+      "additionalProperties": false,
+      "description": "Write the tour files flat into a directory your app serves (bundled mode).",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "type": {
+          "const": "app-assets",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "path"
+      ],
+      "title": "AppAssetsTourTarget",
+      "type": "object"
+    },
+    "AppAuthConfig": {
+      "description": "Authentication configuration for a single app.",
+      "properties": {
+        "bypass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BypassConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "credentials": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthCredentials"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mode": {
+          "enum": [
+            "form",
+            "auth0",
+            "storage-state",
+            "bypass",
+            "token"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "storage_state_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Storage State Path"
+        },
+        "token": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "AppAuthConfig",
+      "type": "object"
+    },
+    "AppConfig": {
+      "description": "Configuration for a single app/role.",
+      "properties": {
+        "auth": {
+          "$ref": "#/$defs/AppAuthConfig"
+        },
+        "i18n": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AppI18nConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "internal_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Internal Url"
+        },
+        "locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locale"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "url",
+        "auth"
+      ],
+      "title": "AppConfig",
+      "type": "object"
+    },
+    "AppI18nConfig": {
+      "additionalProperties": false,
+      "description": "Per-app i18n hooks. Currently exposes a localStorage strategy.",
+      "properties": {
+        "localstorage": {
+          "$ref": "#/$defs/LocalStorageI18nConfig"
+        }
+      },
+      "required": [
+        "localstorage"
+      ],
+      "title": "AppI18nConfig",
+      "type": "object"
+    },
+    "AuthCredentials": {
+      "description": "Authentication credentials.",
+      "properties": {
+        "password": {
+          "title": "Password",
+          "type": "string"
+        },
+        "totp_secret": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Totp Secret"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "username",
+        "password"
+      ],
+      "title": "AuthCredentials",
+      "type": "object"
+    },
+    "BypassConfig": {
+      "description": "Bypass authentication configuration.",
+      "properties": {
+        "cookie": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cookie"
+        },
+        "header": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Header"
+        },
+        "local_storage": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local Storage"
+        }
+      },
+      "title": "BypassConfig",
+      "type": "object"
+    },
+    "CircuitBreakerConfig": {
+      "additionalProperties": false,
+      "description": "Abort a parallel run early when nearly everything is failing.\n\nWhen the app is down or auth is misconfigured, all N scenarios fail and the\nuser waits out the full wall clock to learn it. The coordinator watches\nresults stream in and aborts once the evidence is overwhelming.\n\nDefaults are deliberately conservative \u2014 ``min_completed`` scenarios must\nhave finished AND ``fail_ratio`` of them must have failed \u2014 so a\nlegitimately red suite never trips it.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "fail_ratio": {
+          "default": 0.9,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Fail Ratio",
+          "type": "number"
+        },
+        "min_completed": {
+          "default": 10,
+          "minimum": 1,
+          "title": "Min Completed",
+          "type": "integer"
+        }
+      },
+      "title": "CircuitBreakerConfig",
+      "type": "object"
+    },
+    "CloudConfig": {
+      "additionalProperties": false,
+      "description": "Where ``steppy bundle upload`` pushes results.\n\n**The URL only, never a token.** A control-plane token is a credential, and\n``config.yaml`` is committed \u2014 the same line :func:`config._check_credential_hygiene`\nalready draws for ``apps.*.auth.credentials``. The token comes from\n``STEPPY_CLOUD_TOKEN`` or ``--token``, and there is deliberately no config\nkey for it to be pasted into.\n\nWholly optional and inert when absent, like ``parallel:`` and ``coverage:``.\nNothing in Steppy assumes a control plane exists; this block is read by one\ncommand and ignored by every other.",
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "title": "CloudConfig",
+      "type": "object"
+    },
+    "CoverageApiConfig": {
+      "additionalProperties": false,
+      "description": "One backend API tracked by the coverage map (a project may have several,\ne.g. an orders-backend + a billing-backend).",
+      "properties": {
+        "base_urls": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Base Urls",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "openapi": {
+          "title": "Openapi",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "openapi"
+      ],
+      "title": "CoverageApiConfig",
+      "type": "object"
+    },
+    "CoverageConfig": {
+      "additionalProperties": false,
+      "description": "Settings for the coverage map (``steppy run --coverage`` + ``steppy\ncoverage`` commands). The whole block is optional \u2014 recording is off\nunless ``--coverage`` is passed, regardless of this block.",
+      "properties": {
+        "api_resource_types": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Api Resource Types",
+          "type": "array"
+        },
+        "apis": {
+          "items": {
+            "$ref": "#/$defs/CoverageApiConfig"
+          },
+          "title": "Apis",
+          "type": "array"
+        },
+        "module_ignore": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Module Ignore",
+          "type": "array"
+        },
+        "non_ui": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Non Ui",
+          "type": "array"
+        },
+        "records_dir": {
+          "default": "./output/coverage",
+          "title": "Records Dir",
+          "type": "string"
+        },
+        "route_param_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Route Param Patterns",
+          "type": "array"
+        },
+        "sitemap": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sitemap"
+        },
+        "sourcemap_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sourcemap Dir"
+        },
+        "store_path": {
+          "default": "./.steppy/coverage.db",
+          "title": "Store Path",
+          "type": "string"
+        }
+      },
+      "title": "CoverageConfig",
+      "type": "object"
+    },
+    "DatepickerConfig": {
+      "additionalProperties": false,
+      "description": "Selectors for the ``pick-date`` / ``pick-time`` actions' calendar and\nclock widgets. Defaults target PrimeNG ``p-datepicker``; set ``preset:`` or\noverride for other UI kits. Works out-of-the-box for PrimeNG apps with no\nconfig.",
+      "properties": {
+        "day_cell": {
+          "default": ".p-datepicker-day-cell:not(.p-datepicker-other-month)",
+          "title": "Day Cell",
+          "type": "string"
+        },
+        "hour_picker": {
+          "default": ".p-datepicker-hour-picker",
+          "title": "Hour Picker",
+          "type": "string"
+        },
+        "minute_picker": {
+          "default": ".p-datepicker-minute-picker",
+          "title": "Minute Picker",
+          "type": "string"
+        },
+        "next_button": {
+          "default": ".p-datepicker-next-button",
+          "title": "Next Button",
+          "type": "string"
+        },
+        "panel": {
+          "default": ".p-datepicker-panel",
+          "title": "Panel",
+          "type": "string"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset"
+        },
+        "prev_button": {
+          "default": ".p-datepicker-prev-button",
+          "title": "Prev Button",
+          "type": "string"
+        },
+        "trigger": {
+          "default": "button.p-datepicker-dropdown, button.p-datepicker-trigger",
+          "title": "Trigger",
+          "type": "string"
+        }
+      },
+      "title": "DatepickerConfig",
+      "type": "object"
+    },
+    "DialogConfig": {
+      "additionalProperties": false,
+      "description": "Selectors for the confirmation dialog driven by the ``confirm`` action.\nDefaults target PrimeNG ``p-confirmDialog`` (whose accept/reject buttons\nhave no ``data-testid``); set ``preset:`` or override this block in\n``config.yaml`` for other UI kits. ``confirm`` works out-of-the-box for\nPrimeNG apps with no config.",
+      "properties": {
+        "accept": {
+          "default": "button.p-confirmdialog-accept-button, button.p-confirm-dialog-accept",
+          "title": "Accept",
+          "type": "string"
+        },
+        "danger": {
+          "default": "button.p-button-danger, button.p-confirmdialog-accept-button",
+          "title": "Danger",
+          "type": "string"
+        },
+        "overlay": {
+          "default": ".p-confirmdialog, p-confirmdialog",
+          "title": "Overlay",
+          "type": "string"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset"
+        },
+        "reject": {
+          "default": "button.p-confirmdialog-reject-button, button.p-confirm-dialog-reject",
+          "title": "Reject",
+          "type": "string"
+        }
+      },
+      "title": "DialogConfig",
+      "type": "object"
+    },
+    "DropdownConfig": {
+      "additionalProperties": false,
+      "description": "Selectors for the component dropdown driven by the ``select-option``\naction. Defaults target PrimeNG ``p-select``; set ``preset:`` (e.g.\n``material``) or override individual selectors in ``config.yaml`` for other\nUI kits. ``select-option`` works out-of-the-box for PrimeNG apps with no\nconfig.",
+      "properties": {
+        "filter": {
+          "default": ".p-select-filter-container input, .p-select-filter",
+          "title": "Filter",
+          "type": "string"
+        },
+        "option": {
+          "default": ".p-select-option, .p-select-list-container li",
+          "title": "Option",
+          "type": "string"
+        },
+        "overlay": {
+          "default": ".p-select-overlay",
+          "title": "Overlay",
+          "type": "string"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset"
+        },
+        "settle": {
+          "default": "api",
+          "enum": [
+            "api",
+            "none"
+          ],
+          "title": "Settle",
+          "type": "string"
+        },
+        "trigger": {
+          "default": "p-select",
+          "title": "Trigger",
+          "type": "string"
+        }
+      },
+      "title": "DropdownConfig",
+      "type": "object"
+    },
+    "FieldsetConfig": {
+      "additionalProperties": false,
+      "description": "Selectors for the ``expand`` action (collapsible section). Defaults target\nPrimeNG ``p-fieldset``: ``toggle`` is the clickable legend/toggle button and\n``content`` is the toggleable body (used to detect whether the section is\nalready open, so ``expand`` is idempotent). Set ``preset:`` or override for\nother UI kits.",
+      "properties": {
+        "content": {
+          "default": ".p-toggleable-content, .p-fieldset-content-container",
+          "title": "Content",
+          "type": "string"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset"
+        },
+        "toggle": {
+          "default": ".p-fieldset-toggle-button, .p-fieldset-legend",
+          "title": "Toggle",
+          "type": "string"
+        }
+      },
+      "title": "FieldsetConfig",
+      "type": "object"
+    },
+    "FormAuthConfig": {
+      "additionalProperties": false,
+      "description": "Selectors for the generic hosted-login form-fill (auth ``mode: form``,\nformerly ``mode: auth0``).\n\nWorks against any IdP with a fillable login form (Auth0, Keycloak, \u2026) by\noverriding the three selectors, or by naming an IdP ``preset:`` (``auth0`` |\n``keycloak``) that fills them at once (FLAWS \u00a76.2). Defaults mirror the\nhistorical Auth0 selectors so existing configs are unchanged.",
+      "properties": {
+        "consent_selector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Consent Selector"
+        },
+        "password_selector": {
+          "default": "input[name='password']",
+          "title": "Password Selector",
+          "type": "string"
+        },
+        "post_login_url_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Post Login Url Pattern"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset"
+        },
+        "submit_selector": {
+          "default": "button[data-action-button-primary='true']",
+          "title": "Submit Selector",
+          "type": "string"
+        },
+        "totp_selector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Totp Selector"
+        },
+        "totp_submit_selector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Totp Submit Selector"
+        },
+        "username_selector": {
+          "default": "input[name='username']",
+          "title": "Username Selector",
+          "type": "string"
+        }
+      },
+      "title": "FormAuthConfig",
+      "type": "object"
+    },
+    "GlobalAuthConfig": {
+      "description": "Global authentication settings.",
+      "properties": {
+        "form": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FormAuthConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "storage_state_dir": {
+          "default": "./.auth",
+          "title": "Storage State Dir",
+          "type": "string"
+        },
+        "storage_state_ttl": {
+          "default": 3600,
+          "title": "Storage State Ttl",
+          "type": "integer"
+        }
+      },
+      "title": "GlobalAuthConfig",
+      "type": "object"
+    },
+    "GuideTourTarget": {
+      "additionalProperties": false,
+      "description": "Publish the tours with the static guide site, under ``tours/<build-id>/``.",
+      "properties": {
+        "type": {
+          "const": "guide",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "GuideTourTarget",
+      "type": "object"
+    },
+    "LayoutConfig": {
+      "additionalProperties": false,
+      "description": "A named viewport for guide capture. When ``screenshot.layouts`` is\npopulated, ``steppy run --guide`` parametrizes captures over each layout\nand screenshots land under ``output/screenshots/<scenario>/[<locale>/]<layout>/``.",
+      "properties": {
+        "device_scale_factor": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Device Scale Factor",
+          "type": "integer"
+        },
+        "height": {
+          "title": "Height",
+          "type": "integer"
+        },
+        "width": {
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "title": "LayoutConfig",
+      "type": "object"
+    },
+    "LocalStorageI18nConfig": {
+      "additionalProperties": false,
+      "description": "Per-locale localStorage values used to switch the app's UI language.\n\nThe same `key` is written for every locale; only the value changes.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "object"
+        }
+      },
+      "required": [
+        "key",
+        "values"
+      ],
+      "title": "LocalStorageI18nConfig",
+      "type": "object"
+    },
+    "OutputConfig": {
+      "additionalProperties": false,
+      "description": "Where run artifacts are written and read back (FLAWS \u00a74.6).\n\nBoth live keys are resolved against the project root, so a relative value\nlands under it and an absolute one wins outright. ``screenshots_dir`` is\nread by the *writer* (the generated conftest, at runtime \u2014 editing it takes\neffect without re-running ``steppy generate``) and by every reader:\n``steppy guide``'s ``--screenshots-dir`` default, ``steppy build``'s\nfallback when the TypeScript config omits ``screenshotsDir``, the parallel\ncoordinator's failure harvest, and ``steppy bundle create``.\n``guides_dir`` is ``steppy guide``'s ``--output-dir`` default and the\nbundle's guides root. ``tours_dir`` holds the canonical in-app tour tree\n(``<tours_dir>/<build-id>/``) that ``steppy generate`` / ``steppy tours``\nwrite and the static ``steppy build`` republishes.\n\nA value outside ``output/`` is allowed and honoured, but note what only\narchives ``output/``: results bundles, the shipped CI artifact upload, the\nscaffolded ``.gitignore``, and the ``--workers N`` bind mount (where a\ncapture written elsewhere cannot leave the container at all). Each of those\nwarns rather than failing silently.\n\n``reports_dir`` is **deprecated and ignored**. Nothing ever wrote\n``output/reports``: Playwright traces and videos are top-level\n``output/traces`` / ``output/videos``, and ``report.junit_xml`` /\n``report.html`` are explicit paths of their own. It is still accepted so an\nexisting ``config.yaml`` keeps loading; ``steppy validate`` warns and\n``steppy update --check`` reports it.",
+      "properties": {
+        "guides_dir": {
+          "default": "./output/guides",
+          "title": "Guides Dir",
+          "type": "string"
+        },
+        "reports_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reports Dir"
+        },
+        "screenshots_dir": {
+          "default": "./output/screenshots",
+          "title": "Screenshots Dir",
+          "type": "string"
+        },
+        "tours_dir": {
+          "default": "./output/tours",
+          "title": "Tours Dir",
+          "type": "string"
+        }
+      },
+      "title": "OutputConfig",
+      "type": "object"
+    },
+    "ParallelConfig": {
+      "additionalProperties": false,
+      "description": "Settings for ``steppy run --workers N`` (N >= 2). The whole block is\noptional \u2014 only consulted when parallel mode is engaged. Single-worker\nruns (no flag, or ``--workers 1``) ignore it entirely.",
+      "properties": {
+        "build_context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Build Context"
+        },
+        "build_image": {
+          "default": true,
+          "title": "Build Image",
+          "type": "boolean"
+        },
+        "circuit_breaker": {
+          "$ref": "#/$defs/CircuitBreakerConfig"
+        },
+        "compose_file": {
+          "default": "docker-compose.yml",
+          "title": "Compose File",
+          "type": "string"
+        },
+        "dockerfile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dockerfile"
+        },
+        "healthcheck_timeout": {
+          "default": 120,
+          "title": "Healthcheck Timeout",
+          "type": "integer"
+        },
+        "isolate_auth": {
+          "default": false,
+          "title": "Isolate Auth",
+          "type": "boolean"
+        },
+        "pre_auth": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreAuthConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "retry": {
+          "$ref": "#/$defs/RetryConfig"
+        },
+        "worker_base_image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worker Base Image"
+        },
+        "worker_image": {
+          "default": "steppy-worker",
+          "title": "Worker Image",
+          "type": "string"
+        },
+        "workers": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "const": "auto",
+              "type": "string"
+            }
+          ],
+          "default": 1,
+          "title": "Workers"
+        }
+      },
+      "title": "ParallelConfig",
+      "type": "object"
+    },
+    "PdfConfig": {
+      "additionalProperties": false,
+      "description": "PDF export settings, shared by ``steppy guide --pdf/--handbook`` and\n``steppy build --pdf/--handbook``.\n\nRendering is headless Chromium's print-to-PDF over the already-generated\nguide HTML, so the ``@media print`` rules in the guide templates are what\nthe PDF actually shows. Defaults are chosen so an unconfigured project\ngets a usable document: A4 portrait, backgrounds ON (Playwright defaults\nthem off, which would drop the step badges and role chip), and a\n``N / M`` footer.",
+      "properties": {
+        "format": {
+          "default": "A4",
+          "enum": [
+            "A0",
+            "A1",
+            "A2",
+            "A3",
+            "A4",
+            "A5",
+            "A6",
+            "Letter",
+            "Legal",
+            "Tabloid",
+            "Ledger"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "landscape": {
+          "default": false,
+          "title": "Landscape",
+          "type": "boolean"
+        },
+        "margin": {
+          "$ref": "#/$defs/PdfMarginConfig"
+        },
+        "page_numbers": {
+          "default": true,
+          "title": "Page Numbers",
+          "type": "boolean"
+        },
+        "print_background": {
+          "default": true,
+          "title": "Print Background",
+          "type": "boolean"
+        },
+        "scale": {
+          "default": 1.0,
+          "maximum": 2,
+          "minimum": 0.1,
+          "title": "Scale",
+          "type": "number"
+        },
+        "timeout": {
+          "default": 30000,
+          "minimum": 1000,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "title": "PdfConfig",
+      "type": "object"
+    },
+    "PdfMarginConfig": {
+      "additionalProperties": false,
+      "description": "Page margins for PDF export. Any CSS length Chromium accepts\n(``12mm``, ``0.5in``, ``48px``). The bottom default leaves room for the\npage-number footer.",
+      "properties": {
+        "bottom": {
+          "default": "14mm",
+          "title": "Bottom",
+          "type": "string"
+        },
+        "left": {
+          "default": "12mm",
+          "title": "Left",
+          "type": "string"
+        },
+        "right": {
+          "default": "12mm",
+          "title": "Right",
+          "type": "string"
+        },
+        "top": {
+          "default": "12mm",
+          "title": "Top",
+          "type": "string"
+        }
+      },
+      "title": "PdfMarginConfig",
+      "type": "object"
+    },
+    "PiperConfig": {
+      "additionalProperties": false,
+      "description": "Settings for the ``piper`` provider \u2014 the free, offline, neural voice.\n\nSteppy shells out to ``python -m piper`` and never imports the package:\npiper1-gpl is GPL-3.0, and an arms-length subprocess keeps it a user-installed\ntool rather than a dependency of a permissively-licensed wheel. It is\ndeliberately absent from ``pyproject.toml`` extras for the same reason \u2014\ninstall it yourself with ``pip install piper-tts``.\n\nVoice models are per-language (``fr_FR-siwis-medium``, ``nl_NL-mls-medium``),\nwhich is why ``TtsConfig.voice`` accepts a per-locale map.",
+      "properties": {
+        "data_dir": {
+          "default": ".steppy/voices",
+          "title": "Data Dir",
+          "type": "string"
+        },
+        "download": {
+          "default": true,
+          "title": "Download",
+          "type": "boolean"
+        },
+        "python": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Python"
+        }
+      },
+      "title": "PiperConfig",
+      "type": "object"
+    },
+    "PreAuthConfig": {
+      "additionalProperties": false,
+      "description": "Pre-authentication hook for ``steppy run --workers N`` (parallel mode).\n\nWhen set, the coordinator injects a one-off ``steppy-preauth`` service into\neach worker's stack and runs ``command`` INSIDE the stack network \u2014 gated\nvia Compose ``service_completed_successfully`` so it finishes before any\n``steppy-worker`` claims a scenario. Its job is to populate the shared\n``.auth`` cache with a session captured at the in-network origin\n(``apps.<role>.internal_url``); a host-captured ``storage-state`` file\ncannot serve that origin because Playwright storage state is origin-bound.\nDe-duplicated once-per-run across the N per-worker stacks via an O_EXCL\nlock in the shared coord dir. Unset \u21d2 the feature is entirely inert (the\nrendered override + dispatch are byte-identical to today).",
+      "properties": {
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "title": "Command"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "timeout": {
+          "default": 600,
+          "minimum": 1,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "title": "PreAuthConfig",
+      "type": "object"
+    },
+    "ReportConfig": {
+      "additionalProperties": false,
+      "description": "CI-friendly reporting artifacts + flaky-retry (FLAWS \u00a76.1).\n\nAll fields are off by default, so omitting this block keeps ``steppy run``\nbyte-identical. ``junit_xml``/``html`` are output paths; when set, ``run``\nappends the matching pytest flag. ``trace`` turns on Playwright tracing;\n``on-failure`` (the useful default when enabled) saves a trace zip only for\nfailed tests, ``on`` saves every trace, ``off`` disables it. ``video``\nmirrors ``trace`` for Playwright video recording (``on-failure`` keeps only\nfailed-test webms). ``retries`` reruns each failed test up to N times via\npytest-rerunfailures (the ``steppy-dev[retry]`` extra); 0 disables it. The CLI\n``--trace``/``--video`` flags force ``on-failure`` and ``--retries N``\noverrides ``retries`` for a single run.",
+      "properties": {
+        "html": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Html"
+        },
+        "junit_xml": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Junit Xml"
+        },
+        "retries": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "trace": {
+          "default": "off",
+          "enum": [
+            "off",
+            "on",
+            "on-failure"
+          ],
+          "title": "Trace",
+          "type": "string"
+        },
+        "video": {
+          "default": "off",
+          "enum": [
+            "off",
+            "on",
+            "on-failure"
+          ],
+          "title": "Video",
+          "type": "string"
+        }
+      },
+      "title": "ReportConfig",
+      "type": "object"
+    },
+    "RetryConfig": {
+      "additionalProperties": false,
+      "description": "Scenario-level retry pass for ``steppy run --workers N`` (N >= 2).\n\nDistinct from ``report.retries`` (pytest-rerunfailures), which reruns a\nfailed test **in-process, immediately** \u2014 same worker, same moment, same\ncontention. At scale the dominant flake source is cross-worker contention,\nand retrying into it proves nothing. This pass instead waits for the whole\nqueue to drain, then re-runs only the failed scenarios at **reduced\nconcurrency** in the still-running stacks.\n\nThat difference is also what makes the outcome meaningful: a scenario that\nfails under 8 workers and passes alone is FLAKY (contention), not broken.\n\n``passes: 0`` disables the feature entirely.",
+      "properties": {
+        "passes": {
+          "default": 1,
+          "maximum": 3,
+          "minimum": 0,
+          "title": "Passes",
+          "type": "integer"
+        },
+        "workers": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "title": "RetryConfig",
+      "type": "object"
+    },
+    "ScreenshotConfig": {
+      "description": "Screenshot settings.",
+      "properties": {
+        "device_scale_factor": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Device Scale Factor",
+          "type": "integer"
+        },
+        "format": {
+          "default": "png",
+          "enum": [
+            "png",
+            "jpeg"
+          ],
+          "title": "Format",
+          "type": "string"
+        },
+        "full_page": {
+          "default": false,
+          "title": "Full Page",
+          "type": "boolean"
+        },
+        "highlight": {
+          "default": true,
+          "title": "Highlight",
+          "type": "boolean"
+        },
+        "highlight_border": {
+          "default": "2px solid red",
+          "title": "Highlight Border",
+          "type": "string"
+        },
+        "highlight_color": {
+          "default": "rgba(255, 0, 0, 0.3)",
+          "title": "Highlight Color",
+          "type": "string"
+        },
+        "layouts": {
+          "additionalProperties": {
+            "$ref": "#/$defs/LayoutConfig"
+          },
+          "title": "Layouts",
+          "type": "object"
+        },
+        "mask": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mask",
+          "type": "array"
+        },
+        "mask_color": {
+          "default": "#000000",
+          "title": "Mask Color",
+          "type": "string"
+        },
+        "viewport": {
+          "$ref": "#/$defs/ViewportConfig"
+        }
+      },
+      "title": "ScreenshotConfig",
+      "type": "object"
+    },
+    "SecurityConfig": {
+      "additionalProperties": false,
+      "description": "Security-sensitive toggles.\n\n``allow_shell_capture`` gates the ``capture from.type=shell`` action, which\nruns ``subprocess.run(..., shell=True)`` with values that may be scraped from\nthe live page (DOM) or an HTTP response. It is a command-injection vector by\ndesign, so it is **disabled by default** and must be explicitly enabled.",
+      "properties": {
+        "allow_shell_capture": {
+          "default": false,
+          "title": "Allow Shell Capture",
+          "type": "boolean"
+        }
+      },
+      "title": "SecurityConfig",
+      "type": "object"
+    },
+    "TimingConfig": {
+      "description": "Timing defaults.",
+      "properties": {
+        "action_wait": {
+          "default": 500,
+          "title": "Action Wait",
+          "type": "integer"
+        },
+        "navigate_wait": {
+          "default": "networkidle",
+          "enum": [
+            "networkidle",
+            "load",
+            "domcontentloaded",
+            "none"
+          ],
+          "title": "Navigate Wait",
+          "type": "string"
+        },
+        "navigation_wait": {
+          "default": 2000,
+          "title": "Navigation Wait",
+          "type": "integer"
+        },
+        "sqs_wait": {
+          "default": 5000,
+          "title": "Sqs Wait",
+          "type": "integer"
+        },
+        "step_timeout": {
+          "default": 30000,
+          "title": "Step Timeout",
+          "type": "integer"
+        }
+      },
+      "title": "TimingConfig",
+      "type": "object"
+    },
+    "ToggleConfig": {
+      "additionalProperties": false,
+      "description": "Selectors for the ``toggle`` action. Defaults target PrimeNG: a\n``ToggleSwitch`` hides a real ``input[role=\"switch\"]`` behind styling, and\nsegmented groups are ``p-togglebutton`` items. Set ``preset:`` or override\nfor other UI kits.",
+      "properties": {
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset"
+        },
+        "segment": {
+          "default": ".p-togglebutton",
+          "title": "Segment",
+          "type": "string"
+        },
+        "switch": {
+          "default": "input[role=\"switch\"]",
+          "title": "Switch",
+          "type": "string"
+        }
+      },
+      "title": "ToggleConfig",
+      "type": "object"
+    },
+    "TokenConfig": {
+      "description": "Token-based authentication configuration.",
+      "properties": {
+        "body": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Body"
+        },
+        "endpoint": {
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "inject_as": {
+          "enum": [
+            "localStorage",
+            "cookie",
+            "header"
+          ],
+          "title": "Inject As",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "method": {
+          "default": "POST",
+          "title": "Method",
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpoint",
+        "inject_as",
+        "key"
+      ],
+      "title": "TokenConfig",
+      "type": "object"
+    },
+    "ToursConfig": {
+      "additionalProperties": false,
+      "description": "In-app tours: guided popovers over the live app, compiled from scenarios.\n\nAbsent or ``enabled: false`` \u21d2 no tour output at all and every existing\noutput byte-identical. When enabled, ``steppy generate`` and ``steppy\ntours`` compile every opted-in scenario into ``<output.tours_dir>/<build-id>/``\nplus a flat copy per ``app-assets`` target, and ``generate`` appends a CI\nreplay to each opted-in scenario's test file (``replay``). A ``guide``\ntarget makes the static ``steppy build`` republish the tree.\n\n``build_id`` is ``git-sha``, ``git-sha:<repo-path>`` or a literal (see\n:mod:`steppy.buildid`); an unset ``${VAR}`` is accepted here and only\nrejected when tours are emitted, so unrelated commands keep working.\n``layouts`` maps the layout names scenario steps use to CSS media queries\nthe overlay evaluates (skip-only: a step whose layouts do not match is\nskipped, never re-routed).",
+      "properties": {
+        "build_id": {
+          "default": "git-sha",
+          "title": "Build Id",
+          "type": "string"
+        },
+        "default": {
+          "default": false,
+          "title": "Default",
+          "type": "boolean"
+        },
+        "default_locale": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Default Locale"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "guide_base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Guide Base Url"
+        },
+        "layouts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layouts"
+        },
+        "locales": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locales"
+        },
+        "replay": {
+          "default": true,
+          "title": "Replay",
+          "type": "boolean"
+        },
+        "targets": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "app-assets": "#/$defs/AppAssetsTourTarget",
+                "guide": "#/$defs/GuideTourTarget"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/AppAssetsTourTarget"
+              },
+              {
+                "$ref": "#/$defs/GuideTourTarget"
+              }
+            ]
+          },
+          "title": "Targets",
+          "type": "array"
+        },
+        "test_id_attribute": {
+          "default": "data-testid",
+          "title": "Test Id Attribute",
+          "type": "string"
+        }
+      },
+      "title": "ToursConfig",
+      "type": "object"
+    },
+    "TtsConfig": {
+      "additionalProperties": false,
+      "description": "Text-to-speech provider selection for video narration.\n\n``provider`` is a plain string rather than a ``Literal`` on purpose: besides\nthe built-ins (``none``, ``piper``, ``espeak``, ``http``) and the vendor\npresets (``elevenlabs``, ``openai``, ``azure``, ``google``), a third party\ncan register one through the ``steppy.tts_providers`` entry-point group, and\na closed enum would make that unreachable.\n\nDefault is ``none``: captions only, no audio, no network, no bill. Adding a\nvoice is one config line.\n\nPut the key in the environment, not here \u2014 ``${ELEVENLABS_API_KEY}`` is\nresolved at config load, and a literal value earns a hygiene warning.",
+      "properties": {
+        "api_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Api Key"
+        },
+        "base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Url"
+        },
+        "cache": {
+          "default": true,
+          "title": "Cache",
+          "type": "boolean"
+        },
+        "cache_dir": {
+          "default": ".steppy/tts-cache",
+          "title": "Cache Dir",
+          "type": "string"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "http": {
+          "$ref": "#/$defs/TtsHttpConfig"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "options": {
+          "title": "Options",
+          "type": "object"
+        },
+        "piper": {
+          "$ref": "#/$defs/PiperConfig"
+        },
+        "provider": {
+          "default": "none",
+          "title": "Provider",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "speed": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "maximum": 4,
+          "title": "Speed",
+          "type": "number"
+        },
+        "timeout": {
+          "default": 60000,
+          "minimum": 1000,
+          "title": "Timeout",
+          "type": "integer"
+        },
+        "voice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Voice"
+        }
+      },
+      "title": "TtsConfig",
+      "type": "object"
+    },
+    "TtsHttpConfig": {
+      "additionalProperties": false,
+      "description": "Raw HTTP shape of a text-to-speech request.\n\nThis is the engine every vendor preset runs on: ``elevenlabs``, ``openai``,\n``azure`` and ``google`` are rows of data in ``steppy/tts/presets.py`` that\nfill these fields in, and a vendor Steppy has never heard of is reachable by\nwriting them out here directly. That is what makes \"swap the provider by\nediting config.yaml\" literally true rather than aspirational.\n\nString leaves in ``headers``/``json``/``body`` may contain ``{text}``,\n``{voice}``, ``{locale}``, ``{model}``, ``{speed}``, ``{api_key}``,\n``{region}``, plus any key from ``TtsConfig.options``. Substitution happens\non the parsed structure, never on serialized JSON, so narration containing\na brace cannot corrupt the request body.",
+      "properties": {
+        "audio_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audio Path"
+        },
+        "body": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Body"
+        },
+        "content_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Type"
+        },
+        "encoding": {
+          "default": "raw",
+          "enum": [
+            "raw",
+            "base64"
+          ],
+          "title": "Encoding",
+          "type": "string"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Headers",
+          "type": "object"
+        },
+        "json": {
+          "anyOf": [
+            {
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Json"
+        },
+        "method": {
+          "default": "POST",
+          "title": "Method",
+          "type": "string"
+        },
+        "response": {
+          "default": "binary",
+          "enum": [
+            "binary",
+            "json"
+          ],
+          "title": "Response",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "title": "TtsHttpConfig",
+      "type": "object"
+    },
+    "VideoBrandingConfig": {
+      "additionalProperties": false,
+      "description": "Marks burned into every frame. ``logo`` is a project-relative image path;\nit is embedded as a data URI, since the render page has no network.",
+      "properties": {
+        "accent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Accent"
+        },
+        "font_family": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Font Family"
+        },
+        "logo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Logo"
+        }
+      },
+      "title": "VideoBrandingConfig",
+      "type": "object"
+    },
+    "VideoConfig": {
+      "additionalProperties": false,
+      "description": "Narrated-video settings for guides declaring ``modes: ['video']``.\n\nOnly consulted once a render is armed with ``steppy build --video`` or\n``steppy guide --video``; every other command ignores this block, and a\nguide that declares the mode without the flag renders nothing.\n\nFrames are stepped deterministically rather than screen-recorded, so the\noutput depends on the manifest and this config \u2014 not on how fast the render\nhost happens to be. Two consequences worth knowing: ``fps`` and ``width``\nare the cost knobs (a render is frames x screenshot latency), and because\ncursor travel is timed over *display* distance, changing ``width`` changes\nthe video's duration.\n\nRequires ffmpeg on PATH \u2014 including with ``tts.provider: none``, since a\nsilent captioned video still has to be encoded.",
+      "properties": {
+        "branding": {
+          "$ref": "#/$defs/VideoBrandingConfig"
+        },
+        "cache": {
+          "default": true,
+          "title": "Cache",
+          "type": "boolean"
+        },
+        "cache_dir": {
+          "default": ".steppy/video-cache",
+          "title": "Cache Dir",
+          "type": "string"
+        },
+        "captions": {
+          "default": "band",
+          "enum": [
+            "band",
+            "off"
+          ],
+          "title": "Captions",
+          "type": "string"
+        },
+        "crf": {
+          "default": 23,
+          "maximum": 51,
+          "minimum": 0,
+          "title": "Crf",
+          "type": "integer"
+        },
+        "ffmpeg_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ffmpeg Path"
+        },
+        "fps": {
+          "default": 24,
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Fps",
+          "type": "integer"
+        },
+        "hold_ms": {
+          "default": 700,
+          "minimum": 0,
+          "title": "Hold Ms",
+          "type": "integer"
+        },
+        "intro_ms": {
+          "default": 1200,
+          "minimum": 0,
+          "title": "Intro Ms",
+          "type": "integer"
+        },
+        "jpeg_quality": {
+          "default": 90,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Jpeg Quality",
+          "type": "integer"
+        },
+        "max_height": {
+          "anyOf": [
+            {
+              "minimum": 160,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Height"
+        },
+        "min_step_ms": {
+          "default": 1500,
+          "minimum": 0,
+          "title": "Min Step Ms",
+          "type": "integer"
+        },
+        "narration_pad_ms": {
+          "default": 400,
+          "minimum": 0,
+          "title": "Narration Pad Ms",
+          "type": "integer"
+        },
+        "outro_ms": {
+          "default": 1500,
+          "minimum": 0,
+          "title": "Outro Ms",
+          "type": "integer"
+        },
+        "preset": {
+          "default": "medium",
+          "enum": [
+            "ultrafast",
+            "superfast",
+            "veryfast",
+            "faster",
+            "fast",
+            "medium",
+            "slow",
+            "slower",
+            "veryslow"
+          ],
+          "title": "Preset",
+          "type": "string"
+        },
+        "stamp": {
+          "$ref": "#/$defs/VideoStampConfig"
+        },
+        "timeout": {
+          "default": 120000,
+          "minimum": 1000,
+          "title": "Timeout",
+          "type": "integer"
+        },
+        "tts": {
+          "$ref": "#/$defs/TtsConfig"
+        },
+        "width": {
+          "default": 1280,
+          "maximum": 3840,
+          "minimum": 160,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "title": "VideoConfig",
+      "type": "object"
+    },
+    "VideoStampConfig": {
+      "additionalProperties": false,
+      "description": "Provenance line burned into the frame \u2014 the audit-trail artifact a\nregulated buyer asks for (\"verified against 2.14 on 2026-08-05\").\n\n``text`` accepts ``{version}``, ``{date}``, ``{locale}``, ``{layout}`` and\n``{slug}``. Point ``version`` at the environment (``${STEPPY_RELEASE}``) so\nCI stamps the real tag.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "text": {
+          "default": "{version} \u00b7 {date}",
+          "title": "Text",
+          "type": "string"
+        },
+        "version": {
+          "default": "dev",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "title": "VideoStampConfig",
+      "type": "object"
+    },
+    "ViewportConfig": {
+      "description": "Viewport configuration for screenshots.",
+      "properties": {
+        "height": {
+          "default": 720,
+          "title": "Height",
+          "type": "integer"
+        },
+        "width": {
+          "default": 1280,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "title": "ViewportConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Main Steppy configuration.",
+  "properties": {
+    "apps": {
+      "additionalProperties": {
+        "$ref": "#/$defs/AppConfig"
+      },
+      "title": "Apps",
+      "type": "object"
+    },
+    "auth": {
+      "$ref": "#/$defs/GlobalAuthConfig"
+    },
+    "cloud": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CloudConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "coverage": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CoverageConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "datepicker": {
+      "$ref": "#/$defs/DatepickerConfig"
+    },
+    "default_locale": {
+      "default": "fr",
+      "title": "Default Locale",
+      "type": "string"
+    },
+    "dialog": {
+      "$ref": "#/$defs/DialogConfig"
+    },
+    "dropdown": {
+      "$ref": "#/$defs/DropdownConfig"
+    },
+    "fieldset": {
+      "$ref": "#/$defs/FieldsetConfig"
+    },
+    "locales": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Locales",
+      "type": "array"
+    },
+    "output": {
+      "$ref": "#/$defs/OutputConfig"
+    },
+    "parallel": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ParallelConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "pdf": {
+      "$ref": "#/$defs/PdfConfig"
+    },
+    "report": {
+      "$ref": "#/$defs/ReportConfig"
+    },
+    "screenshot": {
+      "$ref": "#/$defs/ScreenshotConfig"
+    },
+    "security": {
+      "$ref": "#/$defs/SecurityConfig"
+    },
+    "timing": {
+      "$ref": "#/$defs/TimingConfig"
+    },
+    "toggle": {
+      "$ref": "#/$defs/ToggleConfig"
+    },
+    "tours": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ToursConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "video": {
+      "$ref": "#/$defs/VideoConfig"
+    }
+  },
+  "required": [
+    "apps"
+  ],
+  "title": "Steppy configuration (config.yaml)",
+  "type": "object"
+}

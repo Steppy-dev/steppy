@@ -1,0 +1,48 @@
+{
+  "buildId": "demo-0001",
+  "entry": {
+    "route": "/invoices/:invoiceId"
+  },
+  "id": "send-invoice",
+  "kind": "steppy-tour",
+  "locale": "en",
+  "schema": 1,
+  "steps": [
+    {
+      "advance": {
+        "on": "input"
+      },
+      "id": "send-to",
+      "target": "send-to",
+      "text": "Enter the recipient's e-mail address and a short message.",
+      "title": "Recipient and message"
+    },
+    {
+      "advance": {
+        "on": "input"
+      },
+      "id": "send-message",
+      "target": "send-message",
+      "text": "Enter the recipient's e-mail address and a short message.",
+      "title": "Recipient and message"
+    },
+    {
+      "advance": {
+        "on": "click"
+      },
+      "id": "send-invoice-btn",
+      "target": "send-invoice-btn",
+      "text": "Click **Send**."
+    },
+    {
+      "advance": {
+        "on": "manual"
+      },
+      "id": "invoice-status",
+      "target": "invoice-status",
+      "text": "The status changes to **Sent**.",
+      "title": "Sent"
+    }
+  ],
+  "title": "Send an invoice"
+}

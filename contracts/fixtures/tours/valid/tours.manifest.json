@@ -1,0 +1,78 @@
+{
+  "buildId": "demo-0001",
+  "defaultLocale": "en",
+  "guideOrigin": "https://guide.example.com",
+  "kind": "steppy-tours-manifest",
+  "layouts": {
+    "desktop": "(min-width: 768px)",
+    "mobile": "(max-width: 767.98px)"
+  },
+  "locales": [
+    "en",
+    "fr"
+  ],
+  "schema": 1,
+  "testIdAttribute": "data-testid",
+  "tours": [
+    {
+      "entry": {
+        "route": "/invoices"
+      },
+      "files": {
+        "en": "create-invoice.en.json",
+        "fr": "create-invoice.fr.json"
+      },
+      "id": "create-invoice",
+      "integrity": {
+        "en": "sha384-1laaSS95oLd/KTWvJEQOHwe6RNHp8BPziMwT5OMOw1IDktCQQYdm6wPW56/pN65T",
+        "fr": "sha384-CCTucHAOJC5uWK8CxybLUB2Mp4ScM4dP7fIvxST+rrFDjWcPeC+qohRp+pxdfk90"
+      },
+      "role": "editor",
+      "steps": 5,
+      "title": {
+        "en": "Create an invoice",
+        "fr": "Créer une facture"
+      }
+    },
+    {
+      "entry": {
+        "route": "/invoices"
+      },
+      "files": {
+        "en": "remove-inactive-customers.en.json",
+        "fr": "remove-inactive-customers.fr.json"
+      },
+      "id": "remove-inactive-customers",
+      "integrity": {
+        "en": "sha384-vAtAuxDcy+zEybFMnERuU36ErEDkRkNiCj+jkQ1olf9U8s3h6Hdwgz6iTipOwXeT",
+        "fr": "sha384-54jR98OGGVfOxcPUKB42eBv/LNw4D6Wbn3NCiJatMWFp79VlaTfEqlsRrZ3urvt1"
+      },
+      "role": "editor",
+      "steps": 6,
+      "title": {
+        "en": "Remove inactive customers",
+        "fr": "Retirer les clients inactifs"
+      }
+    },
+    {
+      "entry": {
+        "route": "/invoices/:invoiceId"
+      },
+      "files": {
+        "en": "send-invoice.en.json",
+        "fr": "send-invoice.fr.json"
+      },
+      "id": "send-invoice",
+      "integrity": {
+        "en": "sha384-2dmpOhvm4dI0hCJmSG7Y9Zk9sSU3IVUkvEdnNYQmvZKNbWgmvpeiI5WoCiA1xPCj",
+        "fr": "sha384-yOMQ1zFQfu3qQMPy6vkAAG+9qTjpNRL/sNKCNPOX+DsYEdQpu3Z/Z+GhM58PaFnA"
+      },
+      "role": "editor",
+      "steps": 4,
+      "title": {
+        "en": "Send an invoice",
+        "fr": "Envoyer une facture"
+      }
+    }
+  ]
+}

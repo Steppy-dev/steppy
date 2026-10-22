@@ -1,0 +1,124 @@
+# yaml-language-server: $schema=./steppy-config.schema.json
+#
+# Steppy configuration — created by `steppy init`.
+#
+# A "role" is one front-end app / persona you test. This starter uses
+# admin / editor / viewer; rename them (and their URLs) to fit your product,
+# then add/remove roles freely.
+#
+# Credentials use ${ENV_VAR} references so no secrets live in this committed
+# file. Set the vars in your environment/CI, or copy credentials.yaml.example to
+# credentials.yaml (gitignored) and fill in real values. ${VAR:-default}
+# supplies a fallback. See SECURITY.md in the Steppy repo for details.
+#
+# The `# yaml-language-server` line above wires up autocomplete + inline typo
+# checking in editors with the YAML extension (VS Code, etc.).
+apps:
+  admin:
+    name: "My App — Admin"
+    url: "http://localhost:3000"
+    auth:
+      # `form` = generic hosted-login form-fill (works with any IdP that has a
+      # fillable login form: Auth0, Keycloak, …). Other modes: storage-state,
+      # bypass, token. See STEPPY-REFERENCE.md.
+      mode: form
+      credentials:
+        username: "${STEPPY_ADMIN_USERNAME}"
+        password: "${STEPPY_ADMIN_PASSWORD}"
+    # Per-locale localStorage values, set before screenshots so the app renders
+    # in the right language during `steppy run --guide`.
+    i18n:
+      localstorage:
+        key: "app-language"
+        values:
+          en: "en"
+          fr: "fr"
+  editor:
+    name: "My App — Editor"
+    url: "http://localhost:3001"
+    auth:
+      mode: form
+      credentials:
+        username: "${STEPPY_EDITOR_USERNAME}"
+        password: "${STEPPY_EDITOR_PASSWORD}"
+  viewer:
+    name: "My App — Viewer"
+    url: "http://localhost:3002"
+    auth:
+      mode: form
+      credentials:
+        username: "${STEPPY_VIEWER_USERNAME}"
+        password: "${STEPPY_VIEWER_PASSWORD}"
+
+# Auth settings. The `form:` block holds the three login-form selectors; name an
+# IdP `preset:` (auth0 | keycloak) to fill them at once.
+auth:
+  storage_state_dir: "./.auth"
+  storage_state_ttl: 3600  # seconds (1 hour)
+  form:
+    # preset: keycloak      # -> #username / #password / #kc-login
+    username_selector: "input[name='username'], input[name='email'], #username"
+    password_selector: "input[name='password'], #password"
+    submit_selector: "button[type='submit'], button[name='action'][value='default']"
+    post_login_url_pattern: "**/callback**"
+    consent_selector: null
+
+# Supported locales for guide generation. Add any locale code here.
+locales:
+  - en
+  - fr
+
+default_locale: en
+
+screenshot:
+  viewport:
+    width: 1280
+    height: 720
+  format: png
+  full_page: false
+  highlight: true
+  highlight_color: "rgba(255, 0, 0, 0.3)"
+  highlight_border: "2px solid red"
+
+timing:
+  navigation_wait: 2000
+  action_wait: 500
+  sqs_wait: 5000
+  step_timeout: 30000
+
+# Where artifacts are written and read back, resolved against the project root.
+# `screenshots_dir` is honoured by the capture side and by every reader
+# (`steppy guide`, `steppy build`, `steppy bundle`); `guides_dir` is where
+# `steppy guide` writes. Pointing either outside `output/` works, but only
+# `output/` is bundled, uploaded by the CI template, gitignored, and mounted
+# back to the host by `steppy run --workers N`.
+output:
+  screenshots_dir: "./output/screenshots"
+  guides_dir: "./output/guides"
+
+# Optional blocks not shown here (all off / absent by default):
+#   report:    JUnit XML, HTML report, Playwright trace + video on failure, retries
+#   parallel:  `steppy run --workers N` — Docker-backed parallel execution, plus the
+#              retry pass (flaky vs. real failures), circuit breaker and auth isolation
+#   coverage:  `steppy run --coverage` + the `steppy coverage` gap report. Set
+#              `coverage.non_ui` there (health checks, webhooks, cron callbacks)
+#              or CI counts them against you — triage flags live in the
+#              gitignored .steppy/coverage.db and a fresh checkout has none.
+#   security:  shell-capture gate; see also `screenshot.mask` for redaction
+#   pdf:       paper settings for `--pdf` / `--handbook`
+#   video:     `--video` narrated MP4 export, incl. the `video.tts` provider
+#              (none | piper | espeak | elevenlabs | openai | azure | google | http).
+#              Run `steppy video check` to verify the toolchain.
+#   tours:     in-app tours from `tour:`-enabled scenarios — `steppy generate`
+#              writes tour JSON into your app's assets plus a CI replay per tour.
+#              Minimal: `tours: {enabled: true, targets: [{type: app-assets,
+#              path: ../your-app/public/tours}]}`; CI gate: `steppy tours
+#              --check`. The overlay's buttons ship in en/fr/nl/de (other tour
+#              languages need the host's `strings`). See docs/tours.md in the
+#              Steppy repository.
+#   cloud:     `url:` of a Steppy control plane, for `steppy bundle upload`.
+#              The URL only — the token is read from STEPPY_CLOUD_TOKEN (or
+#              --token) and has no config key on purpose, because this file is
+#              committed. Everything else here works with no plane at all.
+# Each is documented with commented examples in the Steppy repo's own config.yaml,
+# and your editor will autocomplete them from the $schema line at the top.

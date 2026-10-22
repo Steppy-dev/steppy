@@ -1,0 +1,140 @@
+{
+  "version": "1.0",
+  "slug": "invoices",
+  "mode": "interactive",
+  "role": "editor",
+  "title": {
+    "fr": "Factures",
+    "nl": "Facturen"
+  },
+  "locales": [
+    "fr",
+    "nl"
+  ],
+  "defaultLocale": "fr",
+  "layouts": [],
+  "defaultLayout": null,
+  "cursor": {
+    "pre_action_ms": 200,
+    "action_ms": 300,
+    "post_action_ms": 150,
+    "travel_speed_px_per_ms": 1.5,
+    "mode": "hotspot"
+  },
+  "steps": [
+    {
+      "id": "step-1",
+      "index": 1,
+      "action": "navigate",
+      "interactive": false,
+      "screenshotWhen": "after",
+      "waitAfter": 0,
+      "text": {
+        "fr": "Ouvrez la page des factures",
+        "nl": "Open de pagina met recepten"
+      },
+      "subtitle": {
+        "fr": null,
+        "nl": null
+      },
+      "captures": {
+        "fr": {
+          "_": {
+            "frames": [
+              {
+                "screenshot": "/assets/editor/invoices/fr/step-01.png",
+                "captureSize": {
+                  "width": 1280,
+                  "height": 720
+                },
+                "cursor": null
+              }
+            ]
+          }
+        },
+        "nl": {
+          "_": {
+            "frames": [
+              {
+                "screenshot": "/assets/editor/invoices/nl/step-01.png",
+                "captureSize": {
+                  "width": 1280,
+                  "height": 720
+                },
+                "cursor": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "step-2",
+      "index": 2,
+      "action": "click",
+      "interactive": true,
+      "screenshotWhen": "after",
+      "waitAfter": 0,
+      "text": {
+        "fr": "Cliquez sur 'Nouvelle facture'",
+        "nl": "Klik op 'Nieuw recept'"
+      },
+      "subtitle": {
+        "fr": null,
+        "nl": null
+      },
+      "captures": {
+        "fr": {
+          "_": {
+            "frames": [
+              {
+                "screenshot": "/assets/editor/invoices/fr/step-02.png",
+                "captureSize": {
+                  "width": 1280,
+                  "height": 720
+                },
+                "cursor": {
+                  "kind": "click",
+                  "target": {
+                    "bbox": {
+                      "x": 100,
+                      "y": 200,
+                      "width": 50,
+                      "height": 30
+                    },
+                    "selector": "[data-testid=\"new-invoice\"]"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "nl": {
+          "_": {
+            "frames": [
+              {
+                "screenshot": "/assets/editor/invoices/nl/step-02.png",
+                "captureSize": {
+                  "width": 1280,
+                  "height": 720
+                },
+                "cursor": {
+                  "kind": "click",
+                  "target": {
+                    "bbox": {
+                      "x": 100,
+                      "y": 200,
+                      "width": 50,
+                      "height": 30
+                    },
+                    "selector": "[data-testid=\"new-invoice\"]"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

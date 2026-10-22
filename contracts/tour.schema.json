@@ -1,0 +1,213 @@
+{
+  "$defs": {
+    "TourAdvance": {
+      "properties": {
+        "on": {
+          "enum": [
+            "click",
+            "input",
+            "change",
+            "visible",
+            "manual"
+          ],
+          "title": "On",
+          "type": "string"
+        }
+      },
+      "required": [
+        "on"
+      ],
+      "title": "TourAdvance",
+      "type": "object"
+    },
+    "TourEntry": {
+      "properties": {
+        "route": {
+          "maxLength": 512,
+          "pattern": "^/$|^(?:/(?::[A-Za-z_][A-Za-z0-9_]{0,63}|[A-Za-z0-9._~%!$&()*+,;=@-]{1,128})){1,32}$",
+          "title": "Route",
+          "type": "string"
+        }
+      },
+      "required": [
+        "route"
+      ],
+      "title": "TourEntry",
+      "type": "object"
+    },
+    "TourStep": {
+      "properties": {
+        "advance": {
+          "$ref": "#/$defs/TourAdvance"
+        },
+        "id": {
+          "pattern": "^[A-Za-z0-9_.:/-]{1,128}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "layouts": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Layouts"
+        },
+        "placement": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "bottom",
+                "left",
+                "right",
+                "auto"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placement"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_.:/-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "waitFor": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_.:/-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Waitfor"
+        }
+      },
+      "required": [
+        "id",
+        "target",
+        "advance"
+      ],
+      "title": "TourStep",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "buildId": {
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,62}[A-Za-z0-9])?$",
+      "title": "Buildid",
+      "type": "string"
+    },
+    "entry": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TourEntry"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "guideUrl": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Guideurl"
+    },
+    "id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "kind": {
+      "const": "steppy-tour",
+      "title": "Kind",
+      "type": "string"
+    },
+    "locale": {
+      "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{1,8}){0,5}$",
+      "title": "Locale",
+      "type": "string"
+    },
+    "schema": {
+      "title": "Schema",
+      "type": "integer"
+    },
+    "steps": {
+      "items": {
+        "$ref": "#/$defs/TourStep"
+      },
+      "title": "Steps",
+      "type": "array"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "kind",
+    "id",
+    "buildId",
+    "locale",
+    "title",
+    "entry",
+    "steps"
+  ],
+  "title": "Steppy in-app tour file (<tour-id>.<locale>.json)",
+  "type": "object",
+  "x-steppy-tour-schema": 1
+}

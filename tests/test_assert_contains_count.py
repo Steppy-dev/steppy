@@ -91,13 +91,42 @@ def test_codegen_contains_emits_to_contain_text(temp_scenario_file):
     assert "Pleine boîte" in src
 
 
-def test_codegen_count_comparator_emits_manual_assert(temp_scenario_file):
+def test_codegen_count_comparator_polls(temp_scenario_file):
     src = _gen(temp_scenario_file, 'count([data-testid^="site-list-row-"], >=1)')
-    # Comparator form: capture .count() into a var, then a manual assert.
-    assert ".count()" in src
-    assert "assert _n >= 1" in src
+    # Comparator form: polled until it holds, within the step timeout — not a
+    # one-shot .count() that reads 0 while the list is still loading.
+    assert (
+        "_wait_until(editor_page.locator(_interp('[data-testid^=\"site-list-row-\"]', _vars)), "
+        "'count:>=1', 30000, message='expected count >= 1')"
+    ) in src
+    assert ".count()" not in src
     # The comparator form does NOT use to_have_count.
     assert "to_have_count" not in src
+
+
+def test_codegen_count_comparator_honours_the_step_timeout(temp_scenario_file):
+    src = _gen(temp_scenario_file, "count(.row, <3)\n    - timeout: 500ms")
+    assert "'count:<3', 500, message='expected count < 3'" in src
+
+
+def test_codegen_count_comparator_keeps_its_fail_message(temp_scenario_file):
+    content = """
+    ---
+    title: Assert DSL
+    auth: false
+    ---
+
+    ### 1. Assert
+    - role: editor
+    - action: assert
+    - expect:
+      - check: count(.row, >=2)
+        message: rows for {{order}} missing
+    """
+    scenario = parse_scenario_file(temp_scenario_file(content))
+    src = SteppyGenerator(load_config()).generate_test_file(scenario)
+    ast.parse(src)
+    assert "'count:>=2', 30000, message=_interp('rows for {{order}} missing', _vars))" in src
 
 
 def test_codegen_count_plain_uses_to_have_count(temp_scenario_file):

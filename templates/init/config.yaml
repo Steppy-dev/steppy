@@ -60,8 +60,13 @@ auth:
     username_selector: "input[name='username'], input[name='email'], #username"
     password_selector: "input[name='password'], #password"
     submit_selector: "button[type='submit'], button[name='action'][value='default']"
-    post_login_url_pattern: "**/callback**"
     consent_selector: null
+    # Where the login ends (a URL glob); unset = any page under the app's url.
+    # Set it when the provider is served on the app's own origin.
+    #   post_login_url_pattern: "**/home**"
+    # The app's own login page, when it comes before the provider:
+    #   login_path: /auth
+    #   start_selector: "[data-testid='login-button']"
 
 # Supported locales for guide generation. Add any locale code here.
 locales:

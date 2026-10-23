@@ -88,9 +88,23 @@ def test_codegen_reload_keeps_default_wait(temp_scenario_file):
 
 def test_codegen_reload_with_explicit_wait(temp_scenario_file):
     src = _gen(temp_scenario_file, "    - reload: true\n    - wait: domcontentloaded")
-    assert "editor_page.reload()" in src
+    # A strategy weaker than `load` reaches reload() itself, or reload would
+    # still wait for the full load event first.
+    assert 'editor_page.reload(wait_until="domcontentloaded")' in src
     assert 'wait_for_load_state("domcontentloaded")' in src
     assert 'wait_for_load_state("networkidle")' not in src
+
+
+def test_codegen_reload_wait_none_commits(temp_scenario_file):
+    src = _gen(temp_scenario_file, "    - reload: true\n    - wait: none\n    - timeout: 5s")
+    assert 'editor_page.reload(wait_until="commit", timeout=5000)' in src
+    assert "wait_for_load_state(" not in src
+
+
+def test_codegen_reload_wait_load_is_unchanged(temp_scenario_file):
+    src = _gen(temp_scenario_file, "    - reload: true\n    - wait: load")
+    assert "editor_page.reload()" in src
+    assert "wait_until=" not in src
 
 
 def test_codegen_default_navigate_unchanged(temp_scenario_file):

@@ -8,6 +8,7 @@ from .assertions import parse_assertion
 from .durations import parse_ms
 from ._templating import make_template_env, template_search_paths
 from .models import Scenario, SteppyConfig
+from .presets import IDP_PRESETS
 
 
 class SteppyGenerator:
@@ -526,6 +527,9 @@ class SteppyGenerator:
             config=self.config,
             roles=sorted(all_roles),
             tours_enabled=self._tours_enabled(),
+            # The conftest reads config.yaml raw at run time, so it carries the
+            # preset table itself to resolve `auth.form.preset`.
+            idp_form_presets={name: kit["form"] for name, kit in IDP_PRESETS.items()},
         )
 
     def _tours_enabled(self) -> bool:

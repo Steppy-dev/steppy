@@ -1183,7 +1183,7 @@ class Scenario(BaseModel):
     seed: Optional[SeedConfig] = None
     priority: Optional[Literal["critical", "high", "medium", "low"]] = None
     auth: bool = True  # Set to false for scenarios that test the login flow itself
-    timeout: Optional[int] = None  # milliseconds
+    timeout: Optional[int] = None  # milliseconds; the default timeout of each step, not a whole-test limit
 
     # Layouts this scenario declares it must pass in (scenario-level). When set,
     # the whole flow parametrizes over these viewports — authoritative on a plain
@@ -1365,7 +1365,14 @@ class FormAuthConfig(_PresetModel):
     username_selector: str = "input[name='username']"
     password_selector: str = "input[name='password']"
     submit_selector: str = "button[data-action-button-primary='true']"
+    # Glob the page reaches once login is done (e.g. ``**/home``). Unset, the
+    # login waits for ``<app url>/**`` — which a provider served on the app's
+    # own origin (Keycloak behind the same proxy) already matches.
     post_login_url_pattern: Optional[str] = None
+    # Where automatic login starts (default ``/``), and an element on the app's
+    # own login page to click through to the provider (a "Log in" button).
+    login_path: Optional[str] = None
+    start_selector: Optional[str] = None
     consent_selector: Optional[str] = None
     # TOTP/MFA (FLAWS §6.2). When ``totp_selector`` is set and the app's
     # credentials carry a ``totp_secret``, the login flow fills a time-based

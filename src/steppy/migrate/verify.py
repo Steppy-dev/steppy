@@ -53,7 +53,10 @@ SUBSTITUTIONS: dict[str, tuple[frozenset[str], str]] = {
         "folds into the preceding navigate's `wait:`, which emits the same call",
     ),
     "is_visible": (frozenset({"to_be_visible", "expect"}), "an assert becomes Playwright's auto-waiting expect()"),
-    "count": (frozenset({"count", "to_have_count", "expect"}), "as above"),
+    "count": (
+        frozenset({"count", "to_have_count", "expect", "_wait_until"}),
+        "a one-shot count becomes an assertion that polls until the comparison holds",
+    ),
 }
 
 #: Calls that only *build* a locator. They carry no behaviour, so a rewrite that

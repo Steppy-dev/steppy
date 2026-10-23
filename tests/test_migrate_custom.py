@@ -195,6 +195,18 @@ def test_a_deliberate_improvement_is_allowed_and_named():
     assert result.ok
 
 
+def test_a_one_shot_count_may_become_a_polling_assertion():
+    """`count(sel, >0)` generates `_wait_until(...)`, not `.count()`; the
+    assert-count rule still verifies, and says why."""
+    result = verify_rewrite(
+        "assert page.locator('#r').count() > 0",
+        "_wait_until(page.locator(_interp('#r', _vars)), 'count:>0', 30000, message='expected count > 0')",
+        [{"action": "assert", "expect": "count(#r, >0)"}],
+    )
+    assert result.ok
+    assert any(s.startswith("count:") for s in result.substitutions)
+
+
 def test_escaped_and_plain_quotes_name_the_same_selector():
     """A custom body writes `'[data-testid=\\"row\\"]'`; a step writes
     `'[data-testid="row"]'`. Comparing source text would reject 1 458 rewrites."""

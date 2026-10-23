@@ -349,16 +349,35 @@ _FORM_DEFAULTS = {
     "submit_selector": "button[data-action-button-primary='true']",
 }
 
+# The IdP presets `auth.form.preset` can name, rendered from
+# steppy.presets.IDP_PRESETS so this file stays standalone.
+_IDP_FORM_PRESETS = {
+{% for name, form in idp_form_presets.items() %}
+    {{ name | pystr }}: {
+{% for key, value in form.items() %}
+        {{ key | pystr }}: {{ value | pystr }},
+{% endfor %}
+    },
+{% endfor %}
+}
+
 
 def _form_selectors() -> dict:
-    """Merge the login-form selector defaults with the configured overrides.
+    """Merge the login-form selector defaults, the named IdP ``preset:`` and the
+    configured overrides, explicit keys winning as they do in ``FormAuthConfig``.
 
-    Accepts both the current ``auth.form`` block and the legacy ``auth.auth0``
-    key (mode ``auth0`` was renamed ``form`` in FLAWS §6.2; CONFIG here is raw
-    YAML, so both spellings can still reach us)."""
+    CONFIG here is raw YAML, so the preset has to be resolved here: left alone,
+    ``preset: keycloak`` would keep the Auth0 defaults. Accepts both the current
+    ``auth.form`` block and the legacy ``auth.auth0`` key (mode ``auth0`` was
+    renamed ``form`` in FLAWS §6.2, so both spellings can still reach us)."""
     auth = CONFIG.get("auth", {})
-    overrides = auth.get("form") or auth.get("auth0") or {}
-    return {**_FORM_DEFAULTS, **overrides}
+    overrides = dict(auth.get("form") or auth.get("auth0") or {})
+    preset = overrides.pop("preset", None)
+    if preset is None:
+        return {**_FORM_DEFAULTS, **overrides}
+    if preset not in _IDP_FORM_PRESETS:
+        raise ValueError(f"Unknown auth.form preset {preset!r}; available: {sorted(_IDP_FORM_PRESETS)}")
+    return {**_FORM_DEFAULTS, **_IDP_FORM_PRESETS[preset], **overrides}
 
 
 def _get_viewport() -> dict:
@@ -401,6 +420,39 @@ def _totp_now(secret: str, digits: int = 6, period: int = 30) -> str:
     return str(code).zfill(digits)
 
 
+def _navigate_wait() -> str:
+    """The configured ``timing.navigate_wait`` (``networkidle`` when unset)."""
+    return (CONFIG.get("timing") or {}).get("navigate_wait", "networkidle")
+
+
+def _login_settle(page: Page, timeout: int = 15000) -> None:
+    """Let the page settle after a login submit, per ``timing.navigate_wait``.
+
+    The login used to wait for ``networkidle`` unconditionally, which an app
+    that holds an EventSource or a WebSocket open never reaches. ``none`` skips
+    the wait, as it does on ``navigate``.
+    """
+    strategy = _navigate_wait()
+    if strategy != "none":
+        page.wait_for_load_state(strategy, timeout=timeout)
+
+
+def _open_login_form(page: Page, form: dict) -> None:
+    """Wait for the provider's username field, first clicking through the
+    app's own login page when ``auth.form.start_selector`` names its button.
+
+    Either page may be the one showing (a session can land on the provider
+    directly), so wait for whichever appears and click only the app's.
+    """
+    start = form.get("start_selector")
+    if start:
+        username = page.locator(form["username_selector"])
+        username.or_(page.locator(start)).first.wait_for(timeout=15000)
+        if not username.first.is_visible():
+            page.locator(start).first.click()
+    page.wait_for_selector(form["username_selector"], timeout=15000)
+
+
 def _fill_totp(page: Page, form: dict, credentials: dict) -> None:
     """Fill a TOTP/MFA code after the password submit, when configured (FLAWS §6.2).
 
@@ -417,12 +469,13 @@ def _fill_totp(page: Page, form: dict, credentials: dict) -> None:
     page.fill(totp_selector, _totp_now(totp_secret))
     submit = form.get("totp_submit_selector") or form["submit_selector"]
     page.locator(submit).click()
-    page.wait_for_load_state("networkidle", timeout=15000)
+    _login_settle(page)
 
 
 def fill_login_credentials(page: Page, role: str) -> None:
     """Fill the hosted login form with credentials from config. Call after the
-    login page appears.
+    login page (the app's own, with ``start_selector`` set, or the provider's)
+    appears.
 
     Handles both single-page and two-step (identifier-first) flows. Works
     against any IdP (Auth0, Keycloak, …) via the ``auth.form`` selectors.
@@ -431,7 +484,7 @@ def fill_login_credentials(page: Page, role: str) -> None:
     form = _form_selectors()
 
     # Step 1: Fill username / email
-    page.wait_for_selector(form["username_selector"], timeout=15000)
+    _open_login_form(page, form)
     page.fill(form["username_selector"], app["auth"]["credentials"]["username"])
 
     # Check if password field is already visible (single-page flow)
@@ -441,14 +494,14 @@ def fill_login_credentials(page: Page, role: str) -> None:
         # Single-page: fill password and submit once
         page.fill(form["password_selector"], app["auth"]["credentials"]["password"])
         page.locator(form["submit_selector"]).click()
-        page.wait_for_load_state("networkidle", timeout=15000)
+        _login_settle(page)
     else:
         # Two-step (identifier-first): submit username, wait for password field
         page.locator(form["submit_selector"]).click()
         page.wait_for_selector(form["password_selector"], timeout=15000)
         page.fill(form["password_selector"], app["auth"]["credentials"]["password"])
         page.locator(form["submit_selector"]).click()
-        page.wait_for_load_state("networkidle", timeout=15000)
+        _login_settle(page)
 
     # Optional TOTP/MFA step (no-op unless configured)
     _fill_totp(page, form, app["auth"]["credentials"])
@@ -461,6 +514,11 @@ def fill_login_credentials(page: Page, role: str) -> None:
             page.click(consent)
         except Exception:
             pass
+
+    # Logged in once the app is back, when the project says what that looks like.
+    pattern = form.get("post_login_url_pattern")
+    if pattern:
+        page.wait_for_url(pattern, timeout=15000)
 
 
 # Back-compat alias (the action/helper was historically named ``auth0``).
@@ -499,16 +557,21 @@ def _new_role_context(browser: Browser, role: str, **extra) -> BrowserContext:
 def _authenticate_auth0(browser: Browser, role: str) -> BrowserContext:
     """Perform Auth0 login and cache the storage state."""
     app = CONFIG["apps"][role]
+    form = _form_selectors()
 
     context = _new_role_context(browser, role)
     page = context.new_page()
-    page.goto("/")
+    # goto() waits for `load` unless told otherwise; honour a weaker strategy
+    # the way the navigate action does.
+    wait_until = {"domcontentloaded": "domcontentloaded", "none": "commit"}.get(_navigate_wait())
+    page.goto(form.get("login_path") or "/", **({"wait_until": wait_until} if wait_until else {}))
 
     fill_login_credentials(page, role)
 
-    # Wait for redirect back to app
-    page.wait_for_url(f"{app['url']}/**", timeout=15000)
-    page.wait_for_load_state("networkidle")
+    # Wait for redirect back to app. A provider served on the app's own origin
+    # already matches `<url>/**`; post_login_url_pattern is the precise answer.
+    page.wait_for_url(form.get("post_login_url_pattern") or f"{app['url']}/**", timeout=15000)
+    _login_settle(page, timeout=30000)
 
     # Cache state
     AUTH_DIR.mkdir(parents=True, exist_ok=True)
@@ -1674,7 +1737,7 @@ el => {
 _WAIT_COMPARATOR = re.compile(r"^(>=|<=|==|!=|>|<)\s*(\d+)$")
 
 
-def _wait_until(locator, spec: str, timeout: int, interval: int = 100) -> None:
+def _wait_until(locator, spec: str, timeout: int, interval: int = 100, message: str = "") -> None:
     """Block until a *state* predicate holds on ``locator``, not just presence.
 
     Playwright's own ``wait_for`` accepts only visible/hidden/detached/attached,
@@ -1697,6 +1760,9 @@ def _wait_until(locator, spec: str, timeout: int, interval: int = 100) -> None:
       value:<text>        -- the input's value equals <text>
       text:<text>         -- the element's text contains <text>
       count:<cmp><n>      -- how many elements match, e.g. count:>=2
+
+    ``message`` replaces the wait-for wording when the predicate never holds;
+    a ``count(sel, >=N)`` assertion polls through here and passes its own.
     """
     deadline = time.monotonic() + timeout / 1000.0
     last = None
@@ -1736,6 +1802,8 @@ def _wait_until(locator, spec: str, timeout: int, interval: int = 100) -> None:
         except Exception as exc:  # the element may not exist yet
             last = f"<{type(exc).__name__}>"
         if time.monotonic() >= deadline:
+            if message:
+                raise AssertionError(f"{message} (last saw {last!r} after {timeout}ms)")
             raise AssertionError(f"wait-for until={spec!r} not satisfied within {timeout}ms (last saw {last!r})")
         time.sleep(interval / 1000.0)
 

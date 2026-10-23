@@ -55,7 +55,15 @@ Hardening:
   fills the role's credentials, submits, handles an optional consent screen, and
   waits for the redirect. Works against **any IdP with a fillable login form**
   (Auth0, Keycloak, …). The three selectors live under global `auth.form:` and
-  can be filled at once with an IdP `preset:` (`auth0` | `keycloak`). *(The old
+  can be filled at once with an IdP `preset:` (`auth0` | `keycloak`). Three
+  optional keys shape the flow around them: `login_path` (where automatic login
+  starts, default `/`) and `start_selector` (a "Log in" button on the app's own
+  page, clicked when it shows up before the provider), and
+  `post_login_url_pattern` (the URL glob that means "logged in"; without it the
+  login waits for any page under the app's `url`, which a provider served on the
+  same origin already matches). After submitting, it waits for
+  `timing.navigate_wait`, so an app that holds an EventSource or WebSocket open
+  can use `domcontentloaded` or `none`. *(The old
   name `auth0` — both the mode and the `auth0-login` step action — is a
   kept-forever deprecated alias.)*
 - **`storage-state`** — reuse a Playwright storage-state file you captured out of
@@ -69,9 +77,11 @@ Hardening:
 **Flows without a scriptable form** — SAML / corporate SSO with conditional
 access, magic-link email, or CAPTCHA — are not automatable headlessly by design.
 The supported answer is a **one-time headed login**: run `steppy auth login`,
-complete the challenge in the visible browser, and Steppy caches the storage
-state (subject to `auth.storage_state_ttl`). This is the same posture Playwright
-itself recommends. TOTP-based MFA automation (via a shared secret) is a possible
+complete the challenge in the visible browser, press Enter, and Steppy caches the
+storage state (subject to `auth.storage_state_ttl`) once the browser has left the
+login page. This is the same posture Playwright itself recommends. A `form` role
+needs no person at all: `steppy auth login <role> --auto` logs in headless with
+its configured credentials, which also works where there is no terminal. TOTP-based MFA automation (via a shared secret) is a possible
 future opt-in, not shipped today.
 
 ## `capture from.type=shell` — command execution

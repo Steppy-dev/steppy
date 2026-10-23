@@ -78,12 +78,7 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
 {% elif assertion.type == "count" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_count({{ assertion.count }}, timeout={{ timeout }})
 {% elif assertion.type == "count-cmp" %}
-        _n = {{ loc }}.count()
-{% if assertion.fail_message %}
-        assert _n {{ assertion.comparator }} {{ assertion.count }}, _interp({{ assertion.fail_message | pystr }}, _vars) + f" (count was {_n})"
-{% else %}
-        assert _n {{ assertion.comparator }} {{ assertion.count }}, f"expected count {{ assertion.comparator }} {{ assertion.count }}, got {_n}"
-{% endif %}
+        _wait_until({{ loc }}, {{ ("count:" ~ assertion.comparator ~ assertion.count) | pystr }}, {{ timeout }}, message={% if assertion.fail_message %}_interp({{ assertion.fail_message | pystr }}, _vars){% else %}{{ ("expected count " ~ assertion.comparator ~ " " ~ assertion.count) | pystr }}{% endif %})
 {% elif assertion.type == "row-contains" %}
         expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.text ~ '"') | pystr }}, _vars)){% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ timeout }})
 {% elif assertion.type == "value" %}
@@ -122,12 +117,22 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
 #}
 {% macro step_body(step) %}
 {% if step.action == "navigate" %}
-{% if step.reload %}
-    {{ step.role }}_page.reload({{ step | call_kwargs(scenario, config, False) }})
-{% else %}
-    {{ step.role }}_page.goto(_interp({{ step.target | pystr }}, _vars){{ step | call_kwargs(scenario, config) }})
-{% endif %}
+{#
+  goto/reload wait for `load` unless told otherwise, so a weaker strategy has
+  to reach the call itself — the wait_for_load_state below can only add
+  waiting. networkidle and load leave the call as it was.
+#}
 {% set _nav_wait = step.wait or config.timing.navigate_wait %}
+{% set _wait_until = {"domcontentloaded": "domcontentloaded", "none": "commit"}.get(_nav_wait) %}
+{% if step.reload %}
+{% if _wait_until %}
+    {{ step.role }}_page.reload(wait_until="{{ _wait_until }}"{{ step | call_kwargs(scenario, config) }})
+{% else %}
+    {{ step.role }}_page.reload({{ step | call_kwargs(scenario, config, False) }})
+{% endif %}
+{% else %}
+    {{ step.role }}_page.goto(_interp({{ step.target | pystr }}, _vars){% if _wait_until %}, wait_until="{{ _wait_until }}"{% endif %}{{ step | call_kwargs(scenario, config) }})
+{% endif %}
 {% if _nav_wait != "none" %}
     {{ step.role }}_page.wait_for_load_state("{{ _nav_wait }}")
 {% endif %}

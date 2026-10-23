@@ -29,7 +29,10 @@ def temp_scenario_file(tmp_path):
     return _create
 
 
-def _gen(temp_scenario_file, body: str) -> str:
+def _gen(temp_scenario_file, body: str, navigate_wait: str | None = None) -> str:
+    config = load_config()
+    if navigate_wait is not None:
+        config = config.model_copy(update={"timing": config.timing.model_copy(update={"navigate_wait": navigate_wait})})
     content = f"""
     ---
     title: Navigate
@@ -44,7 +47,7 @@ def _gen(temp_scenario_file, body: str) -> str:
     - screenshot: false
     """
     scenario = parse_scenario_file(temp_scenario_file(content))
-    src = SteppyGenerator(load_config()).generate_test_file(scenario)
+    src = SteppyGenerator(config).generate_test_file(scenario)
     ast.parse(src)
     return src
 
@@ -90,3 +93,44 @@ def test_codegen_wait_none_omits_load_state(temp_scenario_file):
     src = _gen(temp_scenario_file, "    - wait: none")
     assert "wait_for_load_state(" not in src
     assert "goto(" in src
+
+
+# ── The page load itself ────────────────────────────────────────────────────
+#
+# goto() waits for `load` by default, before any wait_for_load_state runs, so
+# a weaker strategy only takes effect when it reaches goto() as `wait_until`.
+
+
+def test_default_config_passes_no_wait_until(temp_scenario_file):
+    src = _gen(temp_scenario_file, "")
+    assert "editor_page.goto(_interp('/customers', _vars))" in src
+    assert "wait_until=" not in src
+
+
+def test_global_domcontentloaded_reaches_goto(temp_scenario_file):
+    src = _gen(temp_scenario_file, "", navigate_wait="domcontentloaded")
+    assert "editor_page.goto(_interp('/customers', _vars), wait_until=\"domcontentloaded\")" in src
+    assert 'wait_for_load_state("domcontentloaded")' in src
+
+
+def test_global_none_commits_and_skips_the_load_state(temp_scenario_file):
+    src = _gen(temp_scenario_file, "", navigate_wait="none")
+    assert 'wait_until="commit"' in src
+    assert "wait_for_load_state(" not in src
+
+
+def test_global_load_passes_no_wait_until(temp_scenario_file):
+    src = _gen(temp_scenario_file, "", navigate_wait="load")
+    assert "wait_until=" not in src
+    assert 'wait_for_load_state("load")' in src
+
+
+def test_step_load_overrides_a_weaker_global(temp_scenario_file):
+    src = _gen(temp_scenario_file, "    - wait: load", navigate_wait="domcontentloaded")
+    assert "wait_until=" not in src
+    assert 'wait_for_load_state("load")' in src
+
+
+def test_wait_until_comes_before_the_timeout(temp_scenario_file):
+    src = _gen(temp_scenario_file, "    - wait: domcontentloaded\n    - timeout: 10s")
+    assert "goto(_interp('/customers', _vars), wait_until=\"domcontentloaded\", timeout=10000)" in src

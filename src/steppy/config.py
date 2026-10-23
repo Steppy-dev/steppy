@@ -136,6 +136,33 @@ def _check_deprecated_output_keys(raw_config: dict, _warnings: list) -> None:
         )
 
 
+#: What ``steppy init`` used to write for ``auth.form.post_login_url_pattern``.
+_SCAFFOLD_POST_LOGIN_PLACEHOLDER = "**/callback**"
+
+
+def _check_post_login_placeholder(raw_config: dict, _warnings: list) -> None:
+    """Warn when ``post_login_url_pattern`` still holds the old scaffold value.
+
+    The key was parsed but never read up to 0.3.0, so the ``**/callback**`` the
+    scaffold wrote did nothing. It is read now, and on a typical SPA the
+    ``/callback`` URL has already redirected away by the time login is checked
+    — so the placeholder would fail every login after 15 s instead of being
+    harmless. Accepts the legacy ``auth.auth0`` spelling too.
+    """
+    auth = raw_config.get("auth")
+    if not isinstance(auth, dict):
+        return
+    for key in ("form", "auth0"):
+        block = auth.get(key)
+        if isinstance(block, dict) and block.get("post_login_url_pattern") == _SCAFFOLD_POST_LOGIN_PLACEHOLDER:
+            _warnings.append(
+                f"auth.{key}.post_login_url_pattern is {_SCAFFOLD_POST_LOGIN_PLACEHOLDER!r}, the placeholder "
+                "`steppy init` used to write. It was ignored up to 0.3.0 and is now what form login waits "
+                "for, so unless login really ends on a /callback URL, remove it (the login then waits for "
+                "the app's own URL) or set the URL your app lands on, e.g. '**/home'."
+            )
+
+
 def _emit_warnings(warnings: list) -> None:
     """Print collected config warnings to stderr (config.py has no console)."""
     for w in warnings:
@@ -202,6 +229,7 @@ def load_config(config_path: Optional[Path] = None) -> SteppyConfig:
     # or interpolated (so we only warn about what's literally in config.yaml).
     _check_credential_hygiene(raw_config, warnings)
     _check_deprecated_output_keys(raw_config, warnings)
+    _check_post_login_placeholder(raw_config, warnings)
 
     # Merge credentials from separate file if it exists
     credentials = _load_credentials(config_path)

@@ -6,6 +6,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
+Fixes found by running Steppy against an app that keeps a live connection open
+and puts its own login page in front of the identity provider: navigation and
+login no longer require a network-idle page, form login gets past that page, and
+`count(...)` comparisons wait like every other assertion. Upgrading changes the
+generated code for comparison counts; regenerate with `steppy generate`.
+
 ### Added
 - **Form login past the app's own login page.** Two optional `auth.form` keys:
   `login_path` (where automatic login starts, default `/`) and `start_selector`
@@ -910,5 +918,6 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Steppy-dev/steppy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Steppy-dev/steppy/releases/tag/v0.3.0

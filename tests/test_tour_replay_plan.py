@@ -160,6 +160,57 @@ def test_a_click_step_is_never_deferred(tmp_path):
     assert "deferred-ensure" not in _kinds(replay)
 
 
+# ── `tour: start` / `tour: end` ───────────────────────────────────────────────
+
+RANGED = (
+    OPEN
+    + _step(2, "Customers", "click", "- selector: '[data-testid=\"nav-customers\"]'\n")
+    + _step(3, "Search", "fill", "- selector: '[data-testid=\"q\"]'\n- value: acme\n- tour: start\n")
+    + _step(4, "Submit", "keyboard", "- value: Enter\n- tour: end\n")
+    + _step(5, "Clean up", "custom", "- code: page.keyboard.press('Escape')\n")
+    + _step(6, "Guide note", "click", "- selector: '[data-testid=\"x\"]'\n- only-in: guide\n")
+)
+
+
+def test_steps_after_the_end_run_once_the_tour_completed(tmp_path):
+    _scenario, plan, _config, replay = _case(tmp_path, RANGED, frontmatter="tour:\n  entry: /customers")
+    assert plan.end_index == 4
+    assert _kinds(replay) == [
+        "setup",
+        "setup",
+        "start",
+        "tour",
+        "plain",
+        "deferred-ensure",
+        "complete",
+        "after",
+        "omitted",
+    ]
+    assert replay.items[7].comment == "Step 5: Clean up — after the tour"
+    assert replay.items[2].comment == "Tour 'editor--case' starts here (in place, entry /customers)"
+
+
+def test_a_focus_dependent_step_after_the_end_does_not_defer_next(tmp_path):
+    body = RANGED.replace("- value: Enter\n- tour: end\n", "- value: Enter\n").replace(
+        "- value: acme\n- tour: start\n", "- value: acme\n- tour: [start, end]\n"
+    )
+    _scenario, _plan, _config, replay = _case(tmp_path, body, frontmatter="tour:\n  entry: /customers")
+    assert _kinds(replay) == ["setup", "setup", "start", "tour", "complete", "after", "after", "omitted"]
+    assert replay.items[3].parts[0][1].ensure == "inline"
+
+
+def test_an_in_place_start_is_flagged_in_the_spec_and_passes_no_params(tmp_path):
+    _scenario, _plan, _config, replay = _case(tmp_path, RANGED, frontmatter="tour:\n  entry: /customers/:customerId")
+    assert replay.spec["entry"] == {"route": "/customers/:customerId", "params": [], "in_place": True}
+    assert replay.params == []
+
+
+def test_the_spec_is_unchanged_without_a_start_marker(tmp_path):
+    body = RANGED.replace("- tour: start\n", "")
+    _scenario, _plan, _config, replay = _case(tmp_path, body)
+    assert replay.spec["entry"] == {"route": "/invoices", "params": []}
+
+
 # ── Plans that do not line up are compiler bugs ─────────────────────────────
 
 
@@ -192,6 +243,21 @@ def test_misaligned_plans_are_rejected():
         with pytest.raises(ReplayPlanError):
             build_replay(scenario, broken, config)
         assert name  # labels the failing case in the traceback
+
+
+def test_tour_steps_past_the_end_and_after_steps_inside_the_range_are_rejected(tmp_path):
+    scenario, plan, config, _replay = _case(tmp_path, RANGED, frontmatter="tour:\n  entry: /customers")
+    entries = list(plan.entries)
+    cases = {
+        "end before a tour step": _broken(plan, end_index=2),
+        "after inside the range": _broken(
+            plan, entries=(*entries[:3], _retarget(entries[3], disposition="after"), *entries[4:])
+        ),
+    }
+    for name, broken in cases.items():
+        with pytest.raises(ReplayPlanError):
+            build_replay(scenario, broken, config)
+        assert name
 
 
 def test_an_unknown_fill_form_field_is_rejected():

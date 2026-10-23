@@ -6,6 +6,19 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **In-app tours: `tour: start` and `tour: end`.** A guide can walk its reader
+  to a page by clicking while the tour starts on that page: mark the tour's
+  first step `- tour: start` (and its last `- tour: end`, optional). With a
+  start marker, `tour.entry` is only the page's route and no longer has to match
+  a `navigate`; without it, the entry is inferred from the last `navigate` when
+  nothing in between may change the page. The replay starts the tour where the
+  setup left the browser and fails if the overlay had to navigate, then runs
+  the steps after `tour: end` once the tour completed. The step key `tour`
+  also takes a list (`[end, keep]`). New diagnostics: `range-duplicate`,
+  `range-reversed`, `start-on-navigation` (errors) and `entry-unknown`
+  (warning). Scenarios without the markers compile and replay as before.
+
 ## [0.4.0] - 2026-10-23
 
 Fixes found by running Steppy against an app that keeps a live connection open

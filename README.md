@@ -711,7 +711,9 @@ instead of breaking the tour in production.
 
 2. Opt a scenario in with `tour: true` in its frontmatter (or a `tour:` block
    with an id, a title, an entry route). Steps can be fine-tuned with
-   `tour: skip|keep`, `tour-text`, `tour-advance` and `tour-placement`.
+   `tour: skip|keep|start|end`, `tour-text`, `tour-advance` and
+   `tour-placement`; `tour: start` lets a guide walk to a page while its tour
+   starts on it.
 
 3. Mount the overlay once in your app and start a tour from a button. Import
    `@steppy/player/tour` from your app's own code (it registers the element),

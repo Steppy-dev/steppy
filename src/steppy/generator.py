@@ -479,7 +479,7 @@ class SteppyGenerator:
             return head + f"    _tour_start(_tour, {{{args}}})\n"
         if item.kind == "complete":
             return head + "    _tour_expect_complete(_tour)\n"
-        if item.kind in ("setup", "plain"):
+        if item.kind in ("setup", "plain", "after"):
             body = self._apply_optional(str(step_body(item.step)), item.step)
             return head + self._apply_step_guard(self._bracket_step(body, item.step), item.step)
         chunks = []

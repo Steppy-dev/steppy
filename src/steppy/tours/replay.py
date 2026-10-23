@@ -12,6 +12,12 @@ path is keyed on that file):
    branch the scenario test uses, captures removed) → make sure the tour moved
    on. Range steps that are not tour steps run exactly as in the scenario.
 4. **Complete** — ``tour-complete`` fired and no ``tour-error`` did.
+5. **After** — the steps past ``tour: end``, in test mode, once the tour
+   completed (cleanup keeps the replay repeatable).
+
+A start marked ``tour: start`` was reached by whatever the setup did, so the
+replay starts the tour without params and checks that the overlay did not have
+to navigate: ``tour.entry`` must describe the page the setup landed on.
 
 Every action body comes from the ``step_body`` template macro, so a replay can
 never drift from the test it mirrors. This module only decides *which* steps,
@@ -30,7 +36,7 @@ from .model import ReplayEntry, ReplayPlan, ReplayTourStep
 #: before them would steal it, so the Next click is deferred past them.
 FOCUS_DEPENDENT_ACTIONS = frozenset({"keyboard", "custom", "call"})
 
-ItemKind = Literal["setup", "plain", "omitted", "start", "tour", "deferred-ensure", "complete"]
+ItemKind = Literal["setup", "plain", "omitted", "start", "tour", "deferred-ensure", "complete", "after"]
 
 
 class ReplayPlanError(ValueError):
@@ -76,6 +82,7 @@ def _check(plan: ReplayPlan, scenario: Scenario) -> None:
         raise ReplayPlanError(f"{scenario.slug}: {len(plan.entries)} replay entries for {len(scenario.steps)} steps")
     seen_range = False
     expected_index = 0
+    end = _end(plan, scenario)
     for idx, (step, entry) in enumerate(zip(scenario.steps, plan.entries)):
         if entry.step_number != (step.step_number or idx + 1):
             raise ReplayPlanError(f"{scenario.slug}: entry {idx} is for step {entry.step_number}")
@@ -83,8 +90,10 @@ def _check(plan: ReplayPlan, scenario: Scenario) -> None:
         if in_setup and seen_range:
             raise ReplayPlanError(f"{scenario.slug}: setup step {entry.step_number} after the tour started")
         seen_range = seen_range or not in_setup
+        if (entry.disposition == "after") != (idx >= end and step.only_in != "guide"):
+            raise ReplayPlanError(f"{scenario.slug}: step {entry.step_number} is misplaced around the tour's end")
         if entry.disposition == "tour":
-            if in_setup or step.role not in (plan.role, None) or step.only_in == "test":
+            if in_setup or idx >= end or step.role not in (plan.role, None) or step.only_in == "test":
                 raise ReplayPlanError(f"{scenario.slug}: step {entry.step_number} cannot be a tour step")
             fields = list(step.fields or {})
             for ts in entry.tour_steps:
@@ -95,6 +104,10 @@ def _check(plan: ReplayPlan, scenario: Scenario) -> None:
                     raise ReplayPlanError(f"{scenario.slug}: {ts.field!r} is not a field of step {entry.step_number}")
     if expected_index != plan.tour_step_count:
         raise ReplayPlanError(f"{scenario.slug}: {expected_index} tour steps, plan says {plan.tour_step_count}")
+
+
+def _end(plan: ReplayPlan, scenario: Scenario) -> int:
+    return len(scenario.steps) if plan.end_index is None else plan.end_index
 
 
 def _parts(step: Step, entry: ReplayEntry) -> list[tuple[Step, ReplayCheck]]:
@@ -126,6 +139,8 @@ def build_replay(scenario: Scenario, plan: ReplayPlan, config: SteppyConfig) -> 
     _check(plan, scenario)
     steps = scenario.steps
     items: list[ReplayItem] = []
+    after: list[ReplayItem] = []
+    end = _end(plan, scenario)
     started = False
     pending: Optional[tuple[str, Step]] = None  # deferred Next click: (step id, step for its guard)
 
@@ -146,9 +161,18 @@ def build_replay(scenario: Scenario, plan: ReplayPlan, config: SteppyConfig) -> 
                     ReplayItem("setup", comment=f"Step {entry.step_number}: {title} — setup", step=_copy(step))
                 )
             continue
+        if idx >= end:
+            if entry.disposition == "drop":
+                after.append(ReplayItem("omitted", comment=f"Step {entry.step_number}: {title} — guide-only, skipped"))
+            else:
+                after.append(
+                    ReplayItem("after", comment=f"Step {entry.step_number}: {title} — after the tour", step=_copy(step))
+                )
+            continue
         if not started:
             route = plan.entry_route or "the current page"
-            items.append(ReplayItem("start", comment=f"Tour '{plan.tour_id}' starts here (entry {route})"))
+            where = "in place, " if plan.start_in_place else ""
+            items.append(ReplayItem("start", comment=f"Tour '{plan.tour_id}' starts here ({where}entry {route})"))
             started = True
         if entry.disposition == "drop":
             items.append(
@@ -180,6 +204,7 @@ def build_replay(scenario: Scenario, plan: ReplayPlan, config: SteppyConfig) -> 
         items.append(ReplayItem("start", comment=f"Tour '{plan.tour_id}' starts here"))
     flush_pending()
     items.append(ReplayItem("complete", comment=f"Tour '{plan.tour_id}' must complete"))
+    items.extend(after)
 
     from ..generator import SteppyGenerator
 
@@ -191,9 +216,7 @@ def build_replay(scenario: Scenario, plan: ReplayPlan, config: SteppyConfig) -> 
         "default_locale": plan.default_locale,
         "attribute": plan.test_id_attribute,
         "timeout_ms": int(timeout),
-        "entry": (
-            {"route": plan.entry_route, "params": [list(p) for p in plan.entry_params]} if plan.entry_route else None
-        ),
+        "entry": _entry_spec(plan),
         "layouts": dict(plan.layouts),
         "steps": [
             {
@@ -223,6 +246,15 @@ def build_replay(scenario: Scenario, plan: ReplayPlan, config: SteppyConfig) -> 
         params=list(plan.entry_params),
         items=items,
     )
+
+
+def _entry_spec(plan: ReplayPlan) -> Optional[dict]:
+    if not plan.entry_route:
+        return None
+    spec: dict = {"route": plan.entry_route, "params": [list(p) for p in plan.entry_params]}
+    if plan.start_in_place:
+        spec["in_place"] = True
+    return spec
 
 
 def _focus_dependent_follows(steps: list[Step], entries: tuple[ReplayEntry, ...], idx: int) -> bool:

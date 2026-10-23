@@ -77,6 +77,8 @@ def compile_tours(scenarios: list[Scenario], settings: ToursSettings) -> TourCom
                 if any(p.layouts and name in p.layouts for p in inference.steps)
             ),
             test_id_attribute=settings.test_id_attribute,
+            end_index=inference.end_index,
+            start_in_place=inference.start_in_place,
         )
 
     if untitled:

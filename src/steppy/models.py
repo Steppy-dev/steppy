@@ -502,10 +502,13 @@ class Step(BaseModel):
     # In-app tour annotations, read only when the scenario opts into tours (all
     # inert otherwise). `tour: skip` leaves a step out of the tour — it still
     # runs in the test and in the tour replay; `tour: keep` forces a step that
-    # inference would skip into the tour. `tour-text` overrides `guide-text` for
-    # the tour popover; `tour-advance` / `tour-placement` override what inference
-    # picks. The value sets are `steppy.tour_spec`'s, pinned by a test.
-    tour: Optional[Literal["skip", "keep"]] = None
+    # inference would skip into the tour. `tour: start` / `tour: end` mark the
+    # first and last step of the tour's range, whatever the navigation does.
+    # `tour` holds one value or a list (`[end, keep]`), always stored as a list.
+    # `tour-text` overrides `guide-text` for the tour popover; `tour-advance` /
+    # `tour-placement` override what inference picks. The value sets are
+    # `steppy.tour_spec`'s, pinned by a test.
+    tour: Optional[list[Literal["skip", "keep", "start", "end"]]] = None
     tour_text: Optional[GuideText] = Field(default=None, alias="tour-text")
     tour_advance: Optional[Literal["click", "input", "change", "visible", "manual"]] = Field(
         default=None, alias="tour-advance"
@@ -583,20 +586,41 @@ class Step(BaseModel):
     @field_validator("tour", mode="before")
     @classmethod
     def normalize_tour_mode(cls, v):
-        """Step-level ``tour:`` takes ``skip`` or ``keep``.
+        """Step-level ``tour:`` takes ``skip``, ``keep``, ``start`` or ``end``, or a list of them.
 
         The frontmatter ``tour: true`` opts a whole scenario in. Written on a step
         it would read as plausible and do nothing, so the boolean spellings are
-        rejected with a pointer to where they belong.
+        rejected with a pointer to where they belong. A single value becomes a
+        one-element list, so readers only ever test membership.
         """
         if v is None:
             return v
-        if isinstance(v, bool) or (isinstance(v, str) and v.strip().lower() in _BOOLISH):
-            raise ValueError(
-                "step-level 'tour' takes 'skip' or 'keep'; to opt a scenario into in-app tours, "
-                "set `tour: true` in its frontmatter"
-            )
-        return v.strip() if isinstance(v, str) else v
+        values = v if isinstance(v, list) else [v]
+        for value in values:
+            if isinstance(value, bool) or (isinstance(value, str) and value.strip().lower() in _BOOLISH):
+                raise ValueError(
+                    "step-level 'tour' takes 'skip', 'keep', 'start' or 'end'; to opt a scenario into "
+                    "in-app tours, set `tour: true` in its frontmatter"
+                )
+        return [value.strip() if isinstance(value, str) else value for value in values]
+
+    @field_validator("tour")
+    @classmethod
+    def validate_tour_modes(cls, v):
+        """``skip``/``keep`` say whether the step shows, ``start``/``end`` where the range is.
+
+        The two axes combine (``[end, keep]``); within one, ``skip`` and
+        ``keep`` contradict each other, and a repeated value is a typo.
+        """
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("step-level 'tour' needs at least one of 'skip', 'keep', 'start', 'end'")
+        if len(set(v)) != len(v):
+            raise ValueError(f"step-level 'tour' repeats a value: {v}")
+        if "skip" in v and "keep" in v:
+            raise ValueError("step-level 'tour' cannot both 'skip' and 'keep' a step")
+        return v
 
     @field_validator("tour_text")
     @classmethod
@@ -1097,7 +1121,8 @@ class ScenarioTour(BaseModel):
     * ``title`` — a string, or one per locale (default: the scenario title);
     * ``entry`` — the route pattern the tour starts on, e.g.
       ``/invoices/:invoiceId`` (default: inferred from the scenario's first
-      navigation after login);
+      navigation after login). Without a step marked ``tour: start``, the tour
+      starts after the navigate that matches it; with one, it is only the route;
     * ``role`` — whose app the tour runs in, required when steps use several roles;
     * ``guide_slug`` — the guide page ``Open the full guide`` links to (default:
       the file slug, when the scenario is ``guide.enabled``).

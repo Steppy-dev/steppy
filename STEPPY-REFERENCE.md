@@ -115,7 +115,7 @@ These apply to most actions (each action section notes what it needs):
 | `layouts` | list of strings | all | Restrict the step to specific layouts in guide mode (default: all configured). |
 | `wait_after` | int (ms) | most | Sleep after the action. |
 | `note` | string | all | Free-form comment emitted into the generated code. |
-| `tour` | `skip` \| `keep` | all | In-app tours: leave this step out of the tour, or keep a step inference would skip (centred when it has no test-id). Different from the frontmatter `tour:`. |
+| `tour` | `skip` \| `keep` \| `start` \| `end`, or a list (`[end, keep]`) | all | In-app tours: leave this step out of the tour, or keep a step inference would skip (centred when it has no test-id); `start`/`end` make it the tour's first/last step, so a guide can walk to the page while its tour starts on it. Different from the frontmatter `tour:`. |
 | `tour-text` | per-locale map | all | The step's tour text, same shapes as `guide-text`; wins over it. Keep test data out of it. |
 | `tour-advance` | `click` \| `input` \| `change` \| `visible` \| `manual` | all | What moves the tour past this step. Must be something the step's own action does. |
 | `tour-placement` | `top` \| `bottom` \| `left` \| `right` \| `auto` | all | Preferred side of the target for the tour popover. |

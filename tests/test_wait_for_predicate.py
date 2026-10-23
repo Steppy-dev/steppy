@@ -107,6 +107,19 @@ def test_a_predicate_that_never_holds_raises_with_what_it_last_saw():
         wait_until(loc, "value-not-empty", timeout=30, interval=1)
 
 
+def test_a_count_assertion_passes_once_the_row_arrives():
+    """What ``count(sel, >=1)`` now generates: a row that renders late passes,
+    where the old one-shot ``.count()`` read 0 and failed."""
+    loc = _FakeLocator(counts=[0, 0, 1])
+    wait_until(loc, "count:>=1", 5000, interval=1, message="expected count >= 1")
+    assert loc.polls == 3
+
+
+def test_a_count_assertion_that_times_out_reports_the_last_count():
+    with pytest.raises(AssertionError, match=r"^expected count >= 2 \(last saw 1 after 30ms\)$"):
+        wait_until(_FakeLocator(counts=[1]), "count:>=2", 30, interval=1, message="expected count >= 2")
+
+
 def test_an_element_that_does_not_exist_yet_is_polled_not_raised():
     """A locator raising on the first poll is the normal case: the row the step
     is waiting for has not rendered. Only the deadline ends the wait."""

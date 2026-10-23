@@ -354,6 +354,7 @@ See [In-app tours](#in-app-tours-opt-in-1) below.
 
 ```bash
 steppy auth login editor                      # interactive (headed) login
+steppy auth login editor --auto               # headless, with a form role's credentials (CI, scripts)
 steppy auth status                           # cached session state per role
 steppy auth clear                            # clear everything
 steppy auth clear editor                      # clear a single role

@@ -36,6 +36,7 @@ from .parser import (
     validate_scenario_layouts,
     lint_exclusive_groups,
     lint_scenario_selectors,
+    lint_scenario_timeout,
     ParseError,
 )
 from .generator import SteppyGenerator
@@ -111,8 +112,8 @@ def validate(
                     console.print(f"  {escape(str(err))}")
                 raise typer.Exit(1)
 
-            # Selector lint — warnings only, never affects the exit code.
-            for warn in lint_scenario_selectors(parsed):
+            # Selector and timeout lints — warnings only, never affect the exit code.
+            for warn in lint_scenario_selectors(parsed) + lint_scenario_timeout(parsed):
                 console.print(f"[yellow]WARNING[/yellow] {escape(str(warn))}")
 
             # In-app tours: compile checks for this scenario (silent unless it opts in).
@@ -151,8 +152,8 @@ def validate(
                     console.print(f"[red]ERROR[/red] {s.slug}: validation failed")
                     for err in role_errors + layout_errors:
                         console.print(f"  {escape(str(err))}")
-                # Selector lint — warnings only, never affects the exit code.
-                for warn in lint_scenario_selectors(s):
+                # Selector and timeout lints — warnings only, never affect the exit code.
+                for warn in lint_scenario_selectors(s) + lint_scenario_timeout(s):
                     console.print(f"[yellow]WARNING[/yellow] {s.slug}: {escape(str(warn))}")
             # Cross-scenario lint — an exclusion group only means anything
             # relative to the other scenarios, so this runs once over the corpus
@@ -2223,12 +2224,19 @@ def auth_login(
         ...,
         help="Role to authenticate (e.g., admin, editor, viewer)",
     ),
+    auto: bool = typer.Option(
+        False,
+        "--auto",
+        help="Log in headless with the role's configured credentials (auth mode 'form' only). Needs no terminal.",
+    ),
 ):
     """
-    Interactively log in to an app for a specific role.
+    Log in to an app for a specific role and save the session for future test runs.
 
-    Opens a visible browser window and waits for you to log in manually.
-    Saves the session for future test runs.
+    By default, opens a visible browser window and waits for you to log in
+    manually, then checks that the browser has left the login page before saving.
+    With --auto, a form-login role logs in headless through the same flow the
+    generated tests use, so it also works in CI and scripts.
     """
     with _cli_errors():
         config = _load_config_or_exit()
@@ -2239,21 +2247,41 @@ def auth_login(
             console.print(f"\n[yellow]Available roles:[/yellow] {', '.join(config.apps.keys())}")
             raise typer.Exit(1)
 
-        console.print(f"\n[bold]Interactive login for:[/bold] {config.apps[role].name} ({role})")
-        console.print(f"[dim]URL:[/dim] {config.apps[role].url}\n")
+        app_config = config.apps[role]
+        if auto:
+            if app_config.auth.mode != "form":
+                console.print(
+                    f"[red]ERROR[/red] --auto logs in through the login form, and role '{role}' uses "
+                    f"auth mode '{app_config.auth.mode}'."
+                )
+                raise typer.Exit(1)
+            if not app_config.auth.credentials:
+                console.print(f"[red]ERROR[/red] --auto needs apps.{role}.auth.credentials (username/password).")
+                raise typer.Exit(1)
+        elif sys.stdin is None or not sys.stdin.isatty():
+            # input() would end in a bare EOFError; say what to do instead.
+            console.print("[red]ERROR[/red] steppy auth login waits for you to press Enter, and there is no terminal.")
+            console.print(f"  For a form-login role, log in headless instead: steppy auth login {role} --auto")
+            raise typer.Exit(1)
 
-        # Launch headed browser
+        console.print(f"\n[bold]{'Automatic' if auto else 'Interactive'} login for:[/bold] {app_config.name} ({role})")
+        console.print(f"[dim]URL:[/dim] {app_config.url}\n")
+
         from playwright.sync_api import sync_playwright
 
-        from .auth import interactive_login
+        from .auth import authenticate_form, get_storage_state_path, interactive_login
 
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=auto)
 
             try:
-                interactive_login(role, config, browser)
+                if auto:
+                    authenticate_form(browser, role, app_config, config, use_cache=False).close()
+                else:
+                    interactive_login(role, config, browser)
+                state_path = get_storage_state_path(role, Path(config.auth.storage_state_dir))
                 console.print(f"\n[green]OK[/green] Authentication saved for {role}")
-                console.print(f"[dim]Storage state saved to .auth/{role}.json[/dim]")
+                console.print(f"[dim]Storage state saved to {escape(str(state_path))}[/dim]")
             except Exception as e:
                 console.print(f"\n[red]ERROR[/red] Login failed: {e}")
                 raise typer.Exit(1)

@@ -59,8 +59,16 @@ auth:
     username_selector: "input[name='username'], input[name='email'], #username"
     password_selector: "input[name='password'], #password"
     submit_selector: "button[type='submit'], button[name='action'][value='default']"
-    post_login_url_pattern: "**/callback**"
     consent_selector: null
+    # Where the login ends (a URL glob). Unset, Steppy waits for any page under
+    # the app's url — which a provider on the app's own origin (Keycloak behind
+    # the same proxy) already matches, so set it there.
+    #   post_login_url_pattern: "**/home**"
+    # When the app shows its own page with a "Log in" button before the
+    # provider: where automatic login starts, and the button to click.
+    #   login_path: /auth
+    #   start_selector: "[data-testid='login-button']"
+    # After submitting, login waits for timing.navigate_wait (none = no wait).
     # TOTP/MFA (optional): set totp_selector here and a per-app
     # credentials.totp_secret (env-ref) to auto-fill a time-based one-time code
     # after the password submit. The auth0/keycloak presets fill a starter

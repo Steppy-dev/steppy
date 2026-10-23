@@ -272,6 +272,10 @@ IDP_PRESETS: dict[str, dict[str, dict[str, str]]] = {
             "totp_selector": "input[name='code']",
         },
     },
+    # Keycloak is often served behind the app's own proxy (``/keycloak``), where
+    # the default post-login wait for ``<app url>/**`` already matches the login
+    # page: set ``post_login_url_pattern`` there. An app that shows its own
+    # "Log in" page first also needs ``login_path`` / ``start_selector``.
     "keycloak": {
         "form": {
             "username_selector": "#username",

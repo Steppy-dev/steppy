@@ -6,6 +6,58 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Form login past the app's own login page.** Two optional `auth.form` keys:
+  `login_path` (where automatic login starts, default `/`) and `start_selector`
+  (a "Log in" button on the app's own page, clicked when it shows up before the
+  provider's form). The `login` step clicks it too.
+- **`steppy auth login <role> --auto`** logs a `form` role in headless with its
+  configured credentials and saves the session. It needs no terminal, so it works
+  in CI and scripts.
+- `steppy validate` warns when a scenario `timeout:` is above 60 s (see the note
+  under Changed).
+
+### Changed
+- **`count(sel, >=N)` and the other comparator forms now wait.** They re-count
+  until the comparison holds, within the step's timeout, like every other
+  assertion. Before, they read the page once, so a list that was still loading
+  failed with 0. Every comparison count generates different code
+  (`_wait_until(...)` instead of `_n = ….count()`); `count(sel, N)` is
+  unchanged. `<` and `<=` still hold at once on a page that has not rendered.
+- **A scenario's `timeout:` is the default timeout of each of its steps.** This
+  already shipped in 0.3.0 without a note; before 0.3.0 the field did nothing. It
+  is not a limit on the whole test, so a large value (projects had set 3–5
+  minutes) now makes every failing step wait that long. The docs say so now, and
+  `steppy validate` warns above 60 s.
+
+### Fixed
+- **`navigate` honours `timing.navigate_wait` and `wait:` for the page load
+  itself.** `goto()`/`reload()` always waited for the `load` event (30 s) before
+  the configured wait ran, so `domcontentloaded` and `none` could only add
+  waiting. They now pass `wait_until` (`none` becomes `commit`). `networkidle`
+  and `load` generate the same code as before.
+- **Form login no longer requires `networkidle`.** After submitting, it waits for
+  `timing.navigate_wait` (`none` skips the wait), so an app that keeps an
+  EventSource or WebSocket open can log in. This covers the generated tests'
+  automatic login, the `login` step, the TOTP step and `steppy.auth`.
+- **`auth.form.post_login_url_pattern` is read.** It was parsed and ignored, and
+  the fallback, any page under the app's `url`, already matches a provider
+  served on the same origin (Keycloak behind the app's proxy). Automatic login
+  waits for it, and so does the `login` step when it is set. `steppy init` no
+  longer writes the `**/callback**` placeholder, and loading a config that still
+  has it prints a warning: on a typical SPA that URL has already redirected away
+  when login is checked, so keeping it would fail every login. Remove it, or set
+  the URL your app lands on.
+- **Generated tests honour `auth.form.preset`.** They read `config.yaml` as it
+  is written, so `preset: keycloak` with no explicit selectors left the Auth0
+  defaults in place, and login waited for a field Keycloak never renders. The
+  conftest now carries the preset table and resolves it the way the config model
+  does: explicit keys win.
+- **`steppy auth login` without a terminal** fails at once with a hint to use
+  `--auto`, instead of `Login failed: EOF when reading a line`. Interactively, it
+  saves the session only once the browser has left the login page (type `save`
+  to override).
+
 ## [0.3.0] - 2026-10-22
 
 The first public release, under the Apache-2.0 licence. This entry captures

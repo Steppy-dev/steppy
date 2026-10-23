@@ -216,6 +216,27 @@ def lint_scenario_selectors(scenario: Scenario) -> list[str]:
     return warnings
 
 
+#: Above this, a scenario ``timeout:`` reads like a whole-test limit (ms).
+_SCENARIO_TIMEOUT_WARN_MS = 60_000
+
+
+def lint_scenario_timeout(scenario: Scenario) -> list[str]:
+    """Return a *warning* when the scenario ``timeout:`` is large.
+
+    Since 0.3.0 that value is the default timeout of **every step** (it did
+    nothing before), but it reads like a limit for the whole test, so projects
+    set minutes — and then every failing step waits that long. Callers print
+    these as warnings and must NOT fail on them (FLAWS §6.3).
+    """
+    timeout = scenario.timeout
+    if timeout is None or timeout <= _SCENARIO_TIMEOUT_WARN_MS:
+        return []
+    return [
+        f"timeout: {timeout} applies to every step, not to the whole scenario, so a failing step "
+        f"waits up to {timeout / 1000:g}s; set timeout: on the slow steps instead"
+    ]
+
+
 def lint_exclusive_groups(scenarios: list[Scenario]) -> list[str]:
     """Return *warnings* for exclusion groups with a single member.
 

@@ -86,7 +86,7 @@ guide:
 | `tags` | list of strings | `[]` | Free-form. `user-guide-<role>` tags drive guide discovery; `--tag X` filters runs. |
 | `priority` | `critical` \| `high` \| `medium` \| `low` | — | Metadata only. |
 | `auth` | bool | `true` | `false` = the scenario tests the login flow itself (no pre-auth fixture). |
-| `timeout` | int (ms) | — | Per-scenario timeout hint. |
+| `timeout` | int (ms) | — | Default timeout for **each step** of this scenario (a step's own `timeout:` wins; `timing.step_timeout` applies when neither is set). Not a limit on the whole test: `steppy validate` warns above 60000. |
 | `layouts` | list of strings | — | Viewports this scenario must pass in (keys of `screenshot.layouts`). **Authoritative**: even a plain `steppy run` parametrizes the whole flow over these; `--layouts`/`--guide` filters the declared set (disjoint ⇒ the scenario is deselected). Omit ⇒ no scenario-level layout dimension (unchanged behavior). Composes with the step-level `layouts:` in §3. |
 | `exclusive` | string | — | Exclusion group. Two scenarios naming the same group never run **at the same time** under `steppy run --workers N`; different groups still run concurrently. Lowercase `[a-z0-9._+-]`, starting alphanumeric (the name becomes a filename). Promises non-overlap only — not ordering, not indivisibility. Inert without `--workers N ≥ 2`, where one pytest process is already sequential. |
 | `seed` | string \| object | — | Seed script to run around the test. String `base` ≡ `{script: base, run: before}`. `run` = `before` \| `after` \| `both`. Scripts live in `seed/<script>.py`. |
@@ -378,7 +378,11 @@ Keycloak, …). `auth0-login` is a kept-forever deprecated alias.
 
 > **Auth modes:** `apps.<role>.auth.mode` is `form` \| `storage-state` \| `bypass` \| `token`
 > (`auth0` is a deprecated alias for `form`). The `form` selectors live under global
-> `auth.form:` and accept an IdP `preset:` (`auth0` \| `keycloak`). `token` mode fetches a
+> `auth.form:` and accept an IdP `preset:` (`auth0` \| `keycloak`). Optional
+> `login_path` + `start_selector` get automatic login past the app's own "Log in" page,
+> `post_login_url_pattern` names the URL that means "logged in" (default: any page
+> under the app's `url`), and the post-submit wait follows `timing.navigate_wait`.
+> The `login` step clicks `start_selector` too when that page is showing. `token` mode fetches a
 > JWT from an endpoint and injects it via `inject_as: localStorage | cookie | header`.
 > For SAML / corporate SSO with conditional access, magic links, or CAPTCHA, use the
 > one-time headed `steppy auth login` + storage-state TTL (see SECURITY.md).
@@ -402,7 +406,7 @@ arguments accept the same `within`/`match` disambiguation as element actions.
 | `contains(selector, "expected")` | `to_contain_text` (substring, auto-waiting). |
 | `url-contains("/path")` | URL matches `.*<path>.*`. |
 | `count(selector, N)` | `to_have_count(N)` (exact integer). |
-| `count(selector, >=N)` | Manual `assert` with a comparator: `>=` `<=` `==` `!=` `>` `<`. |
+| `count(selector, >=N)` | Re-counts until the comparison holds (`>=` `<=` `==` `!=` `>` `<`), within the step timeout. `<`/`<=` hold at once on an empty page. |
 | `row-contains("text")` | A `text="text"` element is visible. |
 | `status("value")` | Status-badge text check. |
 

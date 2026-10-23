@@ -41,6 +41,36 @@ def _fill_totp_if_configured(page: Page, form, credentials) -> None:
     page.click(submit)
 
 
+def _open_login_form(page: Page, form) -> None:
+    """Wait for the provider's username field, first clicking through the app's
+    own login page when ``form.start_selector`` names its button.
+
+    Either page may be the one showing (a session can land on the provider
+    directly), so wait for whichever appears and click only the app's. Mirrored
+    by ``_open_login_form`` in ``templates/conftest.py.j2``.
+    """
+    if form.start_selector:
+        username = page.locator(form.username_selector)
+        username.or_(page.locator(form.start_selector)).first.wait_for(timeout=15000)
+        if not username.first.is_visible():
+            page.locator(form.start_selector).first.click()
+    page.wait_for_selector(form.username_selector, timeout=15000)
+
+
+def _wait_for_login(page: Page, app_config: AppConfig, form, config: SteppyConfig) -> None:
+    """Wait until the login has landed back in the app.
+
+    ``post_login_url_pattern`` wins: the ``<url>/**`` fallback already matches a
+    provider served on the app's own origin. The settle follows
+    ``timing.navigate_wait`` rather than ``networkidle``, which an app holding
+    an EventSource or a WebSocket open never reaches.
+    """
+    page.wait_for_url(form.post_login_url_pattern or f"{app_config.url}/**", timeout=15000)
+    strategy = config.timing.navigate_wait
+    if strategy != "none":
+        page.wait_for_load_state(strategy, timeout=30000)
+
+
 def get_storage_state_path(role: str, auth_dir: Path) -> Path:
     """Get the path to the storage state file for a role."""
     return auth_dir / f"{role}.json"
@@ -85,6 +115,8 @@ def authenticate_auth0(
     role: str,
     app_config: AppConfig,
     config: SteppyConfig,
+    *,
+    use_cache: bool = True,
 ) -> BrowserContext:
     """
     Authenticate using Auth0 and save storage state.
@@ -94,6 +126,8 @@ def authenticate_auth0(
         role: Role name
         app_config: App configuration for this role
         config: Global Steppy configuration
+        use_cache: Reuse a cached storage state that is still within its TTL.
+            ``steppy auth login --auto`` passes False to force a fresh login.
 
     Returns:
         Authenticated browser context
@@ -105,7 +139,7 @@ def authenticate_auth0(
     state_path = get_storage_state_path(role, auth_dir)
 
     # Check cache first
-    if is_storage_state_valid(role, auth_dir, config.auth.storage_state_ttl):
+    if use_cache and is_storage_state_valid(role, auth_dir, config.auth.storage_state_ttl):
         return browser.new_context(
             storage_state=str(state_path),
             viewport={"width": config.screenshot.viewport.width, "height": config.screenshot.viewport.height},
@@ -126,15 +160,19 @@ def authenticate_auth0(
     page = context.new_page()
 
     try:
-        # Navigate to app → triggers Auth0 redirect
-        page.goto("/", timeout=30000)
-
-        # Wait for the hosted login page
         form = config.auth.form
         if not form:
             raise AuthenticationError("Login-form configuration (auth.form) is missing")
 
-        page.wait_for_selector(form.username_selector, timeout=15000)
+        # Navigate to the app (or its login page) → triggers the IdP redirect.
+        # goto() waits for `load` unless told otherwise; honour a weaker strategy
+        # the way the navigate action does.
+        wait_until = {"domcontentloaded": "domcontentloaded", "none": "commit"}.get(config.timing.navigate_wait)
+        goto_kwargs = {"wait_until": wait_until} if wait_until else {}
+        page.goto(form.login_path or "/", timeout=30000, **goto_kwargs)
+
+        # Wait for the hosted login page
+        _open_login_form(page, form)
 
         # Fill credentials
         page.fill(form.username_selector, app_config.auth.credentials.username)
@@ -153,8 +191,7 @@ def authenticate_auth0(
                 pass  # No consent screen, continue
 
         # Wait for redirect back to the app
-        page.wait_for_url(f"{app_config.url}/**", timeout=15000)
-        page.wait_for_load_state("networkidle", timeout=30000)
+        _wait_for_login(page, app_config, form, config)
 
         # Cache the authenticated state
         auth_dir.mkdir(parents=True, exist_ok=True)
@@ -377,6 +414,25 @@ def get_authenticated_context(
         raise ValueError(f"Unknown auth mode: {mode}")
 
 
+def _still_on_login_page(page: Page, app_config: AppConfig, form) -> Optional[str]:
+    """Why the page still looks like the login, or None once it has left it.
+
+    Two signs: the browser is on another origin than the app (the provider's),
+    or the login form's username field is showing — the second catches a
+    provider served on the app's own origin.
+    """
+    here, app = urlparse(page.url), urlparse(app_config.url)
+    if (here.scheme, here.netloc) != (app.scheme, app.netloc):
+        return f"the browser is on {here.scheme}://{here.netloc}, not on the app ({app.scheme}://{app.netloc})"
+    if form is not None:
+        try:
+            if page.locator(form.username_selector).first.is_visible():
+                return "the login form is still showing"
+        except Exception:
+            pass  # an unparseable selector proves nothing either way
+    return None
+
+
 def interactive_login(
     role: str,
     config: SteppyConfig,
@@ -384,7 +440,7 @@ def interactive_login(
 ) -> None:
     """
     Open a headed browser and wait for the user to log in manually.
-    Save the storage state when done.
+    Save the storage state once the browser has left the login page.
 
     Args:
         role: Role name
@@ -393,6 +449,7 @@ def interactive_login(
 
     Raises:
         ValueError: If role is unknown
+        AuthenticationError: If input closes before the login is confirmed
     """
     if role not in config.apps:
         raise ValueError(f"Unknown role: {role}. Available roles: {list(config.apps.keys())}")
@@ -410,11 +467,26 @@ def interactive_login(
     # Navigate to the app
     page.goto("/", timeout=60000)
 
-    # Wait for user to log in - just wait for the URL to change from login page
-    # This is a simple heuristic - user should close the browser when done
+    # The user logs in by hand and presses Enter; the session is saved only once
+    # the page has left the login, or when the user types `save` to override a
+    # check that misreads their app.
     print(f"\nPlease log in to {app_config.name} in the browser window.")
     print("Press Enter when you have successfully logged in...")
-    input()
+    while True:
+        try:
+            answer = input().strip().lower()
+        except EOFError:
+            raise AuthenticationError(
+                "input closed before the login was confirmed. steppy auth login needs a terminal; "
+                f"for a form-login role, use: steppy auth login {role} --auto"
+            )
+        if answer == "save":
+            break
+        reason = _still_on_login_page(page, app_config, config.auth.form)
+        if reason is None:
+            break
+        print(f"Not saved yet: {reason}.")
+        print("Finish logging in and press Enter, or type 'save' to save this session as it is.")
 
     # Save storage state
     auth_dir.mkdir(parents=True, exist_ok=True)

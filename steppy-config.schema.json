@@ -591,6 +591,18 @@
           "default": null,
           "title": "Consent Selector"
         },
+        "login_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Login Path"
+        },
         "password_selector": {
           "default": "input[name='password']",
           "title": "Password Selector",
@@ -619,6 +631,18 @@
           ],
           "default": null,
           "title": "Preset"
+        },
+        "start_selector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Selector"
         },
         "submit_selector": {
           "default": "button[data-action-button-primary='true']",

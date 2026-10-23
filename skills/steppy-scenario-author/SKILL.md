@@ -46,7 +46,7 @@ tags:                                             # optional; enables filtering 
 seed: base                    # optional; string or {script, run}
 priority: critical            # optional; critical|high|medium|low
 auth: true                    # default true; set false ONLY for login-flow scenarios
-timeout: 30000                # optional; scenario-level timeout in ms
+timeout: 30000                # optional; default timeout (ms) for EACH step, not a whole-test limit
 layouts:                      # optional; viewports this flow must pass in (keys of screenshot.layouts)
   - desktop
   - mobile
@@ -397,7 +397,10 @@ whose surrounding text varies — it replaces the old `assert "X" in el.inner_te
 **`count(...)` comparators**: the second argument accepts `>= <= == != > <` (e.g.
 `count(.row, >=1)`, `count(.row, !=0)`). A **bare integer** (`count(.row, 3)`) keeps the exact
 `to_have_count` check. The dominant uses are `>=1` ("at least one row appeared") and `0` ("the
-row was removed"). Interpolation works in the selector: `contains([data-testid="item-{{record_id}}"], "...")`.
+row was removed"). Like every other assertion, a comparator **waits** — it re-counts until the
+comparison holds or the step's timeout (`timeout:` → scenario `timeout:` → `timing.step_timeout`)
+runs out. So `<` and `<=`, like `count(.row, 0)`, pass at once on a list that has not rendered
+yet: assert something that proves the page loaded first. Interpolation works in the selector: `contains([data-testid="item-{{record_id}}"], "...")`.
 
 ---
 
@@ -982,7 +985,7 @@ The authoring loop is `validate` → `generate` → `run` → `guide` / `build`.
 | `steppy record [URL]` | Bootstrap a **draft** scenario from a live click-through (see Workflow step 1) |
 | `steppy seed <name>` | Run one seed script by hand, outside a test run |
 | `steppy rerun` | Re-run only the previously failed tests |
-| `steppy auth login \| status \| clear` | Interactive login for a role, inspect cached sessions, clear `.auth/` |
+| `steppy auth login \| status \| clear` | Log in for a role (headed by hand, or `--auto`: headless with a form role's credentials, no terminal needed), inspect cached sessions, clear `.auth/` |
 | `steppy flaky` | Rank scenarios by flake rate across recent parallel runs |
 | `steppy stacks cleanup` | Rescue command: tear down orphaned `steppy-run-*` Compose projects left by a force-killed parallel run |
 | `steppy video check \| cache` | Preflight and cache management for narrated video (see Narrated video guides) |

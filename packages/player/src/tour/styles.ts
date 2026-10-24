@@ -1,31 +1,71 @@
 /**
- * Overlay styles. Theming goes through public ``--steppy-*`` custom
- * properties, read into private ``--_pw-*`` ones on ``:host`` and never
- * declared themselves — so a page sets them on ``:root`` or on the element.
- * Geometry comes from properties the tracker writes through CSSOM.
+ * Overlay styles. Theming goes through public ``--steppy-tour-*`` custom
+ * properties (the keys of ``theme.ts``), read into private ``--_pw-*`` ones on
+ * ``:host`` and never declared themselves — so a page sets them on ``:root``
+ * or on the element, and the host's ``theme`` property sets them inline.
+ * ``appearance="light"`` (or ``"auto"`` under a light colour scheme) swaps the
+ * defaults, never a value the page set. Geometry comes from properties the
+ * tracker writes through CSSOM.
  *
- * Defaults meet WCAG AA (guard: ``test/tour/small-modules.test.ts``). The bubble
- * inherits the app's font unless ``--steppy-font-family`` is set. The
- * bubble's inner layout uses logical properties, so it mirrors under the
- * layer's ``dir`` (an Arabic or Hebrew tour); its placement around the target
- * stays physical.
+ * Defaults meet WCAG AA in both appearances (guard: ``test/tour/small-modules.test.ts``).
+ * The bubble inherits the app's font unless ``--steppy-tour-font-family`` (or
+ * ``--steppy-font-family``) is set. The bubble's inner layout uses logical
+ * properties, so it mirrors under the layer's ``dir`` (an Arabic or Hebrew
+ * tour); its placement around the target stays physical.
  */
 
-import { css } from 'lit';
+import { css, type CSSResult } from 'lit';
 
-import { BUBBLE_LOOK, BUTTON_LOOK, TOUR_DEFAULTS, cssValue } from '../ui/tokens.js';
+import { TOUR_DEFAULTS, TOUR_LIGHT, cssValue } from '../ui/tokens.js';
+import { TOUR_THEME_KEYS, privateProperty, themeProperty, type TourThemeKey } from './theme.js';
+
+/** Tokens whose default is another token, so they follow its override. */
+const DERIVED = {
+  link: `var(${privateProperty('bubbleFg')})`,
+  spotlightRadius: `var(${privateProperty('radius')})`,
+} as const;
+
+type Defaults = Record<Exclude<TourThemeKey, keyof typeof DERIVED>, string>;
+
+/** Older or shared properties a token falls back to before its default. */
+const ALIASES: Partial<Record<TourThemeKey, string>> = {
+  bubbleBg: '--steppy-tooltip-bg',
+  bubbleFg: '--steppy-tooltip-fg',
+  fontFamily: '--steppy-font-family',
+};
+
+const DARK: Defaults = TOUR_DEFAULTS;
+const LIGHT: Defaults = TOUR_LIGHT;
+
+/**
+ * ``--_pw-x: var(--steppy-tour-x, <default>);`` per key. Given ``base``, only
+ * the keys whose default differs from it — derived ones never do.
+ */
+function privateTokens(defaults: Defaults, base?: Defaults): CSSResult {
+  const lines: string[] = [];
+  for (const key of TOUR_THEME_KEYS) {
+    const derived = key in DERIVED;
+    if (base && (derived || base[key as keyof Defaults] === defaults[key as keyof Defaults])) continue;
+    const value = derived ? DERIVED[key as keyof typeof DERIVED] : defaults[key as keyof Defaults];
+    const alias = ALIASES[key];
+    const fallback = alias ? `var(${alias}, ${value})` : value;
+    lines.push(`${privateProperty(key)}: var(${themeProperty(key)}, ${fallback});`);
+  }
+  return cssValue(lines.join('\n    '));
+}
 
 export const tourStyles = css`
   :host {
     display: contents;
-    --_pw-bg: var(--steppy-tour-bubble-bg, var(--steppy-tooltip-bg, ${cssValue(TOUR_DEFAULTS.bubbleBg)}));
-    --_pw-fg: var(--steppy-tour-bubble-fg, var(--steppy-tooltip-fg, ${cssValue(TOUR_DEFAULTS.bubbleFg)}));
-    --_pw-muted: var(--steppy-tour-muted, ${cssValue(TOUR_DEFAULTS.muted)});
-    --_pw-accent: var(--steppy-tour-accent, ${cssValue(TOUR_DEFAULTS.accent)});
-    --_pw-accent-fg: var(--steppy-tour-accent-fg, ${cssValue(TOUR_DEFAULTS.accentFg)});
-    --_pw-focus: var(--steppy-tour-focus, ${cssValue(TOUR_DEFAULTS.focus)});
-    --_pw-scrim: var(--steppy-tour-scrim, ${cssValue(TOUR_DEFAULTS.scrim)});
-    --_pw-radius: var(--steppy-tour-radius, ${cssValue(TOUR_DEFAULTS.radius)});
+    ${privateTokens(DARK)}
+  }
+  :host([appearance='light']) {
+    ${privateTokens(LIGHT, DARK)}
+  }
+  @media (prefers-color-scheme: light) {
+    :host([appearance='auto']) {
+      ${privateTokens(LIGHT, DARK)}
+    }
   }
   .layer {
     position: fixed;
@@ -53,9 +93,9 @@ export const tourStyles = css`
     top: var(--_pw-sy, 0);
     width: var(--_pw-sw, 0);
     height: var(--_pw-sh, 0);
-    border-radius: var(--_pw-radius);
+    border-radius: var(--_pw-spotlight-radius);
     box-shadow:
-      0 0 0 2px var(--_pw-accent),
+      0 0 0 var(--_pw-ring-width) var(--_pw-accent),
       0 0 0 max(100vw, 100vh) var(--_pw-scrim);
     pointer-events: none;
     transition:
@@ -67,17 +107,18 @@ export const tourStyles = css`
   .bubble {
     position: absolute;
     box-sizing: border-box;
-    width: min(320px, calc(100vw - 16px));
+    width: min(var(--_pw-width), calc(100vw - 16px));
     max-height: calc(100vh - 16px);
     overflow: auto;
-    padding: ${cssValue(BUBBLE_LOOK.padding)};
+    padding: var(--_pw-padding);
+    border: var(--_pw-border);
     border-radius: var(--_pw-radius);
-    background: var(--_pw-bg);
-    color: var(--_pw-fg);
-    box-shadow: ${cssValue(BUBBLE_LOOK.shadow)};
-    font-family: var(--steppy-font-family, inherit);
-    font-size: ${cssValue(BUBBLE_LOOK.fontSize)};
-    line-height: ${cssValue(BUBBLE_LOOK.lineHeight)};
+    background: var(--_pw-bubble-bg);
+    color: var(--_pw-bubble-fg);
+    box-shadow: var(--_pw-shadow);
+    font-family: var(--_pw-font-family);
+    font-size: var(--_pw-font-size);
+    line-height: var(--_pw-line-height);
     pointer-events: auto;
     visibility: hidden;
     outline: none;
@@ -120,8 +161,8 @@ export const tourStyles = css`
   h2 {
     flex: 1;
     margin: 0 0 4px;
-    font-size: 1em;
-    font-weight: 600;
+    font-size: var(--_pw-title-size);
+    font-weight: var(--_pw-title-weight);
   }
   .body {
     margin: 0;
@@ -129,7 +170,7 @@ export const tourStyles = css`
   }
   .body a,
   .guide {
-    color: var(--_pw-fg);
+    color: var(--_pw-link);
     text-decoration: underline;
   }
   .guide {
@@ -155,9 +196,10 @@ export const tourStyles = css`
   }
   button {
     font: inherit;
+    font-weight: var(--_pw-button-weight);
     cursor: pointer;
-    border-radius: ${cssValue(BUTTON_LOOK.radius)};
-    padding: ${cssValue(BUTTON_LOOK.padding)};
+    border-radius: var(--_pw-button-radius);
+    padding: var(--_pw-button-padding);
     border: 1px solid transparent;
   }
   button:focus-visible,
@@ -175,14 +217,14 @@ export const tourStyles = css`
   }
   .secondary {
     background: transparent;
-    color: var(--_pw-fg);
+    color: var(--_pw-bubble-fg);
     border-color: var(--_pw-muted);
   }
   .close {
     margin-inline-start: auto;
     padding: 0 6px;
     background: transparent;
-    color: var(--_pw-fg);
+    color: var(--_pw-bubble-fg);
     font-size: 1.25em;
     line-height: 1;
   }
@@ -194,11 +236,12 @@ export const tourStyles = css`
     gap: 4px;
     padding: 4px;
     border-radius: 999px;
-    background: var(--_pw-bg);
-    color: var(--_pw-fg);
-    box-shadow: ${cssValue(BUBBLE_LOOK.shadow)};
-    font-family: var(--steppy-font-family, inherit);
-    font-size: ${cssValue(BUBBLE_LOOK.fontSize)};
+    border: var(--_pw-border);
+    background: var(--_pw-bubble-bg);
+    color: var(--_pw-bubble-fg);
+    box-shadow: var(--_pw-shadow);
+    font-family: var(--_pw-font-family);
+    font-size: var(--_pw-font-size);
     pointer-events: auto;
   }
   .pill .primary {

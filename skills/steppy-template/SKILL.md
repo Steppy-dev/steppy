@@ -315,28 +315,64 @@ Set them on `:root` or on the element — custom properties inherit through the 
 
 | Property | Default | Controls |
 |---|---|---|
+| **Colour** | | |
 | `--steppy-tour-bubble-bg` | `#1f1d1a` | Popover background; falls back to `--steppy-tooltip-bg` |
 | `--steppy-tour-bubble-fg` | `#fbf9f4` | Popover text; falls back to `--steppy-tooltip-fg` |
-| `--steppy-tour-muted` | `#c9c5bd` | Progress text ("Step 2 of 5") |
+| `--steppy-tour-muted` | `#c9c5bd` | Progress text ("Step 2 of 5"), secondary button outline |
 | `--steppy-tour-accent` | `#a8410e` | Primary button, spotlight ring |
 | `--steppy-tour-accent-fg` | `#ffffff` | Primary button text |
 | `--steppy-tour-focus` | `#f09a6a` | Focus ring |
 | `--steppy-tour-scrim` | `rgba(31, 29, 26, 0.45)` | The dimming around the spotlight |
-| `--steppy-tour-radius` | `6px` | Corner radius |
-| `--steppy-font-family` | inherited | Unset, the bubble uses **your app's font** |
+| `--steppy-tour-link` | the bubble text colour | Links in step text, "Open the full guide" |
+| `--steppy-tour-border` | `none` | Popover and pill border (`1px solid #ccc`) |
+| **Shape and type** | | |
+| `--steppy-tour-radius` | `6px` | Popover corner radius |
+| `--steppy-tour-width` | `320px` | Popover width (never wider than the screen) |
+| `--steppy-tour-padding` | `8px 12px` | Popover padding |
+| `--steppy-tour-shadow` | `0 4px 12px rgba(0, 0, 0, 0.2)` | Popover and pill shadow |
+| `--steppy-tour-font-family` | inherited | Unset, the bubble uses **your app's font**; falls back to `--steppy-font-family` |
+| `--steppy-tour-font-size` | `14px` | Text size |
+| `--steppy-tour-line-height` | `1.4` | |
+| `--steppy-tour-title-size` | `1em` | Step heading size |
+| `--steppy-tour-title-weight` | `600` | Step heading weight |
+| `--steppy-tour-button-radius` | `4px` | |
+| `--steppy-tour-button-padding` | `4px 10px` | |
+| `--steppy-tour-button-weight` | inherited | |
+| **Spotlight** | | |
+| `--steppy-tour-ring-width` | `2px` | The accent ring around the target (`0` for none) |
+| `--steppy-tour-spotlight-radius` | the popover radius | Corners of the cut-out |
 
 ```css
 /* the app's global stylesheet */
 :root {
   --steppy-tour-accent: #0b5cad;   /* primary button + spotlight ring — 6.7:1 against white text */
   --steppy-tour-radius: 10px;
+  --steppy-tour-width: 360px;
 }
 ```
 
-The defaults are a dark bubble with a rust accent. Moving to a light bubble means setting
-`-bubble-bg`, `-bubble-fg`, `-muted` and `-focus` **together** — the default muted grey and
-focus ring are tuned for the dark background. A project that already sets
-`--steppy-tooltip-bg` / `-fg` on `:root` gets a matching bubble for free.
+**Light bubble.** The defaults are a dark bubble with a rust accent. `appearance="light"` on the
+element switches to a light, AA-checked palette (white bubble, dark text, a hairline border);
+`appearance="auto"` follows the user's `prefers-color-scheme`. The appearance only swaps the
+*defaults* — any property you set still wins. Building your own light look instead means
+setting `-bubble-bg`, `-bubble-fg`, `-muted` and `-focus` **together**. A project that already
+sets `--steppy-tooltip-bg` / `-fg` on `:root` gets a matching bubble for free.
+
+```html
+<steppy-tour-host fallback-manifest="/tours/tours.manifest.json" appearance="auto"></steppy-tour-host>
+```
+
+**From code.** The host's `theme` property takes the same tokens as camelCase keys and writes
+them onto the element through CSSOM — no `<style>` injected, so a strict `style-src` is fine.
+Unknown keys and empty values are ignored; setting a new object removes what the old one set.
+In Angular, `provideSteppyTours({ theme, appearance })` or `<steppy-tours [theme]="…" appearance="light">`.
+
+```js
+document.querySelector('steppy-tour-host').theme = { accent: '#0b5cad', width: '360px', buttonWeight: '600' };
+```
+
+Precedence, strongest first: the `theme` property → a `steppy-tour-host { … }` rule →
+`:root` → the appearance's defaults.
 
 ### Parts
 

@@ -12,7 +12,7 @@
  */
 
 import { InjectionToken } from '@angular/core';
-import type { TourEventName, TourHostApi, TourSource, TourStringOverrides } from '@steppy/player/tour';
+import type { TourAppearance, TourEventName, TourHostApi, TourSource, TourStringOverrides, TourTheme } from '@steppy/player/tour';
 
 export const TOUR_HOST_TAG = 'steppy-tour-host';
 export const TOUR_EVENT_NAMES = ['tour-start', 'tour-step', 'tour-complete', 'tour-dismiss', 'tour-offpath', 'tour-error'] as const;
@@ -45,9 +45,11 @@ export interface HostProps {
   locale: string;
   disabled: boolean;
   strings: TourStringOverrides | undefined;
+  theme: TourTheme | undefined;
   source: TourSource | null;
   targetTimeout?: number;
   baseZIndex?: number;
+  appearance?: TourAppearance;
 }
 
 /**
@@ -62,7 +64,9 @@ export function applyProps(el: TourHostElement, p: HostProps): void {
   el.locale = p.locale;
   el.disabled = p.disabled;
   el.strings = p.strings;
+  el.theme = p.theme;
   el.source = p.source;
   if (p.targetTimeout !== undefined) el.targetTimeout = p.targetTimeout;
   if (p.baseZIndex !== undefined) el.baseZIndex = p.baseZIndex;
+  if (p.appearance !== undefined) el.appearance = p.appearance;
 }

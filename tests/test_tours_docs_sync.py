@@ -60,8 +60,10 @@ def test_every_part_is_documented():
 
 
 def test_every_theming_property_is_documented():
-    styles = (ROOT / "packages" / "player" / "src" / "tour" / "styles.ts").read_text(encoding="utf-8")
-    props = set(re.findall(r"var\((--steppy-tour-[a-z-]+)", styles))
+    # The stylesheet builds its property names from the key table (guard: theme.test.ts).
+    theme = (ROOT / "packages" / "player" / "src" / "tour" / "theme.ts").read_text(encoding="utf-8")
+    keys = re.findall(r"'(\w+)'", theme[theme.index("export const TOUR_THEME_KEYS") : theme.index("] as const;")])
+    props = {"--steppy-tour-" + re.sub(r"[A-Z]", lambda m: "-" + m.group(0).lower(), k) for k in keys}
     assert props
     for prop in props:
         assert f"`{prop}`" in TEXT, prop

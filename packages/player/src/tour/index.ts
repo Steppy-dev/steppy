@@ -10,6 +10,7 @@ import { defineTourHost } from './host.js';
 
 export { SteppyTourHost, defineTourHost } from './host.js';
 export type { TourHostApi, TourNavigate, TourNavigateContext, TourPosition, TourSource, TourStartOptions, TourStringOverrides } from './api.js';
+export { TOUR_APPEARANCES, TOUR_THEME_KEYS, themeProperty, type TourAppearance, type TourTheme, type TourThemeKey } from './theme.js';
 export type { TourEventDetailMap, TourEventMeta, TourStepPosition } from './events.js';
 export type { DismissVia, StepReason, TourErrorDetail, TourSourceKind } from './engine.js';
 export {

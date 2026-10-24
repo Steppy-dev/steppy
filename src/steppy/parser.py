@@ -273,6 +273,9 @@ def _parse_steps(body: str, file_path: Path) -> list[Step]:
     # Split body into step sections using ### headers
     # Pattern: ### followed by optional number and period, then the title
     step_pattern = re.compile(r"^###\s+(?:\d+\.\s+)?(.+)$", re.MULTILINE)
+    # The heading's own number ("16", "17b"), kept apart from the title and the
+    # position: diagnostics print it so a warning can be found by its heading.
+    label_pattern = re.compile(r"###\s+(\d+[A-Za-z]?)\.\s")
 
     matches = list(step_pattern.finditer(body))
 
@@ -294,6 +297,9 @@ def _parse_steps(body: str, file_path: Path) -> list[Step]:
             step_data = _parse_step_content(step_content, step_title, file_path)
             step_data["step_number"] = step_number
             step_data["step_title"] = step_title
+            label = label_pattern.match(match.group(0))
+            if label:
+                step_data["step_label"] = label.group(1)
 
             step = Step(**step_data)
             steps.append(step)

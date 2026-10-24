@@ -4428,12 +4428,23 @@ function ni(t) {
     ${t.ui.restart}
   </button>`;
 }
+function ai(t) {
+  let e;
+  try {
+    e = new Intl.DisplayNames([t], { type: "language" }).of(t);
+  } catch {
+    return t;
+  }
+  return !e || e === t ? t : e.charAt(0).toLocaleUpperCase(t) + e.slice(1);
+}
 function $t(t) {
   return t.locales.length <= 1 ? b : _`<label class="steppy-field">
     ${t.ui.localeSwitcher}
     <select @change=${t.onLocaleChange} .value=${t.activeLocale}>
       ${t.locales.map(
-    (e) => _`<option value=${e} ?selected=${e === t.activeLocale}>${e}</option>`
+    (e) => _`<option value=${e} lang=${e} ?selected=${e === t.activeLocale}>
+            ${ai(e)}
+          </option>`
   )}
     </select>
   </label>`;
@@ -4463,7 +4474,7 @@ function kt(t) {
   })}
   </div>`;
 }
-function ai(t) {
+function oi(t) {
   const e = t.steps.find((s) => s.status === "current") ?? t.steps[t.currentIndex - 1];
   return _`
     <div class="steppy-tpl-inline">
@@ -4481,7 +4492,7 @@ function ai(t) {
     </div>
   `;
 }
-const oi = We`
+const li = We`
   .steppy-tpl-inline {
     display: flex;
     flex-direction: column;
@@ -4519,12 +4530,12 @@ const oi = We`
     margin-left: auto;
     flex-wrap: wrap;
   }
-`, li = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+`, ci = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  render: ai,
-  styles: oi
+  render: oi,
+  styles: li
 }, Symbol.toStringTag, { value: "Module" }));
-function ci(t) {
+function di(t) {
   return _`
     <div class="steppy-wrapper steppy-tpl-overlay">
       ${t.renderStage()}
@@ -4536,16 +4547,16 @@ function ci(t) {
     </div>
   `;
 }
-const di = We`
+const ui = We`
   .steppy-tpl-overlay .steppy-seg {
     margin-left: auto;
   }
-`, ui = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+`, pi = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  render: ci,
-  styles: di
+  render: di,
+  styles: ui
 }, Symbol.toStringTag, { value: "Module" }));
-function pi(t, e) {
+function hi(t, e) {
   const s = e.status === "completed" ? _`${t.ui.stepPassed} <span aria-hidden="true">✓</span>` : e.subLabel || b;
   return _`
     <li
@@ -4567,7 +4578,7 @@ function pi(t, e) {
     </li>
   `;
 }
-function hi(t) {
+function fi(t) {
   return _`
     <div class="steppy-tpl-sidebar">
       <div class="steppy-sidebar-layout">
@@ -4586,7 +4597,7 @@ function hi(t) {
             </div>
           </div>
           <ol class="steppy-timeline">
-            ${t.steps.map((e) => pi(t, e))}
+            ${t.steps.map((e) => hi(t, e))}
           </ol>
           <div class="steppy-rail-foot">
             ${xt(t)} ${bt(t)} ${hs(t)}
@@ -4598,7 +4609,7 @@ function hi(t) {
     </div>
   `;
 }
-const fi = We`
+const mi = We`
   .steppy-tpl-sidebar {
     container-type: inline-size;
   }
@@ -4810,30 +4821,30 @@ const fi = We`
       align-self: start;
     }
   }
-`, mi = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+`, yi = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
-  render: hi,
-  styles: fi
+  render: fi,
+  styles: mi
 }, Symbol.toStringTag, { value: "Module" })), Be = {
-  overlay: ui,
-  sidebar: mi,
-  inline: li
-}, yi = ["sidebar", "overlay", "inline"], gi = new Set(Object.keys(Be));
+  overlay: pi,
+  sidebar: yi,
+  inline: ci
+}, gi = ["sidebar", "overlay", "inline"], vi = new Set(Object.keys(Be));
 function Oe(t) {
-  return typeof t == "string" && gi.has(t);
+  return typeof t == "string" && vi.has(t);
 }
-const vi = [si, ...Object.values(Be).map((t) => t.styles)];
-var _i = Object.defineProperty, xi = Object.getOwnPropertyDescriptor, k = (t, e, s, r) => {
-  for (var i = r > 1 ? void 0 : r ? xi(e, s) : e, n = t.length - 1, a; n >= 0; n--)
+const _i = [si, ...Object.values(Be).map((t) => t.styles)];
+var xi = Object.defineProperty, bi = Object.getOwnPropertyDescriptor, k = (t, e, s, r) => {
+  for (var i = r > 1 ? void 0 : r ? bi(e, s) : e, n = t.length - 1, a; n >= 0; n--)
     (a = t[n]) && (i = (r ? a(e, s, i) : a(i)) || i);
-  return r && i && _i(e, s, i), i;
+  return r && i && xi(e, s, i), i;
 };
 function Qt(t) {
   return { cursor: t.cursor, viewport: t.captureSize };
 }
-const bi = ["arrow", "hotspot", "off"];
+const $i = ["arrow", "hotspot", "off"];
 function es(t) {
-  return typeof t == "string" && bi.includes(t);
+  return typeof t == "string" && $i.includes(t);
 }
 let w = class extends ve {
   constructor() {
@@ -5269,7 +5280,7 @@ let w = class extends ve {
       nextDisabled: this.completed,
       locales: e.locales,
       layouts: r,
-      templates: yi,
+      templates: gi,
       activeTemplate: this._activeTemplate,
       activeLocale: this.locale ?? "",
       activeLayout: this.variant,
@@ -5331,7 +5342,7 @@ let w = class extends ve {
   }
 };
 w.createAnimator = (t) => new X(t);
-w.styles = vi;
+w.styles = _i;
 w.TEMPLATE_STORAGE_KEY = "steppy:active-template";
 k([
   z({ type: String, reflect: !0 })

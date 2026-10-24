@@ -11,6 +11,7 @@ export { routerNavigate } from './navigate';
 
 // Types only: erased at build time, so nothing from the overlay loads on the server.
 export type {
+  TourAppearance,
   TourErrorDetail,
   TourEventDetailMap,
   TourNavigateContext,
@@ -18,4 +19,5 @@ export type {
   TourSource,
   TourStartOptions,
   TourStringOverrides,
+  TourTheme,
 } from '@steppy/player/tour';

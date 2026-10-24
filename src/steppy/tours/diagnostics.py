@@ -84,6 +84,7 @@ class Diagnostic:
     tour: Optional[str] = None
     step_number: Optional[int] = None
     step_title: Optional[str] = None
+    step_label: Optional[str] = None
     hint: Optional[str] = None
 
     def render(self) -> str:
@@ -94,8 +95,14 @@ class Diagnostic:
             where = f"tour '{self.tour or self.scenario}'"
         if self.step_number is not None:
             where += f", step {self.step_number}"
-            if self.step_title:
-                where += f" '{self.step_title}'"
+            title = self.step_title
+            # The position counts headings; the label is what the author wrote ("### 16.").
+            if self.step_label and self.step_label != str(self.step_number):
+                where += f" (### {self.step_label})"
+                if title and title.startswith(f"{self.step_label}. "):
+                    title = title[len(self.step_label) + 2 :]
+            if title:
+                where += f" '{title}'"
         text = f"{where}: {self.message}" if where else self.message
         if self.hint:
             text += f" — {self.hint}"
@@ -127,6 +134,7 @@ class DiagSink:
                 tour=self.tour,
                 step_number=getattr(step, "step_number", None),
                 step_title=getattr(step, "step_title", None),
+                step_label=getattr(step, "step_label", None),
                 hint=hint,
             )
         )

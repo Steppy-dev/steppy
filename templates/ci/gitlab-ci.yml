@@ -38,7 +38,7 @@ e2e:
     # The extras are what make `report.html` and `report.retries` /
     # `steppy run --retries N` do anything — without them Steppy warns and skips
     # those features rather than failing the run. `bundle` adds zstd compression.
-    - pip install 'steppy-dev[retry,report,bundle] @ git+https://github.com/Steppy-dev/steppy.git@v0.5.0'
+    - pip install 'steppy-dev[retry,report,bundle] @ git+https://github.com/Steppy-dev/steppy.git@v0.6.0'
     # In-app tours (only with `tours.enabled: true`): fail fast when the tour files
     # committed to the app no longer match the scenarios. It compares content for
     # the build id each committed copy records, so a new commit alone never fails

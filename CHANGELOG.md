@@ -6,6 +6,43 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-24
+
+The in-app tour overlay can be themed to match the app, and the interactive
+player's language picker names each language.
+
+### Added
+- **In-app tours: theming.** The overlay reads `--steppy-tour-*` CSS custom
+  properties (colours, border, radius, width, padding, shadow, font, button and
+  ring sizes), or the same tokens as camelCase keys through the new `theme`
+  property. `appearance` picks the default palette: `dark` (the default),
+  `light` (WCAG AA), or `auto` (follows `prefers-color-scheme`). Precedence,
+  strongest first: `theme`, a `steppy-tour-host { … }` rule, `:root`, then the
+  appearance's defaults. `@steppy/angular` passes both through
+  `provideSteppyTours({ theme, appearance })` and matching inputs on
+  `<steppy-tours>`. See "Theming" in `docs/tours.md`.
+
+### Changed
+- **The interactive player's language picker shows names.** It lists
+  `Français`, `Nederlands`, `Deutsch` instead of `fr`, `nl`, `de`, like the
+  static pages, and marks each option with its `lang`. A locale the browser
+  cannot name keeps its code. Takes effect after `steppy build` with the new
+  release.
+- **Tour diagnostics name the heading as well as the position.** A warning on
+  the 23rd step headed `### 16.` now reads `step 23 (### 16) '…'`, and a
+  `### 17b.` heading no longer leaves `17b.` in the printed title. Tour ids,
+  capture file names and generated tests are unchanged.
+- **The npm packages are the documented install.** `@steppy/player` and
+  `@steppy/angular` are on npm; the docs and the `steppy-app-tours` skill now
+  say `npm install -E` at the `steppy-dev` version, and keep the checkout route
+  for unreleased changes only.
+
+### Fixed
+- **`may-not-change` fired after its own fix.** An `expand`, or a `toggle` with
+  `state:`, still warned with `tour-advance: manual` set, which is exactly what
+  the warning asks for. It now warns only while the step advances on the
+  click or change it may never make.
+
 ## [0.5.0] - 2026-10-24
 
 In-app tours can start on a page the guide reaches by clicking, and
@@ -946,7 +983,8 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Steppy-dev/steppy/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Steppy-dev/steppy/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Steppy-dev/steppy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Steppy-dev/steppy/releases/tag/v0.3.0

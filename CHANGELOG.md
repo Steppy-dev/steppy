@@ -6,6 +6,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-24
+
+In-app tours can start on a page the guide reaches by clicking, and
+`steppy bundle verify` reports every kind of archive damage.
+
 ### Added
 - **In-app tours: `tour: start` and `tour: end`.** A guide can walk its reader
   to a page by clicking while the tour starts on that page: mark the tour's
@@ -18,6 +23,16 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   also takes a list (`[end, keep]`). New diagnostics: `range-duplicate`,
   `range-reversed`, `start-on-navigation` (errors) and `entry-unknown`
   (warning). Scenarios without the markers compile and replay as before.
+
+### Fixed
+- **`steppy bundle verify` caught only some damage.** A corrupt archive could
+  raise a raw `zlib.error` or `tarfile.ReadError` instead of a verify error
+  (which one depended on where the damage sat, so the outcome varied between
+  zlib builds), and damage that touched no member's bytes, such as a tar
+  header, passed as intact. Every reader (`inspect`, `verify`, `steppy report`)
+  now reports a damaged archive as one, `verify` reads the stream to its end so
+  the gzip checksum is checked, and zstd bundles carry a frame checksum (4
+  bytes; older bundles still read).
 
 ## [0.4.0] - 2026-10-23
 
@@ -931,6 +946,7 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Steppy-dev/steppy/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Steppy-dev/steppy/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Steppy-dev/steppy/releases/tag/v0.3.0

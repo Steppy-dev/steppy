@@ -35,7 +35,24 @@ _EXTRA_HINT = "install the extra with: pip install 'steppy-dev[bundle]'"
 
 
 class ArchiveError(Exception):
-    """Unusable codec request — always actionable."""
+    """An archive Steppy cannot use: an unusable codec request, or a damaged file."""
+
+
+def _damage_errors() -> tuple[type[BaseException], ...]:
+    """What reading a corrupt or truncated archive raises, codec by codec.
+
+    Which one depends on where the damage sits — a tar header, a deflate
+    block, the stream's end — so callers must not have to know the list. Not
+    ``OSError`` as a whole: a failed write while extracting is not damage.
+    """
+    import zlib
+
+    errors: tuple[type[BaseException], ...] = (tarfile.TarError, zlib.error, EOFError, gzip.BadGzipFile)
+    if zstandard_available():
+        import zstandard
+
+        errors += (zstandard.ZstdError,)
+    return errors
 
 
 def zstandard_available() -> bool:
@@ -84,8 +101,10 @@ def _compressed_stream(path: Path, fmt: str) -> Iterator:
             import zstandard
 
             # threads=0 keeps it single-threaded. Multithreaded zstd is
-            # deterministic in practice, but pinning removes the question.
-            compressor = zstandard.ZstdCompressor(level=ZSTD_LEVEL, threads=0)
+            # deterministic in practice, but pinning removes the question. The
+            # frame checksum (4 bytes) is what lets `verify` catch damage to a
+            # tar header, which hashing the members alone cannot see.
+            compressor = zstandard.ZstdCompressor(level=ZSTD_LEVEL, threads=0, write_checksum=True)
             with compressor.stream_writer(raw) as stream:
                 yield stream
         else:
@@ -146,23 +165,39 @@ def open_archive(path: Path) -> Iterator[tarfile.TarFile]:
     """Read an archive written by :func:`write_archive`, sniffing the codec.
 
     Sniffs by extension: the producer chose it, and a bundle is always named by
-    its producer.
+    its producer. Damage found while the caller reads — opening, iterating or
+    reading a member — becomes an :class:`ArchiveError`.
     """
-    if path.suffix == ".zst":
-        if not zstandard_available():
-            raise ArchiveError(f"reading {path.name} needs the 'zstandard' package; {_EXTRA_HINT}")
-        import zstandard
-
-        with open(path, "rb") as raw:
-            decompressor = zstandard.ZstdDecompressor()
-            with decompressor.stream_reader(raw) as stream:
-                with tarfile.open(fileobj=stream, mode="r|") as tar:
-                    yield tar
-    elif path.suffix == ".gz":
-        with tarfile.open(path, mode="r:gz") as tar:
-            yield tar
-    else:
+    if path.suffix not in (".zst", ".gz"):
         raise ArchiveError(f"unrecognised bundle extension {path.suffix!r} (expected .tar.zst or .tar.gz)")
+    if path.suffix == ".zst" and not zstandard_available():
+        raise ArchiveError(f"reading {path.name} needs the 'zstandard' package; {_EXTRA_HINT}")
+    try:
+        if path.suffix == ".zst":
+            import zstandard
+
+            with open(path, "rb") as raw:
+                decompressor = zstandard.ZstdDecompressor()
+                with decompressor.stream_reader(raw) as stream:
+                    with tarfile.open(fileobj=stream, mode="r|") as tar:
+                        yield tar
+        else:
+            with tarfile.open(path, mode="r:gz") as tar:
+                yield tar
+    except _damage_errors() as e:
+        raise ArchiveError(f"{path.name} is damaged or truncated: {e}") from e
+
+
+def read_to_end(tar: tarfile.TarFile) -> None:
+    """Read the compressed stream past the tar's end marker, to its own end.
+
+    ``tarfile`` stops at the end-of-archive blocks, and gzip checks its CRC
+    only on reaching the end of the stream — so without this, damage that
+    touches no member's bytes (a header field, the trailing padding) reads
+    as an intact archive.
+    """
+    while tar.fileobj.read(1024 * 1024):
+        pass
 
 
 def read_members(

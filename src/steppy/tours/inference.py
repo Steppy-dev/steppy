@@ -515,6 +515,9 @@ def _apply_annotations(step: Step, cand: Candidate, settings: ToursSettings, sin
             step=step,
             hint="use `tour-advance: manual`",
         )
+    # A manual advance is the fix `may-not-change` asks for, so the note is moot.
+    if cand.advance == "manual":
+        cand.notes = [note for note in cand.notes if note[0] != "may-not-change"]
     return cand
 
 

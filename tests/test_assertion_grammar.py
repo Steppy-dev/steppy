@@ -214,7 +214,9 @@ def test_each_action_still_accepts_its_own_fields(action, body):
     assert Step(action=action, **body).action == action
 
 
-@pytest.mark.parametrize("field", sorted(_UNIVERSAL_FIELDS - {"action", "step_number", "step_title", "expect"}))
+@pytest.mark.parametrize(
+    "field", sorted(_UNIVERSAL_FIELDS - {"action", "step_number", "step_title", "step_label", "expect"})
+)
 def test_universal_fields_are_accepted_everywhere(field):
     value = {
         "role": "editor",

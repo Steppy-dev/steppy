@@ -233,6 +233,38 @@ def test_reduced_motion_disables_transitions(open_demo):
     assert set(duration.replace(" ", "").split(",")) == {"0s"}
 
 
+_BUBBLE_STYLE = """(prop) => getComputedStyle(
+    document.querySelector('steppy-tour-host').shadowRoot.querySelector('[part~="bubble"]'))[prop]"""
+
+
+def test_theming_through_appearance_page_properties_and_the_theme_property(open_demo):
+    # CSSOM only: the demo's strict CSP refuses an injected <style>, which is
+    # also how a strict app themes the overlay from code.
+    page = open_demo(color_scheme="light")
+    start(page)
+    at_step(page, "new-invoice-btn")
+    assert page.evaluate(_BUBBLE_STYLE, "backgroundColor") == "rgb(31, 29, 26)"
+    assert page.evaluate(_BUBBLE_STYLE, "width") == "320px"
+
+    page.evaluate("document.querySelector('steppy-tour-host').appearance = 'light'")
+    poll(page, f"() => ({_BUBBLE_STYLE})('backgroundColor') === 'rgb(255, 255, 255)'")
+    assert page.evaluate(_BUBBLE_STYLE, "borderTopWidth") == "1px"
+
+    page.evaluate("document.querySelector('steppy-tour-host').appearance = 'auto'")
+    poll(page, f"() => ({_BUBBLE_STYLE})('backgroundColor') === 'rgb(255, 255, 255)'")
+
+    page.evaluate("document.documentElement.style.setProperty('--steppy-tour-width', '360px')")
+    assert page.evaluate(_BUBBLE_STYLE, "width") == "360px"
+
+    page.evaluate("document.querySelector('steppy-tour-host').theme = { bubbleBg: 'rgb(1, 2, 3)', width: '300px' }")
+    poll(page, f"() => ({_BUBBLE_STYLE})('backgroundColor') === 'rgb(1, 2, 3)'")
+    assert page.evaluate(_BUBBLE_STYLE, "width") == "300px"
+
+    page.evaluate("document.querySelector('steppy-tour-host').theme = undefined")
+    poll(page, f"() => ({_BUBBLE_STYLE})('width') === '360px'")
+    assert page.errors == []
+
+
 def test_french_content_and_chrome(open_demo):
     page = open_demo()
     page.select_option('[data-testid="locale-select"]', "fr")

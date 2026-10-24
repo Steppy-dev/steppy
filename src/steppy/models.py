@@ -306,6 +306,7 @@ _UNIVERSAL_FIELDS: frozenset[str] = frozenset(
         "when",
         "step_number",
         "step_title",
+        "step_label",
     }
 )
 
@@ -564,6 +565,7 @@ class Step(BaseModel):
     # Internal tracking
     step_number: Optional[int] = None
     step_title: Optional[str] = None
+    step_label: Optional[str] = None
 
     class Config:
         populate_by_name = True

@@ -1,5 +1,5 @@
 import { InjectionToken, type Signal } from '@angular/core';
-import type { TourNavigate, TourSource, TourStringOverrides } from '@steppy/player/tour';
+import type { TourAppearance, TourNavigate, TourSource, TourStringOverrides, TourTheme } from '@steppy/player/tour';
 
 /**
  * Where the tours' language comes from. A string or a signal is used as is; a
@@ -32,6 +32,10 @@ export interface SteppyToursConfig {
   disabled?: boolean;
   /** Chrome string overrides per locale (buttons, hints). */
   strings?: TourStringOverrides;
+  /** ``--steppy-tour-*`` values set on the overlay element; they win over your stylesheet. */
+  theme?: TourTheme;
+  /** The overlay's default palette: ``'dark'`` (the overlay's default), ``'light'`` or ``'auto'``. */
+  appearance?: TourAppearance;
   /** Supply tour files yourself; see the overlay's ``source`` property. */
   source?: TourSource | null;
   /** The tours' language. Default: ``<html lang>``. */

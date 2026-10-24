@@ -70,6 +70,26 @@ describe('<steppy-tours>', () => {
     expect([el.manifest, el.targetTimeout, el.disabled]).toEqual(['https://guide.example.com/tours/{buildId}/tours.manifest.json', 3000, false]);
   });
 
+  it('passes the theme and appearance through, inputs over configuration', async () => {
+    setup({ theme: { accent: '#0b5cad' }, appearance: 'light' });
+    const fixture = await mountDefined();
+    const el = overlay.element()!;
+    expect([el.theme, el.appearance]).toEqual([{ accent: '#0b5cad' }, 'light']);
+    fixture.componentRef.setInput('theme', { width: '360px' });
+    fixture.componentRef.setInput('appearance', 'auto');
+    await fixture.whenStable();
+    expect([el.theme, el.appearance]).toEqual([{ width: '360px' }, 'auto']);
+    fixture.componentRef.setInput('theme', undefined);
+    await fixture.whenStable();
+    expect(el.theme).toEqual({ accent: '#0b5cad' });
+  });
+
+  it('leaves the overlay default appearance alone when none is configured', async () => {
+    setup();
+    await mountDefined();
+    expect(overlay.calls.some((c) => c.kind === 'set' && c.name === 'appearance')).toBe(false);
+  });
+
   it('emits each overlay event as an output and records it in the service', async () => {
     setup();
     const fixture = await mountDefined();

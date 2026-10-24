@@ -11,7 +11,9 @@ and fail when the surface they cover grows without them:
 - every in-app tour diagnostic code is in the author skill's table;
 - the app-side skill covers the overlay's and the Angular adapter's public API
   (the host's properties, the six events, the error reasons, the adapter's
-  config keys and exports).
+  config keys and exports);
+- every ``--steppy-tour-*`` theme token is in the styling skill (the docs:
+  ``test_tours_docs_sync.py``).
 """
 
 import re
@@ -126,3 +128,20 @@ def test_the_app_skill_names_every_adapter_option_and_export():
     exports = re.findall(r"^export \{ (\w+)", (ADAPTER / "public-api.ts").read_text(encoding="utf-8"), re.M)
     assert options and exports
     assert not [n for n in (*options, *exports) if f"`{n}" not in text]
+
+
+# ── The overlay's theme tokens, in the styling skill ───────────────────────
+
+
+def _tour_theme_properties() -> list[str]:
+    source = (PLAYER / "tour" / "theme.ts").read_text(encoding="utf-8")
+    block = re.search(r"export const TOUR_THEME_KEYS = \[(.*?)\] as const;", source, re.S)
+    assert block, "theme.ts: TOUR_THEME_KEYS not found"
+    keys = re.findall(r"'(\w+)'", block.group(1))
+    assert keys
+    return ["--steppy-tour-" + re.sub(r"[A-Z]", lambda m: "-" + m.group(0).lower(), k) for k in keys]
+
+
+def test_every_tour_theme_token_is_in_the_styling_skill():
+    skill = _skill("steppy-template")
+    assert not [p for p in _tour_theme_properties() if f"`{p}`" not in skill]

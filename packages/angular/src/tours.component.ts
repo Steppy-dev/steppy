@@ -17,7 +17,7 @@ import {
   type OutputEmitterRef,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import type { TourEventDetailMap, TourSource, TourStringOverrides } from '@steppy/player/tour';
+import type { TourAppearance, TourEventDetailMap, TourSource, TourStringOverrides, TourTheme } from '@steppy/player/tour';
 
 import { createNavigate } from './navigate';
 import { OVERLAY_LOADER, TOUR_EVENT_NAMES, applyProps, type HostProps, type TourHostElement } from './overlay';
@@ -71,6 +71,8 @@ export class SteppyToursComponent {
   readonly baseZIndex = input<number | undefined, unknown>(undefined, { transform: optionalNumber });
   readonly disabled = input<boolean | undefined, unknown>(undefined, { transform: optionalBoolean });
   readonly strings = input<TourStringOverrides>();
+  readonly theme = input<TourTheme>();
+  readonly appearance = input<TourAppearance>();
   readonly source = input<TourSource | null>();
 
   readonly tourStart = output<TourEventDetailMap['tour-start']>();
@@ -111,9 +113,11 @@ export class SteppyToursComponent {
       locale: locale ?? this.tours.ɵlocale(),
       disabled: this.disabled() ?? c.disabled ?? false,
       strings: this.strings() ?? c.strings,
+      theme: this.theme() ?? c.theme,
       source: source !== undefined ? source : (c.source ?? null),
       targetTimeout: this.targetTimeout() ?? c.targetTimeout,
       baseZIndex: this.baseZIndex() ?? c.baseZIndex,
+      appearance: this.appearance() ?? c.appearance,
     };
   });
 

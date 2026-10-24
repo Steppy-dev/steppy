@@ -18,9 +18,14 @@ import { transformWithEsbuild } from 'vite';
  * overlay measured 25,965 B — Lit alone is about 6 KB of it — so the gate is
  * that measurement plus 3% headroom: growth past it needs a decision, not a
  * quiet bump. TARGET is still printed so the gap stays visible.
+ *
+ * Raised once, on purpose: the theme surface (``tour/theme.ts`` — 23
+ * ``--steppy-tour-*`` tokens, the ``theme`` property and the light/auto
+ * appearances) measured 27,251 B, about 630 B over the 26,618 B before it.
+ * The new budget keeps the same ~500 B of headroom.
  */
 const TARGET = 25_600;
-const BUDGET = 26_750;
+const BUDGET = 27_750;
 const FORBIDDEN = ['ZodError', 'steppy-guide'];
 
 const file = resolve(import.meta.dirname, '../dist/steppy-tour.js');

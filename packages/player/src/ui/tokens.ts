@@ -57,7 +57,30 @@ export const TOUR_DEFAULTS = {
   accentFg: '#ffffff',
   focus: '#f09a6a',
   scrim: 'rgba(31, 29, 26, 0.45)',
+  border: 'none',
   radius: BUBBLE_LOOK.radius,
+  width: '320px',
+  padding: BUBBLE_LOOK.padding,
+  shadow: BUBBLE_LOOK.shadow,
+  fontFamily: 'inherit',
+  fontSize: BUBBLE_LOOK.fontSize,
+  lineHeight: BUBBLE_LOOK.lineHeight,
+  titleSize: '1em',
+  titleWeight: '600',
+  buttonRadius: BUTTON_LOOK.radius,
+  buttonPadding: BUTTON_LOOK.padding,
+  buttonWeight: 'inherit',
+  ringWidth: '2px',
+} as const;
+
+/** ``appearance="light"``: a light bubble, same accent; AA-checked like the dark one. */
+export const TOUR_LIGHT = {
+  ...TOUR_DEFAULTS,
+  bubbleBg: '#ffffff',
+  bubbleFg: PALETTE.fg,
+  muted: '#5b6b64',
+  focus: '#a8410e',
+  border: '1px solid #e1ddd1',
 } as const;
 
 /** A token value inside a ``css`` template (inserted verbatim, never data). */

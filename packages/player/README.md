@@ -189,3 +189,7 @@ inner layout uses logical properties only — `test/tour/small-modules.test.ts`
 rejects a physical `margin-left/right`. A running tour reloads when the host's
 `locale` (else `<html lang>`) changes; see `_swapLocale` in `host.ts`. Unlike the
 guide player, the overlay exposes `part=` attributes for `::part()` styling.
+Its `--steppy-tour-*` tokens are one table, `TOUR_THEME_KEYS` in `theme.ts`: the
+stylesheet, the host's `theme` property and the docs all follow it, and
+`appearance="light"`/`"auto"` swap the defaults (`TOUR_LIGHT` in `ui/tokens.ts`,
+AA-checked like the dark ones). Add a token there, never as a literal in `styles.ts`.

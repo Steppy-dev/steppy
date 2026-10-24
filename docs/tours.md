@@ -88,8 +88,8 @@ Five principles hold everywhere:
    steppy generate    # tests (+ replays) and tour files
    ```
 
-4. Add the overlay to your app. It is not on npm yet: build it once and
-   depend on it through `npm pack` (see [Installing the module](#player)).
+4. Add the overlay to your app: `npm install -E @steppy/player@<version>`,
+   at your `steppy-dev` version (see [Installing the module](#player)).
    In an Angular app, use the [adapter](#angular) instead. Otherwise mount
    the host in your app shell and start a tour from a button:
 
@@ -795,11 +795,17 @@ installs it in the app's repository, and `steppy update` keeps it current.
 ### Installing the module
 
 The overlay is the `./tour` entry of `@steppy/player`
-(`dist/steppy-tour.js`, with type declarations). The package is ready
-to publish but not on npm yet: build `packages/player` and depend on it with
-a `file:` path or an `npm pack` tarball. Bundle it with your app — never load
-it from a CDN or from the guide site. Angular apps add `@steppy/angular`
-on top (see [Angular](#angular)).
+(`dist/steppy-tour.js`, with type declarations). Install it at the version of
+`steppy-dev` that compiles your tours, pinned exactly. Bundle it with your app —
+never load it from a CDN or from the guide site. Angular apps add
+`@steppy/angular` on top (see [Angular](#angular)).
+
+```bash
+npm install -E @steppy/player@<version>
+```
+
+To try an unreleased change, build `packages/player` from a Steppy checkout and
+depend on it with a `file:` path or an `npm pack` tarball:
 
 ```bash
 npm --prefix packages/player install && npm --prefix packages/player run build
@@ -854,6 +860,8 @@ copies need.
 | `navigate` | — | `location.assign` | `(path, {appPath, tourId}) => …` — how the tour changes routes. `path` includes `<base href>`; `appPath` does not. |
 | `source` | — | — | `(tourId, locale, {buildId, manifestUrl}) => file` — supply tour files yourself. Return the JSON text, a `Response`, or the parsed object, directly or as a promise; it is validated like a fetched file. The manifests are still fetched. |
 | `strings` | — | — | Chrome string overrides per locale. See [Localization](#localization). |
+| `appearance` | `appearance` | `dark` | Default palette: `dark`, `light`, or `auto` (follows `prefers-color-scheme`). See [Theming](#theming). |
+| `theme` | — | — | `--steppy-tour-*` values as camelCase keys, set on the element. See [Theming](#theming). |
 
 Methods:
 
@@ -975,11 +983,12 @@ only the tour replays lift it. Other E2E stacks should set it too.
 
 `@steppy/angular` (`packages/angular`) mounts the overlay the Angular way:
 Angular 20–22, zone.js or zoneless, safe under server rendering, and your app
-needs no `CUSTOM_ELEMENTS_SCHEMA`. Like the overlay, it is not on npm yet:
-build `packages/player` and `packages/angular`, then depend on
-`packages/player` and `packages/angular/dist` — `file:` paths (with
-`"preserveSymlinks": true` in the build options, so Angular is not loaded
-twice) or `npm pack` tarballs.
+needs no `CUSTOM_ELEMENTS_SCHEMA`. Install it with the overlay, both at your
+`steppy-dev` version: `npm install -E @steppy/player@<version> @steppy/angular@<version>`.
+For an unreleased change, build `packages/player` and `packages/angular` from a
+checkout, then depend on `packages/player` and `packages/angular/dist` — `file:`
+paths (with `"preserveSymlinks": true` in the build options, so Angular is not
+loaded twice) or `npm pack` tarballs.
 
 ```ts
 // app.config.ts
@@ -1253,15 +1262,54 @@ on the element:
 
 | Property | Default | |
 |---|---|---|
+| **Colour** | | |
 | `--steppy-tour-bubble-bg` | `#1f1d1a` | falls back to `--steppy-tooltip-bg` |
 | `--steppy-tour-bubble-fg` | `#fbf9f4` | falls back to `--steppy-tooltip-fg` |
-| `--steppy-tour-muted` | `#c9c5bd` | progress text |
+| `--steppy-tour-muted` | `#c9c5bd` | progress text, secondary button outline |
 | `--steppy-tour-accent` | `#a8410e` | primary button, spotlight ring |
 | `--steppy-tour-accent-fg` | `#ffffff` | primary button text |
 | `--steppy-tour-focus` | `#f09a6a` | focus ring |
 | `--steppy-tour-scrim` | `rgba(31, 29, 26, 0.45)` | the dimming around the spotlight |
-| `--steppy-tour-radius` | `6px` | |
-| `--steppy-font-family` | inherited | the bubble uses your app's font by default |
+| `--steppy-tour-link` | the bubble text colour | links in step text and the guide link |
+| `--steppy-tour-border` | `none` | popover and pill border |
+| **Shape and type** | | |
+| `--steppy-tour-radius` | `6px` | popover corners |
+| `--steppy-tour-width` | `320px` | capped at the screen width |
+| `--steppy-tour-padding` | `8px 12px` | |
+| `--steppy-tour-shadow` | `0 4px 12px rgba(0, 0, 0, 0.2)` | popover and pill |
+| `--steppy-tour-font-family` | inherited | falls back to `--steppy-font-family`; the bubble uses your app's font by default |
+| `--steppy-tour-font-size` | `14px` | |
+| `--steppy-tour-line-height` | `1.4` | |
+| `--steppy-tour-title-size` | `1em` | step heading |
+| `--steppy-tour-title-weight` | `600` | step heading |
+| `--steppy-tour-button-radius` | `4px` | |
+| `--steppy-tour-button-padding` | `4px 10px` | |
+| `--steppy-tour-button-weight` | inherited | |
+| **Spotlight** | | |
+| `--steppy-tour-ring-width` | `2px` | the accent ring around the target |
+| `--steppy-tour-spotlight-radius` | the popover radius | |
+
+**Appearance.** The default bubble is dark. `appearance="light"` switches the
+defaults to a light palette that also meets WCAG AA, and `appearance="auto"`
+follows the user's `prefers-color-scheme`. Properties you set still win over
+either.
+
+**From code.** The `theme` property takes the same tokens as camelCase keys
+and sets them on the element through CSSOM, so it needs no `style-src`
+exception. A new object replaces the previous one (keys it drops are removed);
+unknown keys and empty values are ignored. Angular:
+`provideSteppyTours({ theme, appearance })`, or the same inputs on
+`<steppy-tours>`.
+
+```js
+const host = document.querySelector('steppy-tour-host');
+host.appearance = 'auto';
+host.theme = { accent: '#0b5cad', width: '360px', buttonWeight: '600' };
+```
+
+Precedence, strongest first: `theme` → a `steppy-tour-host { … }` rule →
+`:root` → the appearance's defaults. Theming comes from your app only: a tour
+file can never carry a style.
 
 The defaults meet WCAG AA; keep that when you override them. Every visible
 piece is a `::part()`: `layer`, `spotlight`, `bubble`, `title`, `body`,

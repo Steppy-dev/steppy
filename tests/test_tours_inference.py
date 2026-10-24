@@ -539,6 +539,24 @@ def test_keep_on_a_conditional_step_is_an_error(tmp_path):
     assert "keep-not-allowed" in _codes(result, "error")
 
 
+@pytest.mark.parametrize("action, extra", [("expand", ""), ("toggle", "- state: off\n")])
+def test_may_not_change_warns_until_the_advance_is_manual(tmp_path, action, extra):
+    body = OPEN + f"\n### 2. Act\n- role: editor\n- action: {action}\n- selector: '[data-testid=\"x\"]'\n" + extra
+    assert "may-not-change" in _codes(_compile(tmp_path, body), "warning")
+    manual = _compile(tmp_path, body + "- tour-advance: manual\n")
+    assert "may-not-change" not in _codes(manual)
+    assert _steps(manual) == [("x", "x", "manual", None)]
+
+
+def test_diagnostics_name_a_step_by_its_heading_as_well_as_its_position(tmp_path):
+    act = "- role: editor\n- action: expand\n- selector: '[data-testid=\"x\"]'\n"
+    body = OPEN + "\n### 2. Same\n" + act + "\n### 16. Renumbered\n" + act + "\n### 16b. Variant\n" + act
+    lines = [d.render() for d in _compile(tmp_path, body).diagnostics if d.code == "may-not-change"]
+    assert any(", step 2 'Same':" in line for line in lines), lines
+    assert any(", step 3 (### 16) 'Renumbered':" in line for line in lines), lines
+    assert any(", step 4 (### 16b) 'Variant':" in line for line in lines), lines
+
+
 def test_an_advance_the_action_cannot_perform_is_an_error_with_replay(tmp_path):
     body = (
         OPEN

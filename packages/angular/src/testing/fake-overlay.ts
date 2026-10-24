@@ -24,6 +24,8 @@ export const HOST_PROPS = [
   'source',
   'navigate',
   'strings',
+  'theme',
+  'appearance',
 ] as const;
 
 export interface Recorded {

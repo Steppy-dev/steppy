@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../src/index.js';
 import { SteppyGuide, type AnimatorLike } from '../src/steppy-guide.js';
 import type { GuideManifest } from '../src/manifest/schema.js';
+import { localeLabel } from '../src/templates/controls.js';
 import { makeManifest, withLayoutContent } from './fixtures.js';
 
 /**
@@ -437,6 +438,23 @@ describe('hide-layout-switcher', () => {
       'fr',
       'nl',
     ]);
+  });
+});
+
+describe('locale switcher labels', () => {
+  it('labels each locale in its own language, keeping the code as the value', async () => {
+    const { el } = await mount(makeManifest());
+    const select = root(el).querySelector('.steppy-chrome select') as HTMLSelectElement;
+    const options = Array.from(select.options);
+    expect(options.map((o) => o.value)).toEqual(['fr', 'nl']);
+    expect(options.map((o) => o.textContent!.trim())).toEqual(['Français', 'Nederlands']);
+    expect(options.map((o) => o.lang)).toEqual(['fr', 'nl']);
+  });
+
+  it('falls back to the code when the runtime cannot name the locale', () => {
+    expect(localeLabel('not a tag')).toBe('not a tag');
+    expect(localeLabel('qaa')).toBe('qaa');
+    expect(localeLabel('de')).toBe('Deutsch');
   });
 });
 

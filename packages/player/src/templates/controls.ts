@@ -54,6 +54,22 @@ export function renderRestart(ctx: TemplateContext): TemplateResult {
   </button>`;
 }
 
+/**
+ * A locale's name in its own language ("Français", "Nederlands"), the way the
+ * static pages' picker labels it. Falls back to the code itself when the
+ * runtime cannot name it (an invalid tag, or a tag it does not know).
+ */
+export function localeLabel(locale: string): string {
+  let name: string | undefined;
+  try {
+    name = new Intl.DisplayNames([locale], { type: 'language' }).of(locale);
+  } catch {
+    return locale;
+  }
+  if (!name || name === locale) return locale;
+  return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1);
+}
+
 export function renderLocaleSelect(ctx: TemplateContext): TemplateResult | typeof nothing {
   if (ctx.locales.length <= 1) return nothing;
   return html`<label class="steppy-field">
@@ -61,7 +77,9 @@ export function renderLocaleSelect(ctx: TemplateContext): TemplateResult | typeo
     <select @change=${ctx.onLocaleChange} .value=${ctx.activeLocale}>
       ${ctx.locales.map(
         (loc) =>
-          html`<option value=${loc} ?selected=${loc === ctx.activeLocale}>${loc}</option>`,
+          html`<option value=${loc} lang=${loc} ?selected=${loc === ctx.activeLocale}>
+            ${localeLabel(loc)}
+          </option>`,
       )}
     </select>
   </label>`;

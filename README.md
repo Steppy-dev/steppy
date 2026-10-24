@@ -102,7 +102,7 @@ done
 git add src/steppy/_player_bundle/*.js src/steppy/_player_bundle/*.js.map
 ```
 
-Only those three are vendored: `dist/` also holds the in-app tour overlay (`steppy-tour.js`), which has no Python consumer and is meant for apps through npm (`@steppy/player/tour`; publish-ready, not on npm yet: until then, depend on a built `packages/player` or its `npm pack` tarball).
+Only those three are vendored: `dist/` also holds the in-app tour overlay (`steppy-tour.js`), which has no Python consumer and is meant for apps through npm (`@steppy/player/tour`, on npm).
 
 The release pipeline rebuilds these from scratch for each tagged release, but the committed copies are what makes `pip install git+...` work for everyone else without needing Node.
 

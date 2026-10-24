@@ -5,9 +5,11 @@
 
 import type { TourSource } from './loader.js';
 import type { TourStringOverrides } from './strings.js';
+import type { TourAppearance, TourTheme } from './theme.js';
 
 export type { TourSource } from './loader.js';
 export type { TourStringOverrides } from './strings.js';
+export type { TourAppearance, TourTheme } from './theme.js';
 
 export interface TourStartOptions {
   /** Route parameters for the tour's entry (``/invoices/:invoiceId``). */
@@ -51,6 +53,10 @@ export interface TourHostApi {
   source: TourSource | null;
   navigate: TourNavigate | null;
   strings: TourStringOverrides | undefined;
+  /** ``--steppy-tour-*`` values set inline on the element; they win over the page's CSS. */
+  theme: TourTheme | undefined;
+  /** Default palette: ``dark`` (default), ``light``, or ``auto`` (follows the colour scheme). */
+  appearance: TourAppearance;
   /** Start a tour. Resolves true once it started; never rejects. */
   start(tourId: string, options?: TourStartOptions): Promise<boolean>;
   stop(reason?: string): void;

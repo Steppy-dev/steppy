@@ -39,6 +39,7 @@ import { isComboboxLike, readFieldValue, valueSignature } from './signature.js';
 import { clearResume, readResume, writeResume } from './storage.js';
 import { resolveTourStrings, textDir, type TourStringOverrides } from './strings.js';
 import { tourStyles } from './styles.js';
+import { themeDeclarations, type TourAppearance, type TourTheme } from './theme.js';
 import { renderLayer, type Handlers } from './templates.js';
 import { createTracker, type Tracker } from './tracker.js';
 import { APP_DIALOG, attachTriggers, watchChange } from './triggers.js';
@@ -85,6 +86,8 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
     source: { attribute: false },
     navigate: { attribute: false },
     strings: { attribute: false },
+    theme: { attribute: false },
+    appearance: { type: String, reflect: true },
   };
 
   /** Test seam: geometry and timing. */
@@ -101,6 +104,8 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
   source: TourSource | null = null;
   navigate: TourNavigate | null = null;
   strings: TourStringOverrides | undefined = undefined;
+  theme: TourTheme | undefined = undefined;
+  appearance: TourAppearance = 'dark';
 
   private _s: EngineState = initialState();
   private _queue: EngineEvent[] = [];
@@ -119,6 +124,8 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
   private _focusPending = false;
   private _appFocus: Element | null = null;
   private _swapSeq = 0;
+  /** The custom properties ``theme`` wrote last, so a changed theme removes the ones it dropped. */
+  private _themed = new Set<string>();
   /** While a tour runs: an app that switches language through ``<html lang>`` alone. */
   private _lang = new MutationObserver(() => {
     if (!this.locale) void this._swapLocale();
@@ -181,6 +188,7 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has('manifest') || changed.has('fallbackManifest') || changed.has('buildId')) this._cache.clear();
     if (changed.has('baseZIndex')) this.style.setProperty('--_pw-z', String(this.baseZIndex));
+    if (changed.has('theme')) this._applyTheme();
     if (changed.has('disabled') && this.disabled && this._s.phase !== 'idle') this._dispatch({ type: 'DISMISS', via: 'disabled' });
   }
 
@@ -219,6 +227,14 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
       },
       this._handlers,
     );
+  }
+
+  /** Inline custom properties win over the page's ``:root`` and element rules. */
+  private _applyTheme(): void {
+    const next = themeDeclarations(this.theme);
+    for (const prop of this._themed) if (!next.has(prop)) this.style.removeProperty(prop);
+    for (const [prop, value] of next) this.style.setProperty(prop, value);
+    this._themed = new Set(next.keys());
   }
 
   // ── Starting ────────────────────────────────────────────────────────────

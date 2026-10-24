@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOUR_RESUME_STORAGE_KEY } from '../../src/ui/names.js';
-import { TOUR_DEFAULTS } from '../../src/ui/tokens.js';
+import { TOUR_DEFAULTS, TOUR_LIGHT } from '../../src/ui/tokens.js';
 import { CHROME_STRINGS } from '../../src/ui/strings.js';
 import { clearResume, readResume, writeResume, RESUME_TTL_MS, type ResumeRecord } from '../../src/tour/storage.js';
 import { DEFAULT_TOUR_STRINGS, instructionFor, resolveTourStrings, textDir } from '../../src/tour/strings.js';
@@ -103,15 +103,21 @@ const contrast = (a: string, b: string) => {
   return (hi! + 0.05) / (lo! + 0.05);
 };
 
-describe('default colours (WCAG AA)', () => {
+describe.each([
+  ['dark', TOUR_DEFAULTS],
+  ['light', TOUR_LIGHT],
+] as const)('default colours, %s appearance (WCAG AA)', (_, look) => {
   it('text on the bubble and on the accent is at least 4.5:1', () => {
-    expect(contrast(TOUR_DEFAULTS.bubbleFg, TOUR_DEFAULTS.bubbleBg)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(TOUR_DEFAULTS.muted, TOUR_DEFAULTS.bubbleBg)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(TOUR_DEFAULTS.accentFg, TOUR_DEFAULTS.accent)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(look.bubbleFg, look.bubbleBg)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(look.muted, look.bubbleBg)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(look.accentFg, look.accent)).toBeGreaterThanOrEqual(4.5);
   });
   it('the focus ring and the spotlight ring are at least 3:1 where they are drawn', () => {
-    expect(contrast(TOUR_DEFAULTS.focus, TOUR_DEFAULTS.bubbleBg)).toBeGreaterThanOrEqual(3);
-    expect(contrast(TOUR_DEFAULTS.accent, '#ffffff')).toBeGreaterThanOrEqual(3);
+    expect(contrast(look.focus, look.bubbleBg)).toBeGreaterThanOrEqual(3);
+    expect(contrast(look.accent, '#ffffff')).toBeGreaterThanOrEqual(3);
+  });
+  it('the secondary button outline (muted) is at least 3:1 on the bubble', () => {
+    expect(contrast(look.muted, look.bubbleBg)).toBeGreaterThanOrEqual(3);
   });
 });
 

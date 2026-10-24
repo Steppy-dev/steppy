@@ -82,8 +82,21 @@ tour JSON by hand: the manifest pins every file by its SHA-384 hash, `steppy tou
 
 ## 2. Install the packages
 
-`@steppy/player` (the overlay is its `./tour` entry) and `@steppy/angular` are ready to
-publish but not on npm yet. Build them from a Steppy checkout:
+`@steppy/player` (the overlay is its `./tour` entry) and `@steppy/angular` are on npm.
+Install them at the version of `steppy-dev` the Steppy project uses (`steppy --version`),
+pinned exactly, so the overlay reads the tour files that version compiles:
+
+```bash
+npm install -E @steppy/player@<version>                      # any app
+npm install -E @steppy/player@<version> @steppy/angular@<version>   # Angular apps
+```
+
+`@steppy/angular` pins `@steppy/player` to its exact version and needs Angular 20–22.
+When `steppy-dev` is upgraded, upgrade both packages to the same version.
+
+### Unreleased changes, from a Steppy checkout
+
+Only to try a change that is not released yet. Build the packages:
 
 ```bash
 npm --prefix packages/player ci && npm --prefix packages/player run build
@@ -106,8 +119,8 @@ npm install ./steppy-player-<version>.tgz ./steppy-angular-<version>.tgz
 
 With `file:` folders in an Angular app, set `"preserveSymlinks": true` in the build
 options of `angular.json`. Without it, Angular loads a second copy of `@angular/core`
-from `packages/angular/node_modules` and fails with NG0203. `@steppy/angular` pins
-`@steppy/player` to its exact version and needs Angular 20–22.
+from `packages/angular/node_modules` and fails with NG0203. Go back to the npm
+packages once the change is released.
 
 Bundle the overlay with the app. Never load it from a CDN or from the guide site.
 
@@ -163,7 +176,7 @@ await tours.start('send-invoice', { params: { invoiceId: 1001 } }); // resolves 
 
 | API | What |
 |---|---|
-| `provideSteppyTours(config)` | Root providers. Keys: `fallbackManifest`, `manifest`, `buildId`, `guideOrigin`, `targetTimeout`, `baseZIndex`, `disabled`, `strings`, `source` (as on the host, below); `locale` — a string, a signal, or a function run once in an injection context that returns either; `navigate` — `'router'` (default), `'document'` (full page loads) or your own function; `readyTimeout` — how long `start()` waits for the overlay (10 s). |
+| `provideSteppyTours(config)` | Root providers. Keys: `fallbackManifest`, `manifest`, `buildId`, `guideOrigin`, `targetTimeout`, `baseZIndex`, `disabled`, `strings`, `theme`, `appearance`, `source` (as on the host, below); `locale` — a string, a signal, or a function run once in an injection context that returns either; `navigate` — `'router'` (default), `'document'` (full page loads) or your own function; `readyTimeout` — how long `start()` waits for the overlay (10 s). |
 | `<steppy-tours />` (`SteppyToursComponent`) | The overlay. Place it **once**, in the shell, never in a routed page. Its inputs override the config; outputs `tourStart`, `tourStep`, `tourComplete`, `tourDismiss`, `tourOffpath`, `tourError` carry the event details. |
 | `SteppyTours` (root service) | `start(id, {params, step})` waits for the overlay, lets the last call win, resolves `false` when a tour cannot start. `stop(reason)`, `next()`. Signals `active`, `current`, `lastError`; `events`, an Observable delivered inside the zone. |
 | `steppyTourStart` (`SteppyTourStart`) | `<button steppyTourStart="create-invoice" [steppyTourParams]="{invoiceId: id}" steppyTourStep="…">` starts a tour on click. |
@@ -212,8 +225,8 @@ harmless.
 ## 3c. React and Vue
 
 There are no tour wrappers yet (`@steppy/react` and `@steppy/vue` wrap the guide player
-only). Use the element directly, and remember two things: `navigate`, `source` and
-`strings` are **properties**, not attributes; and the module must load in the browser
+only). Use the element directly, and remember two things: `navigate`, `source`,
+`strings` and `theme` are **properties**, not attributes; and the module must load in the browser
 only (in Next.js or Nuxt, import it from client-side code).
 
 ```tsx
@@ -283,6 +296,8 @@ injected scripts and no sanitizer bypass.
 | `navigate` | — | `location.assign` | `(path, {appPath, tourId}) => …`. `path` includes `<base href>`, `appPath` does not. |
 | `source` | — | — | `(tourId, locale, {buildId, manifestUrl}) => file`: supply tour files yourself (JSON text, a `Response` or the object, or a promise of one). Validated like a fetched file. |
 | `strings` | — | — | Chrome string overrides per language (below). |
+| `appearance` | `appearance` | `dark` | The default palette: `dark`, `light`, or `auto` (follows the user's colour scheme). |
+| `theme` | — | — | `{ accent: '#0b5cad', width: '360px', … }`: `--steppy-tour-*` values written onto the element, winning over the app's stylesheet. Keys and look: the `steppy-template` skill. |
 
 Methods: `start(tourId, {params, step})` resolves `true` once the tour started and
 `false` when it could not (a `tour-error` says why) — it never rejects, and starting a

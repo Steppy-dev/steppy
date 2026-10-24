@@ -19,7 +19,7 @@
 #
 #   jobs:
 #     e2e:
-#       uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.5.0
+#       uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.6.0
 #       with:
 #         compose-file: docker-compose.yml
 #       secrets:
@@ -52,7 +52,7 @@ jobs:
         # The extras are what make `report.html` and `report.retries` /
         # `steppy run --retries N` actually do something — without them Steppy
         # warns and skips those features rather than failing the run.
-        run: pip install 'steppy-dev[retry,report] @ git+https://github.com/Steppy-dev/steppy.git@v0.5.0'
+        run: pip install 'steppy-dev[retry,report] @ git+https://github.com/Steppy-dev/steppy.git@v0.6.0'
 
       - name: Install Playwright browsers
         run: playwright install chromium --with-deps

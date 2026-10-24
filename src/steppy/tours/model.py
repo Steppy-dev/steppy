@@ -9,7 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
-Disposition = Literal["setup", "tour", "run", "drop"]
+#: ``setup`` runs before the tour starts, ``after`` once it completed (past
+#: ``tour: end``); ``tour``/``run`` are the range; ``drop`` never runs.
+Disposition = Literal["setup", "tour", "run", "drop", "after"]
 
 
 @dataclass
@@ -73,6 +75,8 @@ class ReplayPlan:
     tour_step_count: int
     layouts: tuple[tuple[str, str], ...] = ()  # (layout, media query) for layouts kept steps use
     test_id_attribute: str = "data-testid"
+    end_index: Optional[int] = None  # first step after `tour: end`; None = the range runs to the last step
+    start_in_place: bool = False  # `tour: start`: the tour must start on the page the setup reached
 
     def entry_for(self, step_number: int) -> ReplayEntry:
         for entry in self.entries:
@@ -92,6 +96,8 @@ class ScenarioInference:
     start_index: int
     steps: list[TourStepPlan]
     entries: list[ReplayEntry] = field(default_factory=list)
+    end_index: Optional[int] = None
+    start_in_place: bool = False
 
 
 @dataclass

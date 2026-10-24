@@ -18,6 +18,7 @@ Run it:  STEPPY_TOUR_E2E=1 python -m pytest tests/integration/test_tour_replay_i
 """
 
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -91,6 +92,37 @@ def visible_project(tmp_path_factory) -> Path:
     return _generated(tmp_path_factory, "tour-demo-visible", _last_step_advances_on_visible)
 
 
+def _start_on_the_customer_list(entry: str):
+    # The guide walks from the invoice list to the customers (header link, or the
+    # menu drawer on a phone); the tour starts on the customer list and ends on
+    # the confirmation, so step 7 runs after it.
+    def edit(root: Path) -> None:
+        scenario = root / "scenarios" / "editor--remove-inactive-customers.md"
+        text = scenario.read_text(encoding="utf-8")
+        title = "  title: {en: Remove inactive customers, fr: Retirer les clients inactifs}\n"
+        remove = "- selector: '[data-testid=\"remove-inactive-btn\"]'\n"
+        for old, new in (
+            (title, title + f"  entry: {entry}\n"),
+            (remove, remove + "- tour: start\n"),
+            ("- action: confirm\n- tour: keep\n", "- action: confirm\n- tour: [end, keep]\n"),
+        ):
+            assert old in text
+            text = text.replace(old, new)
+        scenario.write_text(text, encoding="utf-8")
+
+    return edit
+
+
+@pytest.fixture(scope="module")
+def ranged_project(tmp_path_factory) -> Path:
+    return _generated(tmp_path_factory, "tour-demo-ranged", _start_on_the_customer_list("/customers"))
+
+
+@pytest.fixture(scope="module")
+def wrong_entry_project(tmp_path_factory) -> Path:
+    return _generated(tmp_path_factory, "tour-demo-wrong-entry", _start_on_the_customer_list("/invoices"))
+
+
 def _run(project: Path, url: str, *args: str, **env: str) -> subprocess.CompletedProcess:
     environ = {k: v for k, v in os.environ.items() if not k.startswith("STEPPY_") or k == "STEPPY_TOUR_BUNDLE"}
     environ.update({"TOUR_DEMO_URL": url, **env})
@@ -150,6 +182,28 @@ def test_guide_runs_skip_the_replays(project):
         proc = _run(project, demo.url, "--collect-only", STEPPY_GUIDE_MODE="1")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "__tour" not in proc.stdout.split("collected")[0]
+
+
+def test_a_tour_started_on_a_page_reached_by_clicking_replays_in_place(ranged_project):
+    tour = json.loads(
+        (ranged_project / "app-assets" / "tours" / "remove-inactive-customers.en.json").read_text("utf-8")
+    )
+    assert tour["entry"] == {"route": "/customers"}
+    assert [s["id"] for s in tour["steps"]] == ["remove-inactive-btn", "confirm"]
+    with _demo(ranged_project) as demo:
+        proc = _run(ranged_project, demo.url, "-k", "remove_inactive_customers")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "4 passed" in proc.stdout  # the scenario test and its replay, on both layouts
+
+
+def test_an_entry_that_is_not_the_page_the_start_is_on_fails_the_replay(wrong_entry_project):
+    with _demo(wrong_entry_project) as demo:
+        proc = _run(wrong_entry_project, demo.url, "-k", "remove_inactive_customers__tour and desktop")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 1, out
+    assert "[tour remove-inactive-customers]" in out
+    assert "navigated to its entry route /invoices instead of starting in place" in out
+    assert "reached (/customers) does not match tour.entry /invoices" in out
 
 
 def test_a_visible_step_whose_target_is_already_there_replays(visible_project):

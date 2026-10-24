@@ -239,6 +239,13 @@ def _tour_start(tour, params):
             )
     page.context.add_init_script(f"globalThis.{TOURS_KILL_SWITCH_GLOBAL} = false;")
     page.evaluate(f"() => {{ globalThis.{TOURS_KILL_SWITCH_GLOBAL} = false; }}")
+    # A `tour: start` tour is started where the steps before it landed: its entry
+    # route has to describe that page, or a user started there is sent elsewhere.
+    entry = spec.get("entry") or {}
+    landed = page.evaluate("() => location.pathname") if entry.get("in_place") else None
+    mismatch = (
+        f"the page the steps before `tour: start` reached ({landed}) does not match tour.entry {entry.get('route')}"
+    )
     tour.start_mark = len(tour.events)
     locale = tour.locale or spec.get("default_locale")
     result = page.evaluate(
@@ -260,7 +267,9 @@ def _tour_start(tour, params):
                 "load-failed": "the app does not serve the tour files (check the manifest URL and the app-assets target)",
                 "invalid-data": "the tour files the app serves were rejected; regenerate them with steppy tours",
                 "schema-unsupported": "the app's overlay is older than the tour files",
-                "entry-params": f"route {(spec.get('entry') or {}).get('route')} could not be filled from {params}",
+                "entry-params": (
+                    mismatch if landed else f"route {entry.get('route')} could not be filled from {params}"
+                ),
             }
             tour.fail(None, f"the tour did not start: {reason} {detail.get('message', '')}".rstrip(), hints.get(reason))
         if _now() > deadline:
@@ -268,6 +277,12 @@ def _tour_start(tour, params):
         tour.pump()
     expected = os.environ.get("STEPPY_TOUR_EXPECT_BUILD_ID")
     started = tour.since_start("tour-start")[0].get("detail") or {}
+    if landed and started.get("entryNavigated"):
+        tour.fail(
+            None,
+            f"the tour navigated to its entry route {entry.get('route')} instead of starting in place: {mismatch}",
+            "set tour.entry to the route pattern of the page the tour starts on",
+        )
     if expected and started.get("buildId") != expected:
         tour.fail(
             None,

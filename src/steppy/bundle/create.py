@@ -458,7 +458,9 @@ def verify_bundle(path: Path) -> tuple[BundleManifest, list[str]]:
     expected = {f.path: (f.sha256, f.size) for f in manifest.files}
     seen: set[str] = set()
     problems: list[str] = []
+    walked = False  # every member was reached, so the missing-member check means something
 
+    # The manifest read cleanly, so damage from here on is a finding, not a failure.
     try:
         with _archive.open_archive(path) as tar:
             for member in tar:
@@ -482,9 +484,12 @@ def verify_bundle(path: Path) -> tuple[BundleManifest, list[str]]:
                     problems.append(f"{member.name}: sha256 mismatch")
                 elif size != want_size:
                     problems.append(f"{member.name}: size mismatch ({size} != {want_size})")
+            walked = True
+            _archive.read_to_end(tar)
     except ArchiveError as e:
-        raise BundleError(str(e)) from e
+        problems.append(str(e) if walked else f"{e} (the members after the damage were not checked)")
 
-    for missing in sorted(set(expected) - seen):
-        problems.append(f"{missing}: listed in the manifest but missing from the archive")
+    if walked:
+        for missing in sorted(set(expected) - seen):
+            problems.append(f"{missing}: listed in the manifest but missing from the archive")
     return manifest, problems

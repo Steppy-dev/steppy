@@ -36,7 +36,7 @@ TARGETED_ADVANCE_KINDS = frozenset({"click", "input", "change", "visible"})
 PLACEMENTS = ("top", "bottom", "left", "right", "auto")
 
 #: Values of the step-level ``tour:`` annotation.
-STEP_TOUR_MODES = ("skip", "keep")
+STEP_TOUR_MODES = ("skip", "keep", "start", "end")
 
 #: DOM events the overlay dispatches (bubbling, composed). Colon-free on
 #: purpose: Angular templates read ``(a:b)`` as a global event target.

@@ -45,7 +45,7 @@ def test_every_action_has_a_body_here():
 
 
 @pytest.mark.parametrize("action", sorted(VALID_ACTIONS))
-@pytest.mark.parametrize("mode", ["skip", "keep"])
+@pytest.mark.parametrize("mode", tour_spec.STEP_TOUR_MODES)
 def test_every_action_accepts_the_tour_keys(action, mode):
     step = Step(
         action=action,
@@ -53,7 +53,35 @@ def test_every_action_accepts_the_tour_keys(action, mode):
         **_BODIES[action],
         **{"tour": mode, "tour-text": {"en": "Text"}, "tour-advance": "manual", "tour-placement": "top"},
     )
-    assert step.tour == mode and step.tour_advance == "manual" and step.tour_placement == "top"
+    assert step.tour == [mode] and step.tour_advance == "manual" and step.tour_placement == "top"
+
+
+@pytest.mark.parametrize(
+    "value, stored",
+    [
+        ("keep", ["keep"]),
+        (" start ", ["start"]),
+        (["end", "keep"], ["end", "keep"]),
+        (["start", "end"], ["start", "end"]),
+        (["start", "skip"], ["start", "skip"]),
+    ],
+)
+def test_step_tour_takes_one_value_or_a_list(value, stored):
+    assert Step(action="click", selector="x", role="e", tour=value).tour == stored
+
+
+@pytest.mark.parametrize(
+    "value, message",
+    [
+        (["skip", "keep"], "both 'skip' and 'keep'"),
+        (["end", "end"], "repeats"),
+        ([], "at least one"),
+        (["start", "middle"], "start"),
+    ],
+)
+def test_contradictory_step_tour_lists_are_rejected(value, message):
+    with pytest.raises(ValidationError, match=message):
+        Step(action="click", selector="x", role="e", tour=value)
 
 
 def test_the_value_sets_are_the_contract_vocabulary():
@@ -61,6 +89,8 @@ def test_the_value_sets_are_the_contract_vocabulary():
 
     def literal_args(name):
         (inner,) = [a for a in typing.get_args(hints[name]) if a is not type(None)]
+        if typing.get_origin(inner) is list:  # `tour` holds one value or a list, stored as a list
+            (inner,) = typing.get_args(inner)
         return typing.get_args(inner)
 
     assert literal_args("tour") == tour_spec.STEP_TOUR_MODES
@@ -71,10 +101,10 @@ def test_the_value_sets_are_the_contract_vocabulary():
 def test_the_keys_are_registered_for_every_action():
     assert {"tour", "tour_text", "tour_advance", "tour_placement"} <= _UNIVERSAL_FIELDS
     assert _FIELD_ALIASES["tour_text"] == "tour-text"
-    assert "tour-text" in _structured_step_keys()
+    assert {"tour-text", "tour"} <= _structured_step_keys()
 
 
-@pytest.mark.parametrize("value", ["true", "false", "yes", "on", True])
+@pytest.mark.parametrize("value", ["true", "false", "yes", "on", True, ["start", "true"]])
 def test_a_boolean_step_tour_points_at_the_frontmatter(value):
     with pytest.raises(ValidationError, match="frontmatter"):
         Step(action="click", selector="x", role="e", tour=value)
@@ -194,13 +224,28 @@ tour:
 - tour: keep
 - tour-advance: manual
 - tour-text: {en: "Take a moment."}
+
+### 4. Confirm
+- role: editor
+- action: confirm
+- tour: [end, keep]
+
+### 5. Check
+- role: editor
+- action: assert
+- expect: visible([data-testid="done"])
+- tour:
+    - start
+    - end
 """,
     )
     scenario = parse_scenario_file(path)
     assert scenario.tour.id == "create-invoice"
     assert scenario.steps[1].tour_placement == "bottom"
     assert scenario.steps[1].tour_text.get("en").title == "New invoice"
-    assert scenario.steps[2].tour == "keep" and scenario.steps[2].tour_text.get("en").text == "Take a moment."
+    assert scenario.steps[2].tour == ["keep"] and scenario.steps[2].tour_text.get("en").text == "Take a moment."
+    assert scenario.steps[3].tour == ["end", "keep"]
+    assert scenario.steps[4].tour == ["start", "end"]
 
 
 def test_an_unknown_tour_key_fails_parsing(tmp_path):

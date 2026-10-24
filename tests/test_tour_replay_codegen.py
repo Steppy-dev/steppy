@@ -122,6 +122,27 @@ def test_noauth_scenarios_alias_the_noauth_fixtures(tmp_path):
     assert "(editor_page_noauth: Page, request):" in section and "    editor_page = editor_page_noauth" in section
 
 
+def test_a_ranged_replay_starts_in_place_and_runs_the_rest_after_completion(tmp_path):
+    code = _render(
+        tmp_path,
+        OPEN
+        + "\n### 2. Customers\n- role: editor\n- action: click\n- selector: '[data-testid=\"nav-customers\"]'\n"
+        + "\n### 3. Remove\n- role: editor\n- action: click\n- selector: '[data-testid=\"remove-btn\"]'\n"
+        + "- tour: [start, end]\n"
+        + "\n### 4. Undo\n- role: editor\n- action: click\n- selector: '[data-testid=\"undo-btn\"]'\n",
+        frontmatter="tour:\n  entry: /customers",
+    )
+    ast.parse(code)
+    section = _replay_section(code)
+    assert "'in_place': True" in section and "    _tour_start(_tour, {})\n" in section
+    customers = section.index("editor_page.click(_interp('[data-testid=\"nav-customers\"]'")
+    start = section.index("_tour_start(")
+    complete = section.index("_tour_expect_complete(")
+    assert customers < start < section.index("_tour_expect_step(_tour, 'remove-btn'") < complete
+    assert complete < section.index("# ── Step 4: Undo — after the tour") < section.index("undo-btn")
+    assert section.count("_steppy_mark_step(") == section.count("_steppy_end_step(") == 4
+
+
 def test_a_next_click_is_deferred_past_a_key_press(tmp_path):
     code = _render(
         tmp_path,

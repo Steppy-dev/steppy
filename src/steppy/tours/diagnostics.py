@@ -26,6 +26,9 @@ CODES: dict[str, Severity] = {
     "entry-invalid": "error",
     "entry-no-match": "error",
     "no-entry": "error",  # downgraded to a warning when tours.replay is off
+    "range-duplicate": "error",
+    "range-reversed": "error",
+    "start-on-navigation": "error",
     "target-not-test-id": "error",
     "no-kept-steps": "error",
     "layouts-unmapped": "error",
@@ -48,6 +51,7 @@ CODES: dict[str, Severity] = {
     "upload-target-may-be-hidden": "warning",
     "entry-query-dropped": "warning",
     "entry-id-segment": "warning",
+    "entry-unknown": "warning",
     "app-url-unresolved": "warning",
     "fixture-leak": "warning",
     "generic-text": "warning",

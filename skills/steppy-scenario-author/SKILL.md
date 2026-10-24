@@ -1643,7 +1643,38 @@ Frontmatter `tour:` opts the scenario in; a step's `- tour:` overrides one step.
 
 ### How a scenario becomes a tour
 
-**Start point.** With `tour.entry`, right after the `navigate` whose target matches it (`{{var}}` in a target matches `:param` in the pattern). Without it, right after the first `navigate` following the last `login`. Everything before is setup: the replay runs it, the tour never shows it.
+**Start point.** With a step marked `- tour: start`, that step, however the scenario got there. Otherwise, with `tour.entry`, right after the `navigate` whose target matches it (`{{var}}` in a target matches `:param` in the pattern). Without either, right after the first `navigate` following the last `login`. Everything before is setup: the replay runs it, the tour never shows it. A step marked `- tour: end` is the tour's last: the replay runs the steps after it once the tour completed, and `tour-*` keys on them are `annotation-outside-tour`.
+
+**A guide that walks there, a tour that starts on the page.** The guide opens the list and clicks through the menu; the app starts the tour from a button on the destination page. Keep one scenario: mark the destination's first step `tour: start` and set `tour.entry` to that page's route (it no longer has to match a `navigate`). The replay starts the tour where the setup steps left the browser and fails if the overlay had to navigate to `tour.entry`, so a wrong entry fails in CI. Without `tour.entry`, the entry is the last `navigate` before the start only when nothing in between may change the page (checks, waits, hovers, scrolls); after a click it is `entry-unknown` (warning): the tour then has no entry route and starts wherever `start()` is called. Reword the opening step with `tour-text` when the guide's text says "Then click…".
+
+```markdown
+---
+title: Remove inactive customers
+tour:
+  entry: /customers
+---
+### 1. Open the invoice list
+- role: editor
+- action: navigate
+- target: /invoices
+
+### 2. Open the customer list
+- role: editor
+- action: click
+- selector: '[data-testid="nav-customers"]'
+
+### 3. Remove the inactive customers
+- role: editor
+- action: click
+- selector: '[data-testid="remove-inactive-btn"]'
+- tour: start
+
+### 4. Confirm
+- role: editor
+- action: confirm
+- tour: [end, keep]
+- guide-text: {en: "Click **Yes** to remove them."}
+```
 
 | Scenario step | In the tour |
 |---|---|
@@ -1673,7 +1704,7 @@ Frontmatter `tour:` opts the scenario in; a step's `- tour:` overrides one step.
 
 | Key | Values | Effect |
 |---|---|---|
-| `tour` | `skip`, `keep` | `skip` leaves the step out (it still runs in the test and the replay); `keep` keeps a step inference would skip (centred when it has no test-id) |
+| `tour` | `skip`, `keep`, `start`, `end`, or a list (`[end, keep]`) | `skip` leaves the step out (it still runs in the test and the replay); `keep` keeps a step inference would skip (centred when it has no test-id); `start`/`end` mark the tour's first/last step. One of `skip`/`keep` plus any of `start`/`end`; `[start, end]` is a one-step tour |
 | `tour-text` | like `guide-text` | The step's tour text, per locale. Wins over `guide-text` |
 | `tour-advance` | `click`, `input`, `change`, `visible`, `manual` | What moves the tour on. Must be something the step's own action does (table below) |
 | `tour-placement` | `top`, `bottom`, `left`, `right`, `auto` | The preferred side of the target (ignored, with `placement-ignored`, on a centred step) |
@@ -1713,7 +1744,8 @@ The test still types the value, the guide keeps its wording, and the tour shows 
 - **The target must be findable by the overlay, not just by Playwright.** The overlay looks in the main document's light DOM and takes the first *visible* match; Playwright pierces shadow roots and takes the first DOM match. An element inside another component's shadow root or an iframe passes the test and fails the tour (the replay catches it). Duplicate test-ids on one screen are a smell for the same reason.
 - **Never put fixture values in step text.** Tours show instructions, never test data. When `guide-text` repeats what the test types, the compiler warns `fixture-leak` — write a `tour-text` without the value.
 - **No JavaScript-dispatched clicks in `custom`.** The overlay cannot point at code. Replace them with `action: click` + `synthetic: true`, or add a `guide-cursor` block (`click`/`type`) naming the visible target.
-- **Set `tour.entry` when the flow starts on another page** than the first `navigate` after login — typically a detail route. The app then supplies the params: `host.start('send-invoice', { params: { invoiceId: 1001 } })`.
+- **Set `tour.entry` when the flow starts on another page** than the first `navigate` after login — typically a detail route. The app then supplies the params: `host.start('send-invoice', { params: { invoiceId: 1001 } })`. When the scenario *clicks* its way to that page, add `tour: start` on the page's first step too, or `tour.entry` must match a `navigate` (`entry-no-match`).
+- **Never `tour: skip` the walk to the page.** Skipping the menu clicks leaves the entry on the page they started from: a user who starts the tour on the right page is sent back there. Use `tour: start` on the destination's first step instead.
 - **Layout twins need `tours.layouts`.** A step restricted by `layouts:` compiles only when each of its layouts maps to a media query (else `layouts-unmapped`); the overlay and the replay then skip the twin that does not match the screen:
 
   ```yaml
@@ -1733,8 +1765,11 @@ Every message names the tour, the scenario, the step and its heading, and ends w
 |---|---|---|
 | `target-not-test-id` | error | Point the selector at one test-id, or `tour: skip` / `tour: keep` |
 | `entry-invalid` | error | `tour.entry` (or the navigation it is inferred from) is not a same-origin route pattern: no hash route, no other origin, no `.`/`..`/`%2e` segment — set `tour.entry: /path/:param` |
-| `entry-no-match` | error | No `navigate` matches `tour.entry`: fix the pattern or the step's target |
+| `entry-no-match` | error | No `navigate` matches `tour.entry`: fix the pattern or the step's target, or mark the page's first step `tour: start` |
 | `no-entry` | error | Add `tour.entry` or a `navigate` step (a warning when `replay: false`) |
+| `range-duplicate` | error | `tour: start` (or `tour: end`) on several steps: keep one |
+| `range-reversed` | error | `tour: end` before the tour starts: move it after the start |
+| `start-on-navigation` | error | `tour: start` on a `navigate`/`login`: put it on the step after it, or set `tour.entry` |
 | `tour-role-required` | error | Several roles in the scenario: set `tour.role` |
 | `tour-role-unknown` | error | `tour.role` names a role the scenario does not use |
 | `tour-no-role` | error | No step has a `role:` |
@@ -1743,7 +1778,7 @@ Every message names the tour, the scenario, the step and its heading, and ends w
 | `advance-not-replayable` | error | Choose a `tour-advance` the step's action does (a warning when `replay: false`) |
 | `advance-needs-target` | error | Use `manual`, or give the step a test-id |
 | `annotation-on-skipped-step` | error | Add `tour: keep`, or remove the `tour-*` keys |
-| `annotation-outside-tour` | error | Remove `tour*` keys from steps before the start, `only-in: test` steps, or another role's steps |
+| `annotation-outside-tour` | error | Remove `tour*` keys from steps before the start or after `tour: end`, `only-in: test` steps, or another role's steps |
 | `skip-and-annotations` | error | `tour: skip` or the other `tour-*` keys, not both |
 | `keep-not-allowed` | error | Remove `tour: keep` from the `when:`/`optional:` step |
 | `no-kept-steps` | error | Nothing left to show: check the start point and the annotations |
@@ -1767,6 +1802,7 @@ Every message names the tour, the scenario, the step and its heading, and ends w
 | `reloads-page` | warning | Move the reload/login before the start if you can |
 | `escape-in-tour` | warning | Check the replay: Escape may dismiss the tour |
 | `entry-query-dropped` / `entry-id-segment` | warning | Set `tour.entry` with `:params` and no query |
+| `entry-unknown` | warning | `tour: start` after clicks (or no `navigate`) and no `tour.entry`: set `tour.entry` to the start page's route |
 | `placement-ignored` | warning | Drop `tour-placement` from the centred step |
 | `text-link-dropped` | warning | Link only app routes or the guide site |
 | `no-tours` | warning | Tours are enabled but no scenario opts in: add `tour: true` to one |

@@ -673,19 +673,32 @@ def test_inspect_reads_the_manifest_without_extracting(project: Path, tmp_path: 
     assert manifest.run.run_id == RUN_ID
 
 
-def test_verify_accepts_an_intact_bundle_and_catches_corruption(project: Path, tmp_path: Path):
-    path = create_bundle(project_root=project, fmt="gz", target=tmp_path / "b.tar.gz").path
+@pytest.mark.parametrize(
+    "fmt",
+    ["gz", pytest.param("zst", marks=pytest.mark.skipif(not zstandard_available(), reason="needs steppy-dev[bundle]"))],
+)
+def test_verify_accepts_an_intact_bundle_and_catches_corruption(project: Path, tmp_path: Path, fmt: str):
+    path = create_bundle(project_root=project, fmt=fmt, target=tmp_path / f"b.tar.{fmt}").path
     _manifest, problems = verify_bundle(path)
     assert problems == []
 
-    raw = bytearray(path.read_bytes())
-    raw[len(raw) // 2] ^= 0xFF
-    path.write_bytes(bytes(raw))
-    try:
-        _manifest, problems = verify_bundle(path)
-    except BundleError:
-        return  # a mangled gzip stream is a legitimate outcome too
-    assert problems
+    # Which error a flipped byte causes depends on where it lands — a tar header,
+    # a compressed block, the stream's checksum — and the compressed layout
+    # differs between zlib builds. So flip bytes all along the archive: each one
+    # must be a BundleError (the manifest is unreadable) or a reported problem,
+    # never another exception and never a clean pass. The gzip header's mtime,
+    # flags and OS bytes (4-9) are outside its checksum by design.
+    good = path.read_bytes()
+    start = 10 if fmt == "gz" else 0
+    for pos in range(start, len(good), max(1, len(good) // 80)):
+        raw = bytearray(good)
+        raw[pos] ^= 0xFF
+        path.write_bytes(bytes(raw))
+        try:
+            _manifest, problems = verify_bundle(path)
+        except BundleError:
+            continue
+        assert problems, f"a flipped byte at offset {pos} of {len(good)} went unnoticed"
 
 
 def test_inspect_rejects_a_non_bundle(tmp_path: Path):

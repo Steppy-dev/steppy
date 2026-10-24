@@ -696,6 +696,179 @@ def test_routes_are_relative_to_the_app_base_path(tmp_path):
     assert result.replay_plans["admin--case"].entry_route == "/users"
 
 
+# ── the tour range: `tour: start` / `tour: end` ───────────────────────────────
+
+# The guide walks from the invoice list to the customers by clicking; the tour
+# is meant to start on the customer list.
+WALK = """
+### 1. Open the invoices
+- role: editor
+- action: navigate
+- target: /invoices
+
+### 2. Open Customers
+- role: editor
+- action: click
+- selector: '[data-testid="nav-customers"]'
+
+### 3. Wait for the list
+- role: editor
+- action: wait-for
+- selector: '[data-testid="customer-list"]'
+<3>
+### 4. Remove the inactive ones
+- role: editor
+- action: click
+- selector: '[data-testid="remove-inactive-btn"]'
+<4>
+### 5. Confirm
+- role: editor
+- action: confirm
+- guide-text: {en: "Click Yes."}
+<5>
+### 6. Done
+- role: editor
+- action: assert
+- expect: visible([data-testid="removed"])
+<6>
+"""
+
+
+def _walk(**marks) -> str:
+    body = WALK
+    for n in range(3, 7):
+        body = body.replace(f"<{n}>\n", marks.get(f"s{n}", "") + "\n")
+    return body
+
+
+def test_tour_start_starts_on_a_page_reached_by_clicking(tmp_path):
+    result = _compile(tmp_path, _walk(s3="- tour: start"), frontmatter="tour:\n  entry: /customers")
+    assert not _codes(result, "error"), [d.render() for d in result.diagnostics]
+    assert "entry-unknown" not in _codes(result)
+    # The marked wait-for is a gate: the first tour step waits for the list.
+    assert _steps(result) == [("remove-inactive-btn", "remove-inactive-btn", "click", "customer-list")]
+    plan = result.replay_plans["editor--case"]
+    assert (plan.entry_route, plan.entry_params, plan.start_index) == ("/customers", (), 2)
+    assert plan.start_in_place and plan.end_index is None
+    assert [e.disposition for e in plan.entries] == ["setup", "setup", "run", "tour", "run", "run"]
+
+
+def test_tour_start_without_an_entry_warns_when_clicks_led_there(tmp_path):
+    result = _compile(tmp_path, _walk(s4="- tour: start"))
+    assert not _codes(result, "error"), [d.render() for d in result.diagnostics]
+    (diag,) = [d for d in result.diagnostics if d.code == "entry-unknown"]
+    assert diag.severity == "warning" and diag.step_number == 4
+    assert "step 2" in diag.message and "this `click` may change the page" in diag.message
+    assert "tour.entry" in diag.hint
+    plan = result.replay_plans["editor--case"]
+    assert plan.entry_route is None and plan.start_index == 3
+
+
+def test_tour_start_infers_the_entry_through_steps_that_leave_the_page_alone(tmp_path):
+    result = _compile(
+        tmp_path,
+        OPEN
+        + "\n### 2. Menu (guide only)\n- role: editor\n- action: click\n- selector: '[data-testid=\"menu\"]'\n"
+        + "- only-in: guide\n"
+        + "\n### 3. Wait\n- role: editor\n- action: wait-for\n- selector: '[data-testid=\"invoice-list\"]'\n"
+        + "\n### 4. Peek\n- role: editor\n- action: hover\n- selector: '[data-testid=\"help\"]'\n"
+        + "\n### 5. Go\n- role: editor\n- action: click\n- selector: '[data-testid=\"go\"]'\n- tour: start\n",
+    )
+    assert not _codes(result, "error") and "entry-unknown" not in _codes(result)
+    plan = result.replay_plans["editor--case"]
+    assert (plan.entry_route, plan.entry_params, plan.start_index) == ("/invoices", (), 4)
+    assert [e.disposition for e in plan.entries] == ["setup", "drop", "setup", "setup", "tour"]
+    # Steps before the start are setup, so their check no longer gates the tour.
+    assert _steps(result) == [("go", "go", "click", None)]
+
+
+def test_tour_start_with_no_navigation_before_it_has_no_entry(tmp_path):
+    result = _compile(
+        tmp_path,
+        "\n### 1. Go\n- role: editor\n- action: click\n- selector: '[data-testid=\"go\"]'\n- tour: start\n",
+    )
+    assert "no-entry" not in _codes(result) and "entry-unknown" in _codes(result, "warning")
+    assert result.replay_plans["editor--case"].entry_route is None
+
+
+def test_tour_end_runs_the_rest_after_the_tour(tmp_path):
+    result = _compile(
+        tmp_path,
+        _walk(s4="- tour: start", s5="- tour: [end, keep]")
+        + "\n### 7. Clean up\n- role: editor\n- action: click\n- selector: '[data-testid=\"undo\"]'\n"
+        + "- only-in: guide\n",
+        frontmatter="tour:\n  entry: /customers",
+    )
+    assert not _codes(result, "error"), [d.render() for d in result.diagnostics]
+    assert [s[0] for s in _steps(result)] == ["remove-inactive-btn", "confirm"]
+    plan = result.replay_plans["editor--case"]
+    assert plan.end_index == 5
+    assert [e.disposition for e in plan.entries] == ["setup", "setup", "setup", "tour", "tour", "after", "drop"]
+
+
+def test_a_step_can_start_and_end_the_tour(tmp_path):
+    result = _compile(tmp_path, _walk(s4="- tour: [start, end]"), frontmatter="tour:\n  entry: /customers")
+    assert not _codes(result, "error"), [d.render() for d in result.diagnostics]
+    assert [s[0] for s in _steps(result)] == ["remove-inactive-btn"]
+    assert [e.disposition for e in result.replay_plans["editor--case"].entries][3:] == ["tour", "after", "after"]
+
+
+def test_tour_end_alone_keeps_the_inferred_start(tmp_path):
+    result = _compile(tmp_path, _walk(s4="- tour: end"))
+    assert not _codes(result, "error"), [d.render() for d in result.diagnostics]
+    assert [s[0] for s in _steps(result)] == ["nav-customers", "remove-inactive-btn"]
+    plan = result.replay_plans["editor--case"]
+    assert plan.start_index == 1 and not plan.start_in_place and plan.entry_route == "/invoices"
+
+
+def test_annotations_after_the_end_are_errors(tmp_path):
+    result = _compile(tmp_path, _walk(s4="- tour: end", s6='- tour-text: {en: "Gone."}'))
+    (diag,) = [d for d in result.diagnostics if d.code == "annotation-outside-tour"]
+    assert diag.step_number == 6 and "after the tour ends" in diag.message
+
+
+@pytest.mark.parametrize(
+    "marks, code, step",
+    [
+        ({"s3": "- tour: start", "s4": "- tour: start"}, "range-duplicate", 4),
+        ({"s4": "- tour: end", "s6": "- tour: end"}, "range-duplicate", 6),
+        ({"s4": "- tour: start", "s3": "- tour: end"}, "range-reversed", 3),
+    ],
+)
+def test_a_tour_range_that_cannot_be_is_an_error(tmp_path, marks, code, step):
+    result = _compile(tmp_path, _walk(**marks), frontmatter="tour:\n  entry: /customers")
+    (diag,) = [d for d in result.diagnostics if d.code == code]
+    assert diag.severity == "error" and diag.step_number == step
+    assert not result.tours
+
+
+def test_an_end_before_the_inferred_start_is_reversed(tmp_path):
+    body = _walk().replace("- target: /invoices\n", "- target: /invoices\n- tour: end\n", 1)
+    assert "range-reversed" in _codes(_compile(tmp_path, body), "error")
+
+
+@pytest.mark.parametrize("action, extra", [("navigate", "- target: /customers\n"), ("login", "")])
+def test_a_start_on_the_way_to_a_page_is_an_error(tmp_path, action, extra):
+    result = _compile(
+        tmp_path,
+        OPEN
+        + f"\n### 2. Move\n- role: editor\n- action: {action}\n{extra}- tour: start\n"
+        + "\n### 3. Go\n- role: editor\n- action: click\n- selector: '[data-testid=\"go\"]'\n",
+    )
+    (diag,) = [d for d in result.diagnostics if d.code == "start-on-navigation"]
+    assert diag.step_number == 2 and "step after it" in diag.hint
+
+
+def test_a_start_on_a_test_only_step_is_outside_the_tour(tmp_path):
+    body = _walk().replace("- selector: '[data-testid=\"customer-list\"]'\n", "", 1)
+    body = body.replace("- action: wait-for\n", "- action: wait\n- duration: 1s\n- only-in: test\n- tour: start\n", 1)
+    assert "annotation-outside-tour" in _codes(_compile(tmp_path, body, frontmatter="tour:\n  entry: /customers"))
+
+
+def test_without_markers_tour_entry_still_has_to_match_a_navigation(tmp_path):
+    assert "entry-no-match" in _codes(_compile(tmp_path, _walk(), frontmatter="tour:\n  entry: /customers"), "error")
+
+
 # ── roles, layouts, ids ───────────────────────────────────────────────────────
 
 

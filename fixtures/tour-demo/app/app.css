@@ -289,3 +289,49 @@ textarea {
     transition: none;
   }
 }
+
+/* /reports: a rail that expands over the page while hovered. */
+.reports-page {
+  position: relative;
+  min-height: 560px;
+  padding-left: 80px;
+}
+.side-nav {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  box-sizing: border-box;
+  width: 56px;
+  padding: 8px;
+  overflow: hidden;
+  background: var(--accent);
+  color: #fff;
+}
+.side-nav[data-expanded] {
+  width: 240px;
+}
+.side-nav button {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  white-space: nowrap;
+}
+.side-nav .side-label,
+.side-submenu {
+  display: none;
+}
+.side-nav[data-expanded] .side-label {
+  display: inline;
+}
+.side-nav[data-expanded] .side-submenu[data-open] {
+  display: block;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}

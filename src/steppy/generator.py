@@ -482,10 +482,13 @@ class SteppyGenerator:
         if item.kind in ("setup", "plain", "after"):
             body = self._apply_optional(str(step_body(item.step)), item.step)
             return head + self._apply_step_guard(self._bracket_step(body, item.step), item.step)
+        held = {s["id"] for s in replay.spec["steps"] if s.get("hold")}
         chunks = []
         for part, check in item.parts:
             target = f", _interp({self._py_str(check.selector)}, _vars)" if check.selector else ""
             chunks.append(f"    _tour_expect_step(_tour, {self._py_str(check.step_id)}{target})")
+            if check.step_id in held:
+                chunks.append(f"    _tour_hold(_tour, {self._py_str(check.step_id)})")
             chunks.append(str(step_body(part)))
             if check.ensure == "inline":
                 chunks.append(f"    _tour_ensure_advanced(_tour, {self._py_str(check.step_id)})")

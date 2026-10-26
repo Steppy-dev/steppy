@@ -1330,6 +1330,25 @@ Meta-description text resolves per locale through a fallback chain, so you only 
 
 `guides[].description` is a new optional `LocalizedText` field — the per-guide snippet for search results and shared-link previews; it falls back to the guide `title` when omitted.
 
+#### Inline text styles (the `textStyles` block)
+
+`**strong**`, `*em*`, `` `code` `` and links in step text use the browser's defaults unless the build config
+sets them. Every key is optional; unset, the build emits nothing:
+
+```ts
+textStyles: {
+  strong: { weight: 600, color: '#9a3412' },        // weight: a number or a CSS keyword
+  em: { style: 'normal', color: '#0f766e' },        // style: 'italic' | 'normal' | 'oblique'
+  code: { font: "'JetBrains Mono', monospace", size: '0.9em', color: '#111', background: '#f1f5f9', padding: '0 3px', radius: '3px' },
+  link: { color: '#0b5cad', decoration: 'underline dotted' },
+},
+```
+
+It reaches the static pages, the Angular fragments, the handbook and the interactive player (both
+targets). Values are single CSS values (`;`, braces, `<`, `>`, `\`, backticks, comments and line breaks
+fail the build). The in-app tour overlay reads the same `--steppy-*` properties as fallbacks; see the
+`steppy-template` skill, "Inline text".
+
 #### Deploying to GitHub Pages
 
 ```bash
@@ -1700,7 +1719,7 @@ tour:
 - The overlay's buttons and generic hints exist in **en, fr, nl, de** only. For any other tour language the compiler warns `chrome-strings-missing`; the *app* must then pass the host's `strings` for it (see "In the app" below), or users get English buttons around their text.
 - The overlay follows the app's language at run time (the host's `locale`, else `<html lang>`), mid-tour included, and sets `lang`/`dir` on the popover (right-to-left for Arabic, Hebrew, …). `tour-placement: left/right` stay physical.
 
-### The four step keys
+### The five step keys
 
 | Key | Values | Effect |
 |---|---|---|
@@ -1708,6 +1727,7 @@ tour:
 | `tour-text` | like `guide-text` | The step's tour text, per locale. Wins over `guide-text` |
 | `tour-advance` | `click`, `input`, `change`, `visible`, `manual` | What moves the tour on. Must be something the step's own action does (table below) |
 | `tour-placement` | `top`, `bottom`, `left`, `right`, `auto` | The preferred side of the target (ignored, with `placement-ignored`, on a centred step) |
+| `tour-hold` | one test-id selector | An element the popover never covers while the step shows — the hover menu the target sits in (ignored, with `hold-ignored`, on a centred step) |
 
 `tour-advance` values a step accepts — anything else is `advance-not-replayable`, because the CI replay performs the step's own action and would wait forever:
 
@@ -1754,6 +1774,24 @@ The test still types the value, the guide keeps its wording, and the tour shows 
       desktop: "(min-width: 768px)"
       mobile: "(max-width: 767.98px)"
   ```
+- **Hold hover menus open with `tour-hold`.** The popover is the overlay's one element that takes the pointer, so a menu that closes on `mouseleave` closes when the popover lands on it. After a `hover`, put `tour-hold: '[data-testid="<menu>"]'` on every kept click into that menu — keep the step's own selector on the exact link; only the popover's placement changes. A click after a `hover` with no `tour-hold` is `hover-collapse-risk`:
+
+  ```markdown
+  ### 2. Open the side menu
+  - action: hover
+  - selector: '[data-testid="side-nav"]'
+
+  ### 3. Open the reports submenu
+  - action: click
+  - selector: '[data-testid="side-reports-toggle"]'
+  - tour-hold: '[data-testid="side-nav"]'
+
+  ### 4. Pick the monthly report
+  - action: click
+  - selector: '[data-testid="side-report-monthly"]'
+  - tour-hold: '[data-testid="side-nav"]'
+  ```
+  A `manual` step inside a hover menu still loses it when the user moves to Next: avoid one there, or have the app keep the menu open during tours (`steppy-app-tours`).
 - **Assertions with text become information steps.** An `assert` carrying `guide-text` ("Your invoice is saved as a draft") is shown as a manual step with a Next button; without text it is an invisible gate. Leave the text off a check users should not see.
 - **`tour-*` keys only where the tour keeps the step** — otherwise add `tour: keep` (see Common mistakes). And the replay re-runs the scenario's seed and steps, so the flow must be repeatable.
 
@@ -1804,6 +1842,8 @@ Every message names the tour, the scenario, the step and its heading, and ends w
 | `entry-query-dropped` / `entry-id-segment` | warning | Set `tour.entry` with `:params` and no query |
 | `entry-unknown` | warning | `tour: start` after clicks (or no `navigate`) and no `tour.entry`: set `tour.entry` to the start page's route |
 | `placement-ignored` | warning | Drop `tour-placement` from the centred step |
+| `hold-ignored` | warning | Drop `tour-hold` from the centred step |
+| `hover-collapse-risk` | warning | Add `tour-hold` naming the hovered menu to each click into it |
 | `text-link-dropped` | warning | Link only app routes or the guide site |
 | `no-tours` | warning | Tours are enabled but no scenario opts in: add `tour: true` to one |
 | `app-url-unresolved` | warning | An `apps.<role>.url` or `tours.guide_base_url` still holds an unset `${VAR}` at compile time: set it where you compile |

@@ -193,6 +193,30 @@ export const baseStyles = css`
       transform: translateX(6px);
     }
   }
+  /* Inline markup of step text. The --steppy-strong-*, --steppy-em-*,
+     --steppy-code-* and --steppy-link-* properties come from the host page
+     (steppy build writes them from textStyles); every fallback is the
+     browser's own default. */
+  :is(.steppy-tooltip, .steppy-step-title, .steppy-step-desc, .steppy-inline-desc) strong {
+    font-weight: var(--steppy-strong-weight, bolder);
+    color: var(--steppy-strong-color, inherit);
+  }
+  :is(.steppy-tooltip, .steppy-step-title, .steppy-step-desc, .steppy-inline-desc) em {
+    font-style: var(--steppy-em-style, italic);
+    color: var(--steppy-em-color, inherit);
+  }
+  :is(.steppy-tooltip, .steppy-step-title, .steppy-step-desc, .steppy-inline-desc) code {
+    font-family: var(--steppy-code-font, var(--steppy-font-mono));
+    font-size: var(--steppy-code-size, inherit);
+    color: var(--steppy-code-color, inherit);
+    background: var(--steppy-code-bg, transparent);
+    padding: var(--steppy-code-padding, 0);
+    border-radius: var(--steppy-code-radius, 0);
+  }
+  :is(.steppy-tooltip, .steppy-step-title, .steppy-step-desc, .steppy-inline-desc) a {
+    color: var(--steppy-link-color, LinkText);
+    text-decoration: var(--steppy-link-decoration, underline);
+  }
   .steppy-tooltip {
     position: absolute;
     background: var(--steppy-tooltip-bg);

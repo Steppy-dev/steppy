@@ -10,7 +10,10 @@
  *
  * Invariant: the bubble never covers the spotlight when a side has room for
  * it; otherwise it becomes a sheet at the top or bottom of the viewport, away
- * from the target's centre (where a click lands). A step with nothing to point
+ * from the target's centre (where a click lands). A step's hold zone is
+ * stricter: the bubble never covers it, even to sit beside the target, because
+ * the bubble is the overlay's one element that takes the pointer, and a hover
+ * menu the pointer leaves closes. A step with nothing to point
  * at is centred, unless that would cover an open app dialog: such a step is
  * usually about the dialog (a confirmation), so it becomes a sheet instead.
  */
@@ -36,6 +39,8 @@ export interface TrackerOptions {
   preferred: () => TooltipSide | 'auto';
   /** A rect the bubble should not cover when it has a choice (the next step's target). */
   avoid: () => Rect | null;
+  /** The step's hold zone, which the bubble must never cover (``hold`` in the tour file). */
+  hold?: () => Element | null;
   /** The app's open dialogs, which a centred bubble moves off. */
   dialogs?: () => Rect[];
   onLost: () => void;
@@ -68,6 +73,7 @@ export function createTracker(o: TrackerOptions): Tracker {
   let poll = 0;
   let clips: Element[] = [];
   let clipsFor: Element | null = null;
+  let holdFor: Element | null = null;
   let observer: ResizeObserver | null = null;
 
   const px = (n: number) => `${Math.round(n * 100) / 100}px`;
@@ -98,7 +104,16 @@ export function createTracker(o: TrackerOptions): Tracker {
       observer?.disconnect();
       observer?.observe(target);
       observer?.observe(bubble);
+      holdFor = null;
     }
+    const zone = o.hold?.() ?? null;
+    if (zone !== holdFor) {
+      if (holdFor) observer?.unobserve(holdFor);
+      // A hover menu grows when the pointer reaches it: placed beside the collapsed rail, the bubble would end up inside.
+      if (zone) observer?.observe(zone);
+      holdFor = zone;
+    }
+    const held = zone ? o.dom.rect(zone) : null;
     let spot: Rect | null = inflate(o.dom.rect(target) ?? { x: 0, y: 0, width: 0, height: 0 }, SPOT_PAD);
     for (const clip of clips) {
       const r = o.dom.rect(clip);
@@ -116,18 +131,21 @@ export function createTracker(o: TrackerOptions): Tracker {
     layer.style.setProperty('--_pw-sh', px(spot.height));
     bubble.toggleAttribute('data-yield', isExpanded(target));
 
-    const centreY = spot.y + spot.height / 2;
+    const away = held ?? spot;
+    const centreY = away.y + away.height / 2;
     const sheet = (): void => setMode(bubble, centreY > vp.y + vp.height / 2 ? 'sheet-top' : 'sheet-bottom', null);
     if (vp.width <= SHEET_BELOW) return sheet();
     const size = o.dom.rect(bubble) ?? { x: 0, y: 0, width: 320, height: 120 };
     const avoid = o.avoid();
     const rel = (r: Rect): Rect => ({ x: r.x - vp.x, y: r.y - vp.y, width: r.width, height: r.height });
-    const p = placeTooltip(rel(spot), size, vp, GAP, {
-      preferred: o.preferred(),
-      margin: MARGIN,
-      avoid: avoid ? [rel(avoid)] : [],
-    });
-    if (p.overlaps) return sheet();
+    const place = (rects: Rect[]) =>
+      placeTooltip(rel(spot), size, vp, GAP, { preferred: o.preferred(), margin: MARGIN, avoid: rects.map(rel) });
+    const covers = (q: { x: number; y: number }) =>
+      held !== null && intersects({ x: q.x, y: q.y, width: size.width, height: size.height }, rel(held));
+    let p = place([held, avoid].filter((r): r is Rect => r !== null));
+    // No side clear of both: the hold zone wins over the next target, and a sheet over both.
+    if (!p.overlaps && covers(p) && avoid) p = place([held!]);
+    if (p.overlaps || covers(p)) return sheet();
     layer.style.setProperty('--_pw-x', px(p.x + vp.x));
     layer.style.setProperty('--_pw-y', px(p.y + vp.y));
     setMode(bubble, 'anchored', p.side);
@@ -183,6 +201,7 @@ export function createTracker(o: TrackerOptions): Tracker {
       observer?.disconnect();
       observer = null;
       clipsFor = null;
+      holdFor = null;
       document.removeEventListener('scroll', onScroll, { capture: true });
       window.removeEventListener('resize', onScroll);
       window.visualViewport?.removeEventListener('resize', onScroll);

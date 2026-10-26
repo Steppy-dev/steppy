@@ -12,12 +12,34 @@ import { describe, expect, it } from 'vitest';
 
 import { baseStyles } from '../../src/templates/base-styles.js';
 
-const RECORDED = 'dc30df8cfc8b30bae08c2c0102e30c6f28ca6f1c5e8e086ffbc20ef8bcd4d2b5';
+const RECORDED = '036bf5face9c9f1d469ca95930c1e587864cc53952acb4a2e70e6517226afa96';
 
 describe('guide base styles', () => {
   it('are byte-identical to the pre-token stylesheet', () => {
     const digest = createHash('sha256').update(baseStyles.cssText, 'utf8').digest('hex');
-    expect(baseStyles.cssText.length).toBe(8163);
+    expect(baseStyles.cssText.length).toBe(9396);
     expect(digest).toBe(RECORDED);
+  });
+});
+
+describe('inline markup in step text', () => {
+  it('reads every --steppy-<element>-* property textStyles can set, with a browser-default fallback', () => {
+    const css = baseStyles.cssText;
+    for (const [prop, fallback] of [
+      ['--steppy-strong-weight', 'bolder'],
+      ['--steppy-strong-color', 'inherit'],
+      ['--steppy-em-style', 'italic'],
+      ['--steppy-em-color', 'inherit'],
+      ['--steppy-code-font', 'var(--steppy-font-mono)'],
+      ['--steppy-code-size', 'inherit'],
+      ['--steppy-code-color', 'inherit'],
+      ['--steppy-code-bg', 'transparent'],
+      ['--steppy-code-padding', '0'],
+      ['--steppy-code-radius', '0'],
+      ['--steppy-link-color', 'LinkText'],
+      ['--steppy-link-decoration', 'underline'],
+    ]) {
+      expect(css, prop).toContain(`var(${prop}, ${fallback})`);
+    }
   });
 });

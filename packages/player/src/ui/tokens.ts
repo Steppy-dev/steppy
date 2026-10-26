@@ -71,6 +71,14 @@ export const TOUR_DEFAULTS = {
   buttonPadding: BUTTON_LOOK.padding,
   buttonWeight: 'inherit',
   ringWidth: '2px',
+  strongWeight: 'bolder',
+  emStyle: 'italic',
+  codeFont: FONTS.mono,
+  codeSize: '0.92em',
+  codeBg: 'transparent',
+  codePadding: '0',
+  codeRadius: '0',
+  linkDecoration: 'underline',
 } as const;
 
 /** ``appearance="light"``: a light bubble, same accent; AA-checked like the dark one. */

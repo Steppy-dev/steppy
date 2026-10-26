@@ -373,6 +373,34 @@ Dialogs, drawers and phones:
   a menu below 768px, the Steppy project's `mobile` query is `(max-width: 767.98px)`;
   otherwise a phone gets the desktop step pointing at a hidden link.
 
+Hover menus (a sidebar that expands on hover, flyouts, mega menus, hover cards):
+
+- **The overlay blocks no pointer events.** Its layer and spotlight let every hover
+  and click through; only the popover takes the pointer. A menu that closes on
+  `mouseleave` therefore closes when the popover lands on it, or when the user moves
+  across the popover. Blocking clicks instead of movement would change nothing: the
+  overlay already blocks neither.
+- **On the scenario side, `tour-hold`** names the menu on each step into it
+  (`tour-hold: '[data-testid="side-nav"]'`). The popover is then never drawn over the
+  menu, re-placed when it expands, while it still points at the exact link. Give the
+  menu container a test-id for it. Details in the `steppy-scenario-author` skill.
+- **What no overlay can prevent:** reaching the popover's Next button (a `manual`
+  step), or reading its text, takes the pointer off the menu — a genuine
+  `mouseleave`. If a tour needs the menu open across such a step, keep it open from
+  the app while a tour runs, between `tour-start` and `tour-complete` /
+  `tour-dismiss`:
+
+  ```js
+  const pin = (on) => document.querySelector('[data-testid="side-nav"]')?.toggleAttribute('data-pinned', on);
+  addEventListener('tour-start', () => pin(true));
+  addEventListener('tour-complete', () => pin(false));
+  addEventListener('tour-dismiss', () => pin(false));
+  ```
+
+  and treat `data-pinned` like hover in the menu's CSS and `mouseleave` handler. In
+  Angular, set a signal from `<steppy-tours (tourStart)="…" (tourComplete)="…"
+  (tourDismiss)="…">` instead. Pin only for the tours that need it (`detail.tourId`).
+
 ## 7. Security headers
 
 The overlay runs under a strict page: no inline script, no inline `style` attribute, no
@@ -434,6 +462,7 @@ unchanged, or the `source` hook. Keep it bundled unless there is a reason not to
 |---|---|
 | `start()` resolves `false`, `load-failed` | `fallback-manifest` does not point at the served file (an HTML page came back, or a 404), or the tour id is not in the manifest. |
 | A tour that starts on another route never shows its first step (Angular) | `navigate` runs outside the zone: use `@steppy/angular`, or wrap the router call in `NgZone.run`. |
+| A hover menu closes mid-tour; the replay says `<steppy-tour-host> intercepts pointer events` or "went off-path: its target disappeared" | The popover lands on the menu. Add `tour-hold` on the scenario steps, and pin the menu open during tours for `manual` steps inside it (section 6, "Hover menus"). |
 | "Can't find this element" (`target-timeout`) | The test-id was renamed or removed, the element renders late (raise `targetTimeout`), it sits in a shadow root or iframe, or it is hidden. |
 | `entry-params` | The entry route needs a param neither `start()` nor the URL gives, or a guard refused or redirected the navigation. |
 | `invalid-data` / `schema-unsupported` | The file was edited by hand, or the overlay is older than the Steppy that compiled the tours: rebuild the packages. |

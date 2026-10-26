@@ -291,6 +291,7 @@ _UNIVERSAL_FIELDS: frozenset[str] = frozenset(
         "tour_text",
         "tour_advance",
         "tour_placement",
+        "tour_hold",
         "action",
         "role",
         "expect",
@@ -368,6 +369,7 @@ _FIELD_ALIASES: dict[str, str] = {
     "tour_text": "tour-text",
     "tour_advance": "tour-advance",
     "tour_placement": "tour-placement",
+    "tour_hold": "tour-hold",
 }
 
 #: Spellings of a boolean a step-level ``tour:`` must not take (step scalars
@@ -508,7 +510,9 @@ class Step(BaseModel):
     # `tour` holds one value or a list (`[end, keep]`), always stored as a list.
     # `tour-text` overrides `guide-text` for the tour popover; `tour-advance` /
     # `tour-placement` override what inference picks. The value sets are
-    # `steppy.tour_spec`'s, pinned by a test.
+    # `steppy.tour_spec`'s, pinned by a test. `tour-hold` names, as one test-id
+    # selector, an element the popover must never cover (a hover menu the step's
+    # target sits in), so the pointer can stay over it.
     tour: Optional[list[Literal["skip", "keep", "start", "end"]]] = None
     tour_text: Optional[GuideText] = Field(default=None, alias="tour-text")
     tour_advance: Optional[Literal["click", "input", "change", "visible", "manual"]] = Field(
@@ -517,6 +521,7 @@ class Step(BaseModel):
     tour_placement: Optional[Literal["top", "bottom", "left", "right", "auto"]] = Field(
         default=None, alias="tour-placement"
     )
+    tour_hold: Optional[str] = Field(default=None, alias="tour-hold")
 
     # Progressive capture for fill-form: snapshot once per field with a
     # single-target cursor on the next-to-fill field, then a settled "all

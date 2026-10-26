@@ -73,6 +73,8 @@ export interface TourStep {
   readonly title: string | null;
   readonly text: string | null;
   readonly placement: Placement | null;
+  /** Test-id of an element the bubble must never cover (a hover menu the target sits in). */
+  readonly hold: string | null;
   readonly layouts: readonly string[] | null;
 }
 
@@ -412,6 +414,7 @@ export function validateTour(raw: unknown, ctx: TourContext): Result<TourFile> {
           title: c.text(o.title, `${p}.title`, MAX_TITLE_CHARS, true),
           text: c.text(o.text, `${p}.text`, MAX_TEXT_CHARS, true),
           placement: o.placement === undefined || o.placement === null ? null : c.oneOf(o.placement, `${p}.placement`, PLACEMENTS),
+          hold: c.optStr(o.hold, `${p}.hold`, RX.testId),
           layouts: layouts && Object.freeze(layouts),
         }),
       );

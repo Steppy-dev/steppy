@@ -243,3 +243,25 @@ def test_generate_all_writes_the_helper_only_with_tours_on(tmp_path):
     off = tmp_path / "off"
     SteppyGenerator(plain, templates_dir=TEMPLATES).generate_all(list(scenarios.values()), off)
     assert not (off / "_steppy_tours.py").exists()
+
+
+def test_a_held_step_is_hovered_and_checked_after_its_popover_anchors(tmp_path):
+    code = _render(
+        tmp_path,
+        OPEN
+        + "\n### 2. Toggle\n- role: editor\n- action: click\n- selector: '[data-testid=\"toggle\"]'\n"
+        + "- tour-hold: '[data-testid=\"side-nav\"]'\n",
+    )
+    ast.parse(code)
+    assert ", _tour_hold\n" in code
+    section = _replay_section(code)
+    assert "'hold': 'side-nav'" in section
+    expect = section.index("_tour_expect_step(_tour, 'toggle'")
+    assert expect < section.index("_tour_hold(_tour, 'toggle')") < section.index("editor_page.click(")
+
+
+def test_without_a_hold_the_replay_neither_imports_nor_calls_it(tmp_path):
+    code = _render(
+        tmp_path, OPEN + "\n### 2. Go\n- role: editor\n- action: click\n- selector: '[data-testid=\"go\"]'\n"
+    )
+    assert "_tour_hold" not in code and "'hold'" not in code

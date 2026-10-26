@@ -103,7 +103,8 @@ uses `guide.html.j2`). The class surface:
 **What's a variable vs. hardcoded:** only the cursor and z-index layers are CSS variables
 (set on `.steppy-guide`); the rest are **literal colours** (a blue `#3498db`/`#2563eb`
 accent, slate `#2c3e50`, grey `#7f8c8d`). There is **no palette-token system here** (unlike
-the interactive player).
+the interactive player). The one exception is the inline markup of step text (strong, em,
+code, links): see [Inline text](#inline-text-strong-em-code-links).
 
 ```css
 /* the only variables the step-by-step layer exposes */
@@ -341,6 +342,18 @@ Set them on `:root` or on the element — custom properties inherit through the 
 | **Spotlight** | | |
 | `--steppy-tour-ring-width` | `2px` | The accent ring around the target (`0` for none) |
 | `--steppy-tour-spotlight-radius` | the popover radius | Corners of the cut-out |
+| **Inline text in the step body** — each falls back to the guide property in brackets | | |
+| `--steppy-tour-strong-weight` | `bolder` | `**strong**` weight (`--steppy-strong-weight`) |
+| `--steppy-tour-strong-color` | the bubble text colour | `**strong**` colour (`--steppy-strong-color`) |
+| `--steppy-tour-em-style` | `italic` | `*em*` style (`--steppy-em-style`) |
+| `--steppy-tour-em-color` | the bubble text colour | `*em*` colour (`--steppy-em-color`) |
+| `--steppy-tour-code-font` | a monospace stack | `` `code` `` font (`--steppy-code-font`) |
+| `--steppy-tour-code-size` | `0.92em` | (`--steppy-code-size`) |
+| `--steppy-tour-code-color` | the bubble text colour | (`--steppy-code-color`) |
+| `--steppy-tour-code-bg` | `transparent` | (`--steppy-code-bg`) |
+| `--steppy-tour-code-padding` | `0` | (`--steppy-code-padding`) |
+| `--steppy-tour-code-radius` | `0` | (`--steppy-code-radius`) |
+| `--steppy-tour-link-decoration` | `underline` | Links in step text (`--steppy-link-decoration`); `--steppy-tour-link` falls back to `--steppy-link-color` |
 
 ```css
 /* the app's global stylesheet */
@@ -372,7 +385,45 @@ document.querySelector('steppy-tour-host').theme = { accent: '#0b5cad', width: '
 ```
 
 Precedence, strongest first: the `theme` property → a `steppy-tour-host { … }` rule →
-`:root` → the appearance's defaults.
+`:root` → for the inline-text tokens, the guide's `--steppy-strong-*` / `--steppy-em-*` /
+`--steppy-code-*` / `--steppy-link-*` properties → the appearance's defaults.
+
+### Inline text: strong, em, code, links
+
+Step text accepts `**strong**`, `*em*`, `` `code` `` and links. One set of custom properties styles them
+on every surface that shows step text:
+
+| Property | Browser default it replaces |
+|---|---|
+| `--steppy-strong-weight`, `--steppy-strong-color` | `bolder`, the text colour |
+| `--steppy-em-style`, `--steppy-em-color` | `italic`, the text colour |
+| `--steppy-code-font`, `--steppy-code-size`, `--steppy-code-color`, `--steppy-code-bg`, `--steppy-code-padding`, `--steppy-code-radius` | monospace, no background |
+| `--steppy-link-color`, `--steppy-link-decoration` | `LinkText`, `underline` |
+
+- **Built guides (`steppy build`):** set them in `steppy.guide.config.ts` — the build writes the properties
+  and the rules that read them (static: appended to `assets/guides.css` on `:root`, which the interactive and
+  video pages and the handbook share; Angular: in each fragment's style block on `.steppy-guide`, and on the
+  interactive component's `.steppy-guide-host`). Unset, nothing is emitted.
+
+  ```ts
+  textStyles: {
+    strong: { weight: 600, color: '#9a3412' },
+    em: { style: 'normal', color: '#0f766e' },
+    code: { font: "'JetBrains Mono', monospace", background: 'rgb(0 0 0 / 6%)', padding: '0 3px', radius: '3px' },
+    link: { color: '#0b5cad', decoration: 'underline dotted' },
+  },
+  ```
+
+  Each value is one CSS value: `;`, braces, `<`, `>`, backslashes, backticks, comments and line breaks are
+  refused at build time.
+- **Interactive player:** reads the same properties (they inherit into its shadow root), so setting them on
+  the page around `<steppy-guide>` works without a build too.
+- **In-app tours:** the overlay's `--steppy-tour-strong-*` … tokens fall back to these, so an app that sets
+  `--steppy-strong-color` on `:root` styles its embedded guides and its tours alike; a `--steppy-tour-*`
+  property or the host's `theme` still wins for the tours alone.
+- **`steppy guide` (standalone pages):** no build config; override `templates/guide.html.j2` with rules on
+  `.step-content strong` etc.
+- Video captions are plain text: markup is not rendered there.
 
 ### Parts
 

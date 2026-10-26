@@ -31,6 +31,17 @@ describe('theme keys', () => {
     expect(CSS).toContain('var(--steppy-tour-font-family, var(--steppy-font-family, inherit))');
   });
 
+  it('inline-markup tokens fall back to the guide properties, then to the rendering they replace', () => {
+    expect(CSS).toContain('--_pw-strong-weight: var(--steppy-tour-strong-weight, var(--steppy-strong-weight, bolder))');
+    expect(CSS).toContain('--_pw-em-style: var(--steppy-tour-em-style, var(--steppy-em-style, italic))');
+    expect(CSS).toContain('--_pw-link: var(--steppy-tour-link, var(--steppy-link-color, var(--_pw-bubble-fg)))');
+    expect(CSS).toContain('--_pw-code-size: var(--steppy-tour-code-size, var(--steppy-code-size, 0.92em))');
+    expect(CSS).toContain('--_pw-code-color: var(--steppy-tour-code-color, var(--steppy-code-color, var(--_pw-bubble-fg)))');
+    // Only text inside the step body is restyled.
+    expect(CSS).toMatch(/\.body strong\s*\{/);
+    expect(CSS).not.toMatch(/(^|\n)\s*code\s*\{/);
+  });
+
   it('the light and auto appearances swap only the defaults', () => {
     const light = CSS.slice(CSS.indexOf(":host([appearance='light'])"), CSS.indexOf('@media (prefers-color-scheme: light)'));
     expect(light).toContain('--_pw-bubble-bg: var(--steppy-tour-bubble-bg, var(--steppy-tooltip-bg, #ffffff))');

@@ -295,7 +295,11 @@ export function reduce(s: EngineState, e: EngineEvent): Transition {
       const old = s.loaded!.tour.steps;
       const same =
         e.tour.steps.length === old.length &&
-        e.tour.steps.every((st, i) => st.id === old[i]!.id && st.target === old[i]!.target && st.advance === old[i]!.advance);
+        e.tour.steps.every((st, i) => st.id === old[i]!.id &&
+            st.target === old[i]!.target &&
+            st.advance === old[i]!.advance &&
+            st.hold === old[i]!.hold,
+        );
       return same ? { state: { ...s, loaded: { ...s.loaded!, tour: e.tour } }, effects: [] } : none;
     }
   }

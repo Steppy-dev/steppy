@@ -1,7 +1,8 @@
 """Pydantic models for the steppy build command configuration."""
 
+import re
 from enum import Enum
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -317,6 +318,121 @@ class SeoConfig(BaseModel):
         return self
 
 
+#: What a ``textStyles`` value may never contain: it is written verbatim into a
+#: ``<style>`` block, so each of these would end the declaration, the rule or the
+#: element (or open a comment that swallows the rest of the stylesheet); a
+#: backtick would end the Angular component's ``styles`` template literal.
+_CSS_VALUE_FORBIDDEN = re.compile(r"[;{}<>\\`\n\r]|/\*|\*/")
+
+
+def _css_value(v: Any, where: str) -> Optional[str]:
+    if v is None:
+        return None
+    if not isinstance(v, str):
+        raise ValueError(f"textStyles.{where} must be a string")
+    v = v.strip()
+    if not v:
+        raise ValueError(f"textStyles.{where} must not be empty")
+    if _CSS_VALUE_FORBIDDEN.search(v):
+        raise ValueError(
+            f"textStyles.{where} must be one CSS value, without ; {{ }} < > \\ `, a comment or a line break: {v!r}"
+        )
+    return v
+
+
+class _TextStyle(BaseModel):
+    """One element's styles. Every field maps to one ``--steppy-<element>-<name>`` property."""
+
+    #: (field name, CSS property suffix), in emission order.
+    _PROPERTIES: ClassVar[tuple[tuple[str, str], ...]] = ()
+    _ELEMENT: ClassVar[str] = ""
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def validate_value(cls, v: Any, info: Any) -> Any:
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and info.field_name == "weight":
+            v = str(v)
+        return _css_value(v, f"{cls._ELEMENT}.{info.field_name}")
+
+    def declarations(self) -> list[tuple[str, str]]:
+        return [
+            (f"--steppy-{self._ELEMENT}-{suffix}", getattr(self, name))
+            for name, suffix in self._PROPERTIES
+            if getattr(self, name) is not None
+        ]
+
+
+class StrongStyle(_TextStyle):
+    _ELEMENT: ClassVar[str] = "strong"
+    _PROPERTIES: ClassVar[tuple[tuple[str, str], ...]] = (("weight", "weight"), ("color", "color"))
+    weight: Optional[str] = None
+    color: Optional[str] = None
+
+
+class EmStyle(_TextStyle):
+    _ELEMENT: ClassVar[str] = "em"
+    _PROPERTIES: ClassVar[tuple[tuple[str, str], ...]] = (("style", "style"), ("color", "color"))
+    style: Optional[Literal["italic", "normal", "oblique"]] = None
+    color: Optional[str] = None
+
+
+class CodeStyle(_TextStyle):
+    _ELEMENT: ClassVar[str] = "code"
+    _PROPERTIES: ClassVar[tuple[tuple[str, str], ...]] = (
+        ("font", "font"),
+        ("size", "size"),
+        ("color", "color"),
+        ("background", "bg"),
+        ("padding", "padding"),
+        ("radius", "radius"),
+    )
+    font: Optional[str] = None
+    size: Optional[str] = None
+    color: Optional[str] = None
+    background: Optional[str] = None
+    padding: Optional[str] = None
+    radius: Optional[str] = None
+
+
+class LinkStyle(_TextStyle):
+    _ELEMENT: ClassVar[str] = "link"
+    _PROPERTIES: ClassVar[tuple[tuple[str, str], ...]] = (("color", "color"), ("decoration", "decoration"))
+    color: Optional[str] = None
+    decoration: Optional[str] = None
+
+
+class TextStylesConfig(BaseModel):
+    """Styles for the inline markup of step text: ``**strong**``, ``*em*``, `` `code` `` and links.
+
+    Emitted by ``steppy build`` as ``--steppy-strong-*`` / ``--steppy-em-*`` /
+    ``--steppy-code-*`` / ``--steppy-link-*`` custom properties plus the rules
+    that read them, into every surface that shows step text: the static pages,
+    the Angular fragments, the handbook and the interactive player (custom
+    properties inherit into its shadow root). The in-app tour overlay reads the
+    same properties as fallbacks for its own ``--steppy-tour-*`` tokens, so an
+    app that sets them once styles its guides and its tours alike.
+    """
+
+    strong: Optional[StrongStyle] = None
+    em: Optional[EmStyle] = None
+    code: Optional[CodeStyle] = None
+    link: Optional[LinkStyle] = None
+
+    class Config:
+        extra = "forbid"
+
+    def declarations(self) -> list[tuple[str, str]]:
+        """``(custom property, value)`` pairs in a fixed order, only the ones that are set."""
+        out: list[tuple[str, str]] = []
+        for style in (self.strong, self.em, self.code, self.link):
+            if style is not None:
+                out.extend(style.declarations())
+        return out
+
+
 class BuildConfig(BaseModel):
     """Top-level build configuration, mirrors the TypeScript steppy.guide.config.ts."""
 
@@ -357,6 +473,9 @@ class BuildConfig(BaseModel):
     # Static-site SEO / indexing controls. Defaults to a private config
     # (noindex + robots.txt Disallow) so nothing is accidentally indexable.
     seo: SeoConfig = Field(default_factory=SeoConfig)
+    # Styles for strong / em / code / links in step text. Unset emits nothing,
+    # so a build without it is byte-identical to one before the option existed.
+    text_styles: Optional[TextStylesConfig] = Field(default=None, alias="textStyles")
 
     class Config:
         extra = "forbid"

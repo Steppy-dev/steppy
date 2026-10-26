@@ -159,6 +159,39 @@
     }
   },
   {
+    "name": "hold-valid",
+    "rule": "hold is a test-id",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "ok",
+    "python": "accept",
+    "set": {
+      "steps.0.hold": "side-nav"
+    }
+  },
+  {
+    "name": "hold-selector",
+    "rule": "hold is a test-id",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.hold": "#side-nav"
+    }
+  },
+  {
+    "name": "hold-empty",
+    "rule": "hold is a test-id",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.hold": ""
+    }
+  },
+  {
     "name": "placement-unknown",
     "rule": "contract enum",
     "kind": "tour",

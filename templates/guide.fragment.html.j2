@@ -223,6 +223,9 @@
             font-size: 16px;
         }
     }
+{% if text_styles_css %}
+    /* textStyles (steppy.guide.config.ts) */
+{{ text_styles_css }}{% endif %}
 </style>
 {% endif %}
 

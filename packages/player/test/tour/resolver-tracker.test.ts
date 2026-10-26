@@ -87,13 +87,17 @@ describe('resolver.wait', () => {
 });
 
 describe('tracker', () => {
-  function setup(targetRect: string | null, opts: { preferred?: 'auto' | 'top'; dialogs?: string[] } = {}) {
+  function setup(
+    targetRect: string | null,
+    opts: { preferred?: 'auto' | 'top' | 'bottom'; dialogs?: string[]; hold?: string; avoid?: string } = {},
+  ) {
     const layer = document.createElement('div');
     const bubble = document.createElement('section');
     bubble.setAttribute('data-rect', '0,0,300,120');
     layer.append(bubble);
     document.body.append(layer);
     const target = targetRect ? add('t', targetRect) : null;
+    const zone = opts.hold ? add('zone', opts.hold, 'aside') : null;
     const onLost = vi.fn();
     let current: Element | null = target;
     const tracker = createTracker({
@@ -103,7 +107,12 @@ describe('tracker', () => {
       target: () => current,
       refind: () => null,
       preferred: () => opts.preferred ?? 'auto',
-      avoid: () => null,
+      avoid: () => {
+        if (!opts.avoid) return null;
+        const [x, y, width, height] = opts.avoid.split(',').map(Number) as [number, number, number, number];
+        return { x, y, width, height };
+      },
+      hold: () => zone,
       dialogs: () =>
         (opts.dialogs ?? []).map((r) => {
           const [x, y, width, height] = r.split(',').map(Number) as [number, number, number, number];
@@ -113,7 +122,7 @@ describe('tracker', () => {
     });
     tracker.start();
     dom.scheduler.flushFrames();
-    return { layer, bubble, target, tracker, onLost, setCurrent: (el: Element | null) => (current = el) };
+    return { layer, bubble, target, zone, tracker, onLost, setCurrent: (el: Element | null) => (current = el) };
   }
 
   it('anchors next to the target and draws the spotlight around it', () => {
@@ -135,6 +144,38 @@ describe('tracker', () => {
     expect(setup('20,700,100,40').bubble.getAttribute('data-mode')).toBe('sheet-top');
     document.body.innerHTML = '';
     expect(setup('20,100,100,40').bubble.getAttribute('data-mode')).toBe('sheet-bottom');
+  });
+
+  it('never covers the hold zone, even on the preferred side', () => {
+    // A link in a 240px sidebar: below it would be inside the sidebar.
+    const { bubble, layer } = setup('0,300,240,40', { preferred: 'bottom', hold: '0,0,240,800' });
+    expect(bubble.getAttribute('data-mode')).toBe('anchored');
+    expect(bubble.getAttribute('data-side')).toBe('right');
+    expect(parseFloat(layer.style.getPropertyValue('--_pw-x'))).toBeGreaterThanOrEqual(240);
+    // The spotlight stays on the target, not the zone.
+    expect(layer.style.getPropertyValue('--_pw-sh')).toBe('52px');
+  });
+
+  it('prefers the hold zone over the next target when no side clears both', () => {
+    const { bubble } = setup('0,300,240,40', { hold: '0,0,240,800', avoid: '250,200,1030,300' });
+    expect(bubble.getAttribute('data-side')).toBe('right');
+  });
+
+  it('re-places when the hold zone grows', () => {
+    // A rail that expands on hover, the link inside it widening with it.
+    const { bubble, target, zone, layer, tracker } = setup('0,300,56,40', { hold: '0,0,56,800' });
+    expect(parseFloat(layer.style.getPropertyValue('--_pw-x'))).toBeLessThan(240);
+    zone!.setAttribute('data-rect', '0,0,240,800');
+    target!.setAttribute('data-rect', '0,300,240,40');
+    tracker.notify();
+    dom.scheduler.flushFrames();
+    expect(bubble.getAttribute('data-mode')).toBe('anchored');
+    expect(parseFloat(layer.style.getPropertyValue('--_pw-x'))).toBeGreaterThanOrEqual(240);
+  });
+
+  it('turns into a sheet when no side clears the hold zone', () => {
+    const { bubble } = setup('500,300,100,40', { hold: '0,0,1280,800' });
+    expect(bubble.getAttribute('data-mode')).toMatch(/^sheet-/);
   });
 
   it('centres a targetless step', () => {

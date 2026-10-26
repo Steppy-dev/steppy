@@ -99,8 +99,11 @@ def test_the_value_sets_are_the_contract_vocabulary():
 
 
 def test_the_keys_are_registered_for_every_action():
-    assert {"tour", "tour_text", "tour_advance", "tour_placement"} <= _UNIVERSAL_FIELDS
+    assert {"tour", "tour_text", "tour_advance", "tour_placement", "tour_hold"} <= _UNIVERSAL_FIELDS
     assert _FIELD_ALIASES["tour_text"] == "tour-text"
+    assert _FIELD_ALIASES["tour_hold"] == "tour-hold"
+    # A selector is a plain string: never parsed as a YAML flow sequence.
+    assert "tour-hold" not in _structured_step_keys()
     assert {"tour-text", "tour"} <= _structured_step_keys()
 
 

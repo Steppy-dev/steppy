@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from steppy.build import BuildAssembler, text_styles_css
 from steppy.build_models import TextStylesConfig
 from tests.test_build import _setup_project
+from tests.test_build_fixture import _patch_render_pdfs
 
 STYLES = {
     "strong": {"weight": 600, "color": "#9a3412"},
@@ -78,7 +79,9 @@ def test_unset_or_empty_emits_nothing():
 # ── the build ────────────────────────────────────────────────────────────────
 
 
-def test_static_build_appends_the_block_to_guides_css_on_root(tmp_path):
+def test_static_build_appends_the_block_to_guides_css_on_root(tmp_path, monkeypatch):
+    # The handbook also prints a PDF: stub the renderer so no Chromium is needed.
+    _patch_render_pdfs(monkeypatch, [])
     config, root = _setup_project(tmp_path, target="static", textStyles=STYLES)
     BuildAssembler(config, root).build_all(handbook=True)
     css = (root / "output" / "generated" / "assets" / "guides.css").read_text(encoding="utf-8")

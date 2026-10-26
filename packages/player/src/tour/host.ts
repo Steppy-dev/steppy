@@ -577,6 +577,10 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
       },
       preferred: () => this._preferredSide(),
       avoid: () => this._nextTargetRect(),
+      hold: () => {
+        const id = this._s.loaded?.tour.steps[this._s.index]?.hold;
+        return id && this._resolver ? this._resolver.find(id) : null;
+      },
       dialogs: () => this._openDialogs(),
       onPlaced: () => this._applyPendingFocus(),
       onLost: () => {

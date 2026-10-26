@@ -27,6 +27,7 @@ class TourStepPlan:
     advance: str
     wait_for: Optional[str] = None
     placement: Optional[str] = None
+    hold: Optional[str] = None  # test-id of the element the popover must not cover
     layouts: Optional[tuple[str, ...]] = None
     field: Optional[str] = None  # fill-form: the `fields` key this sub-step fills
     step_id: str = ""
@@ -44,6 +45,7 @@ class ReplayTourStep:
     layouts: Optional[tuple[str, ...]]
     field: Optional[str] = None
     source_selector: Optional[str] = None
+    hold: Optional[str] = None
 
 
 @dataclass(frozen=True)

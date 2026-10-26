@@ -211,3 +211,100 @@ def test_a_visible_step_whose_target_is_already_there_replays(visible_project):
         proc = _run(visible_project, demo.url, "-k", "send_invoice__tour")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "2 passed" in proc.stdout
+
+
+# ── Hover menus: `tour-hold` ──────────────────────────────────────────────────
+
+# The demo's /reports page has a rail that expands while hovered and collapses on
+# mouseleave; its submenu only shows while expanded. `tour-placement: top` on the
+# link puts that step's popover over the toggle, right under the pointer that just
+# clicked it: without a hold zone the rail collapses and the link disappears.
+_HOVER_MENU = """---
+title: Open the monthly report
+description: An editor opens a report from the hover side menu.
+tags: [tour-demo]
+layouts: [desktop]
+tour:
+  id: monthly-report
+  title: {en: Open the monthly report, fr: Ouvrir le rapport mensuel}
+  entry: /reports
+---
+
+### 1. Open the reports
+- role: editor
+- action: navigate
+- target: /reports
+
+### 2. Open the side menu
+- role: editor
+- action: hover
+- selector: '[data-testid="side-nav"]'
+
+### 3. Open the reports submenu
+- role: editor
+- action: click
+- selector: '[data-testid="side-reports-toggle"]'
+HOLD- tour-text: {en: "Open **Reports**.", fr: "Ouvrez **Rapports**."}
+
+### 4. Pick the monthly report
+- role: editor
+- action: click
+- selector: '[data-testid="side-report-monthly"]'
+- tour-placement: top
+HOLD- expect: contains([data-testid="report-title"], "Monthly report")
+- tour-text: {en: "Pick **Monthly report**.", fr: "Choisissez **Rapport mensuel**."}
+"""
+
+
+def _hover_menu(hold: bool):
+    def edit(root: Path) -> None:
+        line = "- tour-hold: '[data-testid=\"side-nav\"]'\n" if hold else ""
+        (root / "scenarios" / "editor--monthly-report.md").write_text(
+            _HOVER_MENU.replace("HOLD", line), encoding="utf-8"
+        )
+
+    return edit
+
+
+@pytest.fixture(scope="module")
+def held_project(tmp_path_factory) -> Path:
+    return _generated(tmp_path_factory, "tour-demo-held", _hover_menu(hold=True))
+
+
+@pytest.fixture(scope="module")
+def unheld_project(tmp_path_factory) -> Path:
+    return _generated(tmp_path_factory, "tour-demo-unheld", _hover_menu(hold=False))
+
+
+def _validate(project: Path) -> str:
+    from steppy.cli import app
+
+    cwd = os.getcwd()
+    os.chdir(project)
+    try:
+        return CliRunner().invoke(app, ["validate"]).output
+    finally:
+        os.chdir(cwd)
+
+
+def test_a_held_hover_menu_survives_the_tour(held_project):
+    tour = json.loads((held_project / "app-assets" / "tours" / "monthly-report.en.json").read_text("utf-8"))
+    assert [(s["id"], s.get("hold")) for s in tour["steps"]] == [
+        ("side-reports-toggle", "side-nav"),
+        ("side-report-monthly", "side-nav"),
+    ]
+    assert "hover-collapse-risk" not in _validate(held_project)
+    with _demo(held_project) as demo:
+        proc = _run(held_project, demo.url, "-k", "monthly_report")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "2 passed" in proc.stdout  # the scenario test and its replay, desktop only
+
+
+def test_an_unheld_hover_menu_warns_and_collapses_in_the_replay(unheld_project):
+    assert "hover-collapse-risk" in _validate(unheld_project)
+    with _demo(unheld_project, targetTimeout=1500) as demo:
+        proc = _run(unheld_project, demo.url, "-k", "monthly_report__tour")
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 1, out
+    assert "[tour monthly-report] step 'side-report-monthly'" in out
+    assert "the tour went off-path: its target disappeared" in out

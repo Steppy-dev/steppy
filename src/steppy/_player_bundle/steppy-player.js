@@ -534,7 +534,7 @@ const Ps = (t) => (e, s) => {
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const Ms = { attribute: !0, type: String, converter: Ie, reflect: !1, hasChanged: pt }, js = (t = Ms, e, s) => {
+const Ms = { attribute: !0, type: String, converter: Ie, reflect: !1, hasChanged: pt }, zs = (t = Ms, e, s) => {
   const { kind: r, metadata: i } = s;
   let n = globalThis.litPropertyMetadata.get(i);
   if (n === void 0 && globalThis.litPropertyMetadata.set(i, n = /* @__PURE__ */ new Map()), r === "setter" && ((t = Object.create(t)).wrapped = !0), n.set(s.name, t), r === "accessor") {
@@ -555,8 +555,8 @@ const Ms = { attribute: !0, type: String, converter: Ie, reflect: !1, hasChanged
   }
   throw Error("Unsupported decorator location: " + r);
 };
-function z(t) {
-  return (e, s) => typeof s == "object" ? js(t, e, s) : ((r, i, n) => {
+function j(t) {
+  return (e, s) => typeof s == "object" ? zs(t, e, s) : ((r, i, n) => {
     const a = i.hasOwnProperty(n);
     return i.constructor.createProperty(n, r), a ? Object.getOwnPropertyDescriptor(i, n) : void 0;
   })(t, e, s);
@@ -567,14 +567,14 @@ function z(t) {
  * SPDX-License-Identifier: BSD-3-Clause
  */
 function N(t) {
-  return z({ ...t, state: !0, attribute: !1 });
+  return j({ ...t, state: !0, attribute: !1 });
 }
 /**
  * @license
  * Copyright 2020 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const zs = (t) => t.strings === void 0;
+const js = (t) => t.strings === void 0;
 /**
  * @license
  * Copyright 2017 Google LLC
@@ -644,7 +644,7 @@ class Bs extends Us {
     e !== this.isConnected && (this.isConnected = e, e ? this.reconnected?.() : this.disconnected?.()), s && (_e(this, e), Le(this));
   }
   setValue(e) {
-    if (zs(this._$Ct)) this._$Ct._$AI(e, this);
+    if (js(this._$Ct)) this._$Ct._$AI(e, this);
     else {
       const s = [...this._$Ct._$AH];
       s[this._$Ci] = e, this._$Ct._$AI(s, this, 0);
@@ -712,7 +712,7 @@ function gt(t, e) {
 function Ks(t) {
   return { x: t.x + t.width / 2, y: t.y + t.height / 2 };
 }
-function jt(t, e, s) {
+function zt(t, e, s) {
   if (!t) return null;
   const r = yt(e, s);
   return r ? Ks(gt(t, r)) : null;
@@ -842,13 +842,13 @@ class X {
   async travelToTargetIndex(e, s, r) {
     const i = s[r], n = this.cursorEl;
     if (!i || !n) return;
-    const a = jt(i.bbox, this.imgEl, e.viewport);
+    const a = zt(i.bbox, this.imgEl, e.viewport);
     a && (this.onPhaseChange?.("travel", i), await this.travelTo(n, this.currentPos, a), this.currentPos = a, this.onPhaseChange?.("pre-action", i), n.classList.remove("pulse"), n.offsetWidth, n.classList.add("pulse"), await J(this.timings.pre_action_ms), n.classList.remove("pulse"));
   }
   async playTargetActionIndex(e, s, r) {
     const i = s[r];
     if (!i) return;
-    const n = jt(i.bbox, this.imgEl, e.viewport) || this.currentPos;
+    const n = zt(i.bbox, this.imgEl, e.viewport) || this.currentPos;
     this.onPhaseChange?.("action", i), i.kind === "click" ? (this.rippleEl && this.fireClick(this.rippleEl, n), await J(this.timings.action_ms)) : i.kind === "type" ? this.kbdEl && await this.typeValue(this.kbdEl, n, i.value) : await J(this.timings.action_ms), this.onPhaseChange?.("post-action", i);
   }
   async travelTo(e, s, r) {
@@ -884,7 +884,7 @@ function xe(t, e) {
 function Xs(t) {
   return t.replace(/_/g, "-").split("-", 1)[0].toLowerCase();
 }
-function zt(t, e) {
+function jt(t, e) {
   if (!e) return null;
   const s = (o) => o.replace(/_/g, "-").toLowerCase(), r = [...t], i = s(e), n = r.find((o) => s(o) === i);
   if (n !== void 0) return n;
@@ -892,7 +892,7 @@ function zt(t, e) {
   return r.find((o) => s(o) === a) ?? null;
 }
 function Qs(t, e, s, r = "en") {
-  const i = zt(Object.keys(t), e), n = (i !== null ? t[i] : void 0) ?? t[r], a = s ? zt(Object.keys(s), e) : null, o = a !== null ? s[a] : void 0;
+  const i = jt(Object.keys(t), e), n = (i !== null ? t[i] : void 0) ?? t[r], a = s ? jt(Object.keys(s), e) : null, o = a !== null ? s[a] : void 0;
   return o ? { ...n, ...o } : n;
 }
 const Ce = {
@@ -1384,7 +1384,7 @@ var h;
 (function(t) {
   t.errToObj = (e) => typeof e == "string" ? { message: e } : e || {}, t.toString = (e) => typeof e == "string" ? e : e?.message;
 })(h || (h = {}));
-class j {
+class z {
   constructor(e, s, r, i) {
     this._cachedPath = [], this.parent = e, this.data = s, this._path = r, this._key = i;
   }
@@ -1578,10 +1578,10 @@ class x {
     return Ue.create(this, this._def);
   }
   or(e) {
-    return je.create([this, e], this._def);
+    return ze.create([this, e], this._def);
   }
   and(e) {
-    return ze.create(this, e, this._def);
+    return je.create(this, e, this._def);
   }
   transform(e) {
     return new se({
@@ -2602,8 +2602,8 @@ class M extends x {
       exact: !1,
       message: i.maxLength.message
     }), r.dirty()), s.common.async)
-      return Promise.all([...s.data].map((a, o) => i.type._parseAsync(new j(s, a, s.path, o)))).then((a) => E.mergeArray(r, a));
-    const n = [...s.data].map((a, o) => i.type._parseSync(new j(s, a, s.path, o)));
+      return Promise.all([...s.data].map((a, o) => i.type._parseAsync(new z(s, a, s.path, o)))).then((a) => E.mergeArray(r, a));
+    const n = [...s.data].map((a, o) => i.type._parseSync(new z(s, a, s.path, o)));
     return E.mergeArray(r, n);
   }
   get element() {
@@ -2683,7 +2683,7 @@ class T extends x {
       const f = n[d], m = i.data[d];
       l.push({
         key: { status: "valid", value: d },
-        value: f._parse(new j(i, m, i.path, d)),
+        value: f._parse(new z(i, m, i.path, d)),
         alwaysSet: d in i.data
       });
     }
@@ -2708,7 +2708,7 @@ class T extends x {
         l.push({
           key: { status: "valid", value: f },
           value: d._parse(
-            new j(i, m, i.path, f)
+            new z(i, m, i.path, f)
             //, ctx.child(key), value, getParsedType(value)
           ),
           alwaysSet: f in i.data
@@ -2942,7 +2942,7 @@ T.lazycreate = (t, e) => new T({
   typeName: g.ZodObject,
   ...v(e)
 });
-class je extends x {
+class ze extends x {
   _parse(e) {
     const { ctx: s } = this._processInputParams(e), r = this._def.options;
     function i(n) {
@@ -3010,7 +3010,7 @@ class je extends x {
     return this._def.options;
   }
 }
-je.create = (t, e) => new je({
+ze.create = (t, e) => new ze({
   options: t,
   typeName: g.ZodUnion,
   ...v(e)
@@ -3104,7 +3104,7 @@ function ot(t, e) {
     return { valid: !0, data: i };
   } else return s === p.date && r === p.date && +t == +e ? { valid: !0, data: t } : { valid: !1 };
 }
-class ze extends x {
+class je extends x {
   _parse(e) {
     const { status: s, ctx: r } = this._processInputParams(e), i = (n, a) => {
       if (Vt(n) || Vt(a))
@@ -3136,7 +3136,7 @@ class ze extends x {
     }));
   }
 }
-ze.create = (t, e, s) => new ze({
+je.create = (t, e, s) => new je({
   left: t,
   right: e,
   typeName: g.ZodIntersection,
@@ -3168,7 +3168,7 @@ class ee extends x {
     }), s.dirty());
     const n = [...r.data].map((a, o) => {
       const l = this._def.items[o] || this._def.rest;
-      return l ? l._parse(new j(r, a, r.path, o)) : null;
+      return l ? l._parse(new z(r, a, r.path, o)) : null;
     }).filter((a) => !!a);
     return r.common.async ? Promise.all(n).then((a) => E.mergeArray(s, a)) : E.mergeArray(s, n);
   }
@@ -3210,8 +3210,8 @@ class Ze extends x {
     const i = [], n = this._def.keyType, a = this._def.valueType;
     for (const o in r.data)
       i.push({
-        key: n._parse(new j(r, o, r.path, o)),
-        value: a._parse(new j(r, r.data[o], r.path, o)),
+        key: n._parse(new z(r, o, r.path, o)),
+        value: a._parse(new z(r, r.data[o], r.path, o)),
         alwaysSet: o in r.data
       });
     return r.common.async ? E.mergeObjectAsync(s, i) : E.mergeObjectSync(s, i);
@@ -3249,8 +3249,8 @@ class Kt extends x {
         received: r.parsedType
       }), y;
     const i = this._def.keyType, n = this._def.valueType, a = [...r.data.entries()].map(([o, l], d) => ({
-      key: i._parse(new j(r, o, r.path, [d, "key"])),
-      value: n._parse(new j(r, l, r.path, [d, "value"]))
+      key: i._parse(new z(r, o, r.path, [d, "key"])),
+      value: n._parse(new z(r, l, r.path, [d, "value"]))
     }));
     if (r.common.async) {
       const o = /* @__PURE__ */ new Map();
@@ -3316,7 +3316,7 @@ class Te extends x {
       }
       return { status: s.value, value: d };
     }
-    const o = [...r.data.values()].map((l, d) => n._parse(new j(r, l, r.path, d)));
+    const o = [...r.data.values()].map((l, d) => n._parse(new z(r, l, r.path, d)));
     return r.common.async ? Promise.all(o).then((l) => a(l)) : a(o);
   }
   min(e, s) {
@@ -3768,9 +3768,9 @@ var g;
 const q = U.create, I = pe.create, Nr = it.create;
 G.create;
 const be = M.create, O = T.create;
-je.create;
-const Lr = vt.create;
 ze.create;
+const Lr = vt.create;
+je.create;
 ee.create;
 const Ke = Ze.create, ye = De.create, Je = te.create;
 Ue.create;
@@ -3787,11 +3787,11 @@ const Yt = 1, Pr = /^\d+\.\d+$/, C = q().min(1), ps = O({
 }).strict(), et = O({
   selector: C.optional(),
   bbox: ps
-}).strict(), jr = O({
+}).strict(), zr = O({
   selector: C.optional(),
   bbox: ps,
   value: q().optional()
-}).strict(), zr = Lr("kind", [
+}).strict(), jr = Lr("kind", [
   O({ kind: ye("click"), target: et }).strict(),
   O({ kind: ye("hover"), target: et }).strict(),
   O({
@@ -3801,12 +3801,12 @@ const Yt = 1, Pr = /^\d+\.\d+$/, C = q().min(1), ps = O({
   }).strict(),
   O({
     kind: ye("type-multi"),
-    targets: be(jr).min(1)
+    targets: be(zr).min(1)
   }).strict()
 ]), Zr = O({
   screenshot: C,
   captureSize: Mr,
-  cursor: zr.nullable()
+  cursor: jr.nullable()
 }).strict(), Dr = O({
   title: q().nullable(),
   text: q(),
@@ -4238,6 +4238,30 @@ const Z = {
     75% {
       transform: translateX(6px);
     }
+  }
+  /* Inline markup of step text. The --steppy-strong-*, --steppy-em-*,
+     --steppy-code-* and --steppy-link-* properties come from the host page
+     (steppy build writes them from textStyles); every fallback is the
+     browser's own default. */
+  :is(.steppy-tooltip, .steppy-step-title, .steppy-step-desc, .steppy-inline-desc) strong {
+    font-weight: var(--steppy-strong-weight, bolder);
+    color: var(--steppy-strong-color, inherit);
+  }
+  :is(.steppy-tooltip, .steppy-step-title, .steppy-step-desc, .steppy-inline-desc) em {
+    font-style: var(--steppy-em-style, italic);
+    color: var(--steppy-em-color, inherit);
+  }
+  :is(.steppy-tooltip, .steppy-step-title, .steppy-step-desc, .steppy-inline-desc) code {
+    font-family: var(--steppy-code-font, var(--steppy-font-mono));
+    font-size: var(--steppy-code-size, inherit);
+    color: var(--steppy-code-color, inherit);
+    background: var(--steppy-code-bg, transparent);
+    padding: var(--steppy-code-padding, 0);
+    border-radius: var(--steppy-code-radius, 0);
+  }
+  :is(.steppy-tooltip, .steppy-step-title, .steppy-step-desc, .steppy-inline-desc) a {
+    color: var(--steppy-link-color, LinkText);
+    text-decoration: var(--steppy-link-decoration, underline);
   }
   .steppy-tooltip {
     position: absolute;
@@ -5345,31 +5369,31 @@ w.createAnimator = (t) => new X(t);
 w.styles = _i;
 w.TEMPLATE_STORAGE_KEY = "steppy:active-template";
 k([
-  z({ type: String, reflect: !0 })
+  j({ type: String, reflect: !0 })
 ], w.prototype, "src", 2);
 k([
-  z({ type: String, reflect: !0 })
+  j({ type: String, reflect: !0 })
 ], w.prototype, "locale", 2);
 k([
-  z({ type: String, reflect: !0 })
+  j({ type: String, reflect: !0 })
 ], w.prototype, "variant", 2);
 k([
-  z({ type: Boolean, reflect: !0 })
+  j({ type: Boolean, reflect: !0 })
 ], w.prototype, "autoplay", 2);
 k([
-  z({ type: Number, reflect: !0, attribute: "start-index" })
+  j({ type: Number, reflect: !0, attribute: "start-index" })
 ], w.prototype, "startIndex", 2);
 k([
-  z({ type: String, reflect: !0 })
+  j({ type: String, reflect: !0 })
 ], w.prototype, "cursor", 2);
 k([
-  z({ type: String, reflect: !0 })
+  j({ type: String, reflect: !0 })
 ], w.prototype, "template", 2);
 k([
-  z({ type: Boolean, reflect: !0, attribute: "hide-layout-switcher" })
+  j({ type: Boolean, reflect: !0, attribute: "hide-layout-switcher" })
 ], w.prototype, "hideLayoutSwitcher", 2);
 k([
-  z({ attribute: !1 })
+  j({ attribute: !1 })
 ], w.prototype, "uiStrings", 2);
 k([
   N()
@@ -5423,7 +5447,7 @@ export {
   Qr as parseManifest,
   Ks as rectCenter,
   or as resolveStepContent,
-  jt as scaleBbox,
+  zt as scaleBbox,
   gt as scaleRect,
   Js as travelDuration
 };

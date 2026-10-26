@@ -997,3 +997,86 @@ def test_conditional_and_dropped_gate_steps_are_explained(tmp_path):
     infos = _codes(result, "info")
     assert "conditional-skipped" in infos and "gate-dropped" in infos
     assert _steps(result) == [("go", "go", "click", None)]
+
+
+# ── tour-hold and hover menus ─────────────────────────────────────────────────
+
+HOVER = """
+### 2. Open the menu
+- role: editor
+- action: hover
+- selector: '[data-testid="side-nav"]'
+"""
+
+
+def _click(n: int, test_id: str, extra: str = "") -> str:
+    return f"\n### {n}. Click\n- role: editor\n- action: click\n- selector: '[data-testid=\"{test_id}\"]'\n" + extra
+
+
+HOLD = "- tour-hold: '[data-testid=\"side-nav\"]'\n"
+
+
+def test_a_hold_zone_reaches_the_tour_file_as_a_test_id(tmp_path):
+    from steppy.tours.emit import tour_file_payload
+
+    result = _compile(tmp_path, OPEN + HOVER + _click(3, "toggle", HOLD) + _click(4, "monthly", HOLD))
+    assert not _codes(result, "error") and "hover-collapse-risk" not in _codes(result)
+    (tour,) = result.tours
+    assert [s.hold for s in tour.steps] == ["side-nav", "side-nav"]
+    payload = tour_file_payload(tour, "en", "b-1")
+    assert [s.get("hold") for s in payload["steps"]] == ["side-nav", "side-nav"]
+
+
+def test_a_step_without_a_hold_emits_no_hold_key(tmp_path):
+    from steppy.tours.emit import tour_file_payload
+
+    result = _compile(tmp_path, OPEN + _click(2, "go"))
+    assert "hold" not in tour_file_payload(result.tours[0], "en", "b-1")["steps"][0]
+
+
+def test_a_hold_zone_that_is_not_a_test_id_is_an_error(tmp_path):
+    result = _compile(tmp_path, OPEN + _click(2, "go", "- tour-hold: aside.sidebar\n"))
+    errors = [d for d in result.diagnostics if d.severity == "error"]
+    assert [d.code for d in errors] == ["target-not-test-id"]
+    assert "tour-hold" in errors[0].render()
+
+
+def test_a_hold_zone_on_a_centred_step_is_ignored_with_a_warning(tmp_path):
+    result = _compile(
+        tmp_path, OPEN + "\n### 2. Note\n- role: editor\n- action: wait\n- duration: 1s\n- tour: keep\n" + HOLD
+    )
+    assert "hold-ignored" in _codes(result, "warning")
+    assert result.tours[0].steps[0].hold is None
+
+
+def test_a_hold_zone_on_a_skipped_step_is_an_annotation_error(tmp_path):
+    result = _compile(tmp_path, OPEN + HOVER + HOLD + _click(3, "go"))
+    assert "annotation-on-skipped-step" in _codes(result, "error")
+
+
+def test_a_click_after_a_hover_without_a_hold_warns_once(tmp_path):
+    result = _compile(tmp_path, OPEN + HOVER + _click(3, "toggle") + _click(4, "monthly"))
+    warnings = [d for d in result.diagnostics if d.code == "hover-collapse-risk"]
+    assert len(warnings) == 1 and warnings[0].severity == "warning"
+    assert "tour-hold" in warnings[0].render()
+
+
+def test_a_held_chain_warns_on_the_first_click_that_drops_the_hold(tmp_path):
+    result = _compile(tmp_path, OPEN + HOVER + _click(3, "toggle", HOLD) + _click(4, "monthly"))
+    (warning,) = [d for d in result.diagnostics if d.code == "hover-collapse-risk"]
+    assert "step 4" in warning.render()
+
+
+@pytest.mark.parametrize(
+    "between",
+    [
+        "",  # clicking the hovered element itself
+        "\n### 3. Elsewhere\n- role: editor\n- action: navigate\n- target: /reports\n",
+        "\n### 3. Type\n- role: editor\n- action: fill\n- selector: '[data-testid=\"q\"]'\n- value: x\n",
+    ],
+    ids=["same-element", "navigate", "other-kept-step"],
+)
+def test_no_hover_collapse_risk_when_the_hover_no_longer_matters(tmp_path, between):
+    clicked = "side-nav" if not between else "monthly"
+    result = _compile(tmp_path, OPEN + HOVER + between + _click(5, clicked))
+    assert "hover-collapse-risk" not in _codes(result)

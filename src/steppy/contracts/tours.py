@@ -144,6 +144,7 @@ class TourStep(_Strict):
     title: Optional[str] = None
     text: Optional[str] = None
     placement: Optional[Placement] = None
+    hold: Optional[str] = Field(None, pattern=TEST_ID_PATTERN)
     layouts: Optional[list[str]] = None
 
     @field_validator("id")
@@ -153,7 +154,7 @@ class TourStep(_Strict):
             raise ValueError(f"step id {v!r} does not match {STEP_ID_PATTERN}")
         return v
 
-    @field_validator("target", "waitFor")
+    @field_validator("target", "waitFor", "hold")
     @classmethod
     def _test_id(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and not _full(TEST_ID_PATTERN, v):

@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.integration.tour_geometry import DESKTOP, PHONE, SHEETS, clear_of_dialogs, points_at
+from tests.integration.tour_geometry import DESKTOP, PHONE, SHEETS, clear_of_dialogs, measure, points_at
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("STEPPY_TOUR_E2E") != "1",
@@ -80,7 +80,8 @@ def open_demo(browser):
         page.on("pageerror", lambda e: page.errors.append(str(e)))
         page.goto(path)
         page.wait_for_selector(
-            '[data-testid="invoices-footer"], [data-testid="invoice-detail"], [data-testid="customers-page"]',
+            '[data-testid="invoices-footer"], [data-testid="invoice-detail"], [data-testid="customers-page"], '
+            '[data-testid="reports-page"]',
             state="attached",
         )
         poll(page, "() => customElements.get('steppy-tour-host') !== undefined")
@@ -633,3 +634,71 @@ def test_a_focus_trap_that_pulls_focus_back_does_not_fight_the_bubble(open_demo)
     page.click(f'{BUBBLE} [part~="skip"]')
     at_step(page, "save-invoice-btn")
     assert events(page, "tour-dismiss") == []
+
+
+# ── Hover menus: a step's hold zone ──────────────────────────────────────────
+
+
+def _monthly_report_tours(tmp_path) -> Path:
+    """The demo project plus the /reports hover-menu scenario (``tour-hold`` on both clicks), compiled."""
+    from typer.testing import CliRunner
+
+    from steppy.cli import app
+    from tests.integration.test_tour_replay_it import _hover_menu
+
+    root = tmp_path / "project"
+    shutil.copytree(DEMO / "project", root)
+    _hover_menu(hold=True)(root)
+    cwd = os.getcwd()
+    os.chdir(root)
+    try:
+        result = CliRunner().invoke(app, ["tours"])
+    finally:
+        os.chdir(cwd)
+    assert result.exit_code == 0, result.output
+    return root / "app-assets" / "tours"
+
+
+def _overlap(a, b) -> bool:
+    return (
+        a["x"] < b["x"] + b["w"] and b["x"] < a["x"] + a["w"] and a["y"] < b["y"] + b["h"] and b["y"] < a["y"] + a["h"]
+    )
+
+
+def test_the_bubble_never_covers_the_hold_zone_and_the_menu_stays_open(open_demo, tmp_path):
+    page = open_demo(tours_dir=_monthly_report_tours(tmp_path), path="/reports")
+    assert start(page, "monthly-report") is True
+    at_step(page, "side-reports-toggle")
+    page.hover('[data-testid="side-nav"]')
+    points_at(page, "side-reports-toggle")
+    page.click('[data-testid="side-reports-toggle"]')
+    g = points_at(page, "side-report-monthly")
+    # The popover sits beside the expanded menu, not over it, while the spotlight frames the link.
+    zone = page.locator('[data-testid="side-nav"]').bounding_box()
+    assert zone["width"] >= 200, "the menu collapsed"
+    assert not _overlap(g["bubble"], {"x": zone["x"], "y": zone["y"], "w": zone["width"], "h": zone["height"]}), g
+    assert page.locator('[data-testid="side-nav"][data-expanded]').count() == 1
+    page.click('[data-testid="side-report-monthly"]')
+    wait_event(page, "tour-complete")
+    assert page.locator('[data-testid="report-title"]').text_content() == "Monthly report"
+    assert measure(page)["stepId"] is None
+    assert not page.errors
+
+
+# ── Inline text styles ───────────────────────────────────────────────────────
+
+_STRONG_COLOR = """() => {
+  const body = document.querySelector('steppy-tour-host').shadowRoot.querySelector('[part~="body"]');
+  return getComputedStyle(body.querySelector('strong')).color;
+}"""
+
+
+def test_strong_text_follows_the_guide_property_and_the_theme_wins(open_demo):
+    page = open_demo(path="/invoices/1001")
+    # CSSOM, not a <style> tag: the demo's CSP refuses inline styles, as an app's may.
+    page.evaluate("document.documentElement.style.setProperty('--steppy-strong-color', 'rgb(154, 52, 18)')")
+    assert start(page, "send-invoice", params={"invoiceId": "1001"}, step="send-invoice-btn") is True
+    at_step(page, "send-invoice-btn")
+    assert page.evaluate(_STRONG_COLOR) == "rgb(154, 52, 18)"
+    page.evaluate("document.querySelector('steppy-tour-host').theme = { strongColor: 'rgb(11, 92, 173)' }")
+    poll(page, f"() => ({_STRONG_COLOR})() === 'rgb(11, 92, 173)'")

@@ -56,6 +56,10 @@ const TEXT = {
     no: 'No',
     removed: 'Inactive customers removed.',
     customersFooter: 'End of the customer list.',
+    reports: 'Reports',
+    monthly: 'Monthly report',
+    yearly: 'Yearly report',
+    reportsHint: 'Hover the side menu to open it.',
   },
   fr: {
     invoices: 'Factures',
@@ -93,6 +97,10 @@ const TEXT = {
     no: 'Non',
     removed: 'Clients inactifs retirés.',
     customersFooter: 'Fin de la liste des clients.',
+    reports: 'Rapports',
+    monthly: 'Rapport mensuel',
+    yearly: 'Rapport annuel',
+    reportsHint: 'Survolez le menu latéral pour l’ouvrir.',
   },
 };
 
@@ -166,7 +174,9 @@ function render() {
     ? detailPage(decodeURIComponent(detail[1]))
     : /^\/customers\/?$/.test(location.pathname)
       ? customersPage()
-      : listPage();
+      : /^\/reports\/?$/.test(location.pathname)
+        ? reportsPage()
+        : listPage();
   view.replaceChildren(page);
 }
 
@@ -251,6 +261,38 @@ function customersPage() {
     ),
     el('p', { testid: 'customers-footer' }, t('customersFooter')),
   );
+}
+
+// A sidebar that expands while the pointer is over it and collapses on
+// mouseleave, with a submenu that only shows while it is expanded: the hover
+// menu `tour-hold` exists for.
+function reportsPage() {
+  let open = false;
+  const title = el('h1', { testid: 'report-title' }, t('reports'));
+  const show = (key) => () => {
+    title.textContent = t(key);
+  };
+  const submenu = el(
+    'ul',
+    { class: 'side-submenu', testid: 'side-reports-menu' },
+    el('li', {}, el('button', { type: 'button', testid: 'side-report-monthly', onclick: show('monthly') }, t('monthly'))),
+    el('li', {}, el('button', { type: 'button', testid: 'side-report-yearly', onclick: show('yearly') }, t('yearly'))),
+  );
+  const toggle = el(
+    'button',
+    { type: 'button', class: 'side-toggle', testid: 'side-reports-toggle', 'aria-expanded': 'false' },
+    el('span', { 'aria-hidden': 'true' }, '▤'),
+    el('span', { class: 'side-label' }, t('reports')),
+  );
+  toggle.addEventListener('click', () => {
+    open = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    submenu.toggleAttribute('data-open', open);
+  });
+  const aside = el('aside', { class: 'side-nav', testid: 'side-nav' }, toggle, submenu);
+  aside.addEventListener('mouseenter', () => aside.setAttribute('data-expanded', ''));
+  aside.addEventListener('mouseleave', () => aside.removeAttribute('data-expanded'));
+  return el('section', { class: 'page reports-page', testid: 'reports-page' }, aside, title, el('p', {}, t('reportsHint')));
 }
 
 // ── A confirmation (PrimeNG ConfirmDialog's markup: an alertdialog centred in

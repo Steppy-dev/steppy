@@ -234,6 +234,7 @@ def test_universal_fields_are_accepted_everywhere(field):
         "tour_text": {"en": "hi"},
         "tour_advance": "manual",
         "tour_placement": "top",
+        "tour_hold": '[data-testid="side-nav"]',
     }[field]
     if field == "when":
         # `when:` reads the page, so it needs a role — and `wait` is the one

@@ -71,6 +71,8 @@ def tour_file_payload(tour: CompiledTour, locale: str, build_id: str) -> dict:
             step["text"] = text
         if plan.placement and plan.placement != "auto":
             step["placement"] = plan.placement
+        if plan.hold:
+            step["hold"] = plan.hold
         if plan.layouts:
             step["layouts"] = list(plan.layouts)
         steps.append(step)

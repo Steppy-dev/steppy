@@ -266,6 +266,7 @@ tour:
 | `tour-text` | like `guide-text` | The step's tour text, per locale. Wins over `guide-text`. |
 | `tour-advance` | `click`, `input`, `change`, `visible`, `manual` | What moves the tour on. Must be something the step's own action does (`advance-not-replayable`). |
 | `tour-placement` | `top`, `bottom`, `left`, `right`, `auto` | The preferred side of the target. |
+| `tour-hold` | one test-id selector, like a target | An element the popover never covers while the step shows: the hover menu the target sits in (see [Hover menus](#hover-menus)). A `target-not-test-id` error when it is not one test-id. |
 
 `tour-*` keys on a step inference leaves out are an error unless the step also
 says `tour: keep`. Frontmatter `tour:` and step `- tour:` are different keys:
@@ -292,6 +293,39 @@ because the CI replay must be able to perform it:
 | `toggle`, `select`, `select-option`, `pick-date`, `pick-time` | `change` (default), `click`, `manual` |
 | `upload` | `change` (default; `manual` behind a `guide-cursor` trigger), `manual` |
 | an information step (an assertion or a `custom` with text), a step kept by `tour: keep` | `manual` (default), `visible` |
+
+<a id="hover-menus"></a>
+**Hover menus.** The overlay blocks no pointer events: its layer and spotlight
+let every hover and click through to the app. Its one element that takes the
+pointer is the popover. So a menu that opens on hover and closes on
+`mouseleave` (an expanding sidebar, a flyout, a mega menu) closes whenever the
+popover lands on it, which happens in three ways. The user moves the pointer
+across the popover. The popover of the next step appears under a resting
+pointer. Or the replay's `hover` hits the popover (Playwright reports
+`<steppy-tour-host> intercepts pointer events`). `tour-hold` names the menu on
+each step that needs it open:
+
+```markdown
+### 3. Open the reports submenu
+- action: click
+- selector: '[data-testid="side-reports-toggle"]'
+- tour-hold: '[data-testid="side-nav"]'
+
+### 4. Pick the monthly report
+- action: click
+- selector: '[data-testid="side-report-monthly"]'
+- tour-hold: '[data-testid="side-nav"]'
+```
+
+The spotlight and the popover still point at the step's own target; the
+popover is placed on a side clear of the zone, re-placed when the zone grows
+(a rail that expands on hover), and becomes a sheet at the top or bottom of
+the screen when no side is clear. The CI replay checks the popover is clear of
+the zone and that the pointer rests on it. A `hover` followed by a click on
+another element with no `tour-hold` is the `hover-collapse-risk` warning.
+`tour-hold` cannot stop a genuine `mouseleave`: on a `manual` step the user
+moves to the popover's Next button. For that, keep the menu open from the app
+while a tour runs (see the `steppy-app-tours` skill, "Hover menus").
 
 **Test-ids** are values of `^[A-Za-z0-9_.:/-]{1,128}$` — colons and slashes
 are allowed, quotes and spaces are not.
@@ -570,6 +604,8 @@ left out.
 | `entry-id-segment` | warning | The inferred entry route contains fixture-looking ids | Set `tour.entry` with a `:param` |
 | `entry-unknown` | warning | `tour: start` follows steps that may change the page (or no `navigate`), and there is no `tour.entry`: the tour has no entry route | Set `tour.entry` to the route of the page the tour starts on |
 | `placement-ignored` | warning | `tour-placement` on a centred step | Remove it |
+| `hold-ignored` | warning | `tour-hold` on a centred step, whose popover covers no target | Remove it |
+| `hover-collapse-risk` | warning | A `hover`, then a click on another element with no `tour-hold`: if the popover lands on the hovered menu, the menu closes | Add `tour-hold` naming the hovered element (see [Hover menus](#hover-menus)) |
 | `text-link-dropped` | warning | A link to neither an app route nor the guide (or one that resolves off-site, such as `/.//host`) | It renders as text |
 | `app-url-unresolved` | warning | `apps.<role>.url` or `tours.guide_base_url` still holds an unset `${VAR}` at compile time | Set the variable where you compile |
 | `layout-media-overlap` | warning | Two layout queries match the same width | Make the queries disjoint |
@@ -742,7 +778,7 @@ One file per tour and locale:
 | `buildId` | The app build these tours belong to. |
 | `integrity` | SHA-384 SRI value of each file's exact bytes. |
 | `entry.route` | The route the tour starts on, relative to the app's base URL. |
-| `target` / `waitFor` | Test-id values (not selectors). |
+| `target` / `waitFor` / `hold` | Test-id values (not selectors). `hold` is present only on a step with `tour-hold`. |
 | `advance.on` | `click`, `input`, `change`, `visible`, `manual`. |
 | `guideUrl` | The "Open the full guide" link, on `guide_base_url`'s origin only. |
 
@@ -1288,6 +1324,18 @@ on the element:
 | **Spotlight** | | |
 | `--steppy-tour-ring-width` | `2px` | the accent ring around the target |
 | `--steppy-tour-spotlight-radius` | the popover radius | |
+| **Inline text in the step body** (each falls back to the guide property in brackets) | | |
+| `--steppy-tour-strong-weight` | `bolder` | `**strong**` weight (`--steppy-strong-weight`) |
+| `--steppy-tour-strong-color` | the bubble text colour | `**strong**` colour (`--steppy-strong-color`) |
+| `--steppy-tour-em-style` | `italic` | `*em*` style (`--steppy-em-style`) |
+| `--steppy-tour-em-color` | the bubble text colour | `*em*` colour (`--steppy-em-color`) |
+| `--steppy-tour-code-font` | a monospace stack | `` `code` `` font (`--steppy-code-font`) |
+| `--steppy-tour-code-size` | `0.92em` | (`--steppy-code-size`) |
+| `--steppy-tour-code-color` | the bubble text colour | (`--steppy-code-color`) |
+| `--steppy-tour-code-bg` | `transparent` | (`--steppy-code-bg`) |
+| `--steppy-tour-code-padding` | `0` | (`--steppy-code-padding`) |
+| `--steppy-tour-code-radius` | `0` | (`--steppy-code-radius`) |
+| `--steppy-tour-link-decoration` | `underline` | links in step text (`--steppy-link-decoration`); `--steppy-tour-link` falls back to `--steppy-link-color` |
 
 **Appearance.** The default bubble is dark. `appearance="light"` switches the
 defaults to a light palette that also meets WCAG AA, and `appearance="auto"`
@@ -1308,7 +1356,10 @@ host.theme = { accent: '#0b5cad', width: '360px', buttonWeight: '600' };
 ```
 
 Precedence, strongest first: `theme` → a `steppy-tour-host { … }` rule →
-`:root` → the appearance's defaults. Theming comes from your app only: a tour
+`:root` → for the inline-text tokens, the guide's `--steppy-strong-*`, `--steppy-em-*`,
+`--steppy-code-*` and `--steppy-link-*` properties (the ones `steppy build` writes from
+`textStyles`, so one set styles an app's guides and its tours) → the appearance's
+defaults. Theming comes from your app only: a tour
 file can never carry a style.
 
 The defaults meet WCAG AA; keep that when you override them. Every visible
@@ -1461,7 +1512,8 @@ JUnit treat it like its scenario). It:
    those steps reached, failing if the overlay had to navigate to `tour.entry`;
 3. for each tour step, checks the popover shows that step, anchored on the
    element the step acts on (the spotlight around its centre, the popover not
-   covering it); performs the scenario's own action for it — the exact code
+   covering it), and for a step with `tour-hold`, that the popover is clear of
+   the zone and the pointer rests on it; performs the scenario's own action for it — the exact code
    the scenario test runs; and checks the tour moved on;
 4. checks `tour-complete` fired and no `tour-error` did;
 5. runs the steps after `tour: end`, if any.
@@ -1492,6 +1544,7 @@ test-id "invoice-title"): target-timeout: the overlay never found [data-testid="
 | Symptom | Likely cause |
 |---|---|
 | `target-timeout` in production | The test-id changed and the tours were not regenerated, or the element renders late (raise `target-timeout`). |
+| A hover menu closes during a tour, or the replay's `hover` says `<steppy-tour-host> intercepts pointer events` | The popover lands on the menu. Add `tour-hold` (see [Hover menus](#hover-menus)). |
 | `target-not-test-id` at compile time | The step's selector is a CSS path. Point it at the element's test-id, or `tour: skip` / `tour: keep`. |
 | `unguided-action` | A `custom` step clicks through JavaScript. Use `click` with `synthetic: true`, or add `guide-cursor`. |
 | `fixture-leak` | Step text repeats a value the test types. Write `tour-text` without it. |

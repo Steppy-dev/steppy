@@ -235,6 +235,9 @@ def build_replay(scenario: Scenario, plan: ReplayPlan, config: SteppyConfig) -> 
             for ts in e.tour_steps
         ],
     }
+    for step_spec, ts in zip(spec["steps"], tour_steps):
+        if ts.hold:
+            step_spec["hold"] = ts.hold
     assert len(spec["steps"]) == len(tour_steps)
     slug_ = scenario.slug.replace("-", "_")
     return ReplayRender(

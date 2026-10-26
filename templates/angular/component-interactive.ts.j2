@@ -71,6 +71,8 @@ function ensurePlayerLoaded(): Promise<void> {
   styles: [`
     :host { display: block; }
     .steppy-guide-host { display: block; width: 100%; }
+{% if text_styles_css %}
+{{ text_styles_css | indent(4, first=true) }}{% endif %}
   `],
   encapsulation: ViewEncapsulation.None,
 })

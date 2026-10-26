@@ -40,6 +40,19 @@
         "advance": {
           "$ref": "#/$defs/TourAdvance"
         },
+        "hold": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_.:/-]{1,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hold"
+        },
         "id": {
           "pattern": "^[A-Za-z0-9_.:/-]{1,128}$",
           "title": "Id",

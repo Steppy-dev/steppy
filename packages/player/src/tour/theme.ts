@@ -19,6 +19,18 @@ export const TOUR_THEME_KEYS = [
   'scrim',
   'link',
   'border',
+  // Inline markup in step text (each falls back to the guide's --steppy-* property)
+  'strongWeight',
+  'strongColor',
+  'emStyle',
+  'emColor',
+  'codeFont',
+  'codeSize',
+  'codeColor',
+  'codeBg',
+  'codePadding',
+  'codeRadius',
+  'linkDecoration',
   // Shape and type
   'radius',
   'width',

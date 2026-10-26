@@ -28,6 +28,7 @@ from .build_models import (
     GuideMode,
     LocalizedText,
     SeoMode,
+    TextStylesConfig,
 )
 from .guide import GuideAssembler, register_jinja_filters, step_stem
 from .locales import base_language, normalize_locale, og_locale
@@ -35,6 +36,41 @@ from .models import SteppyConfig
 from .naming import GUIDE_SITE_TOURS_DIR
 from .sitemap import Alternate, SitemapUrl, limit_warnings, render_sitemap
 from .parser import parse_scenario_file
+
+
+#: The step-text rule each ``textStyles`` element emits, keyed by element. The
+#: fallbacks are the browser's own defaults, so a property left unset renders
+#: as it did before the block existed.
+_TEXT_STYLE_RULES = {
+    "strong": "strong { font-weight: var(--steppy-strong-weight, bolder); color: var(--steppy-strong-color, inherit); }",
+    "em": "em { font-style: var(--steppy-em-style, italic); color: var(--steppy-em-color, inherit); }",
+    "code": (
+        "code { font-family: var(--steppy-code-font, monospace); font-size: var(--steppy-code-size, inherit);"
+        " color: var(--steppy-code-color, inherit); background: var(--steppy-code-bg, transparent);"
+        " padding: var(--steppy-code-padding, 0); border-radius: var(--steppy-code-radius, 0); }"
+    ),
+    "link": "a { color: var(--steppy-link-color, LinkText); text-decoration: var(--steppy-link-decoration, underline); }",
+}
+
+
+def text_styles_css(styles: Optional[TextStylesConfig], scope: str, *, rules: bool = True) -> str:
+    """``textStyles`` as CSS: its custom properties on ``scope``, then (with
+    ``rules``) the step-text rules of the elements it configures. Empty when
+    the block is unset, so every template that interpolates it stays
+    byte-identical without one."""
+    if styles is None:
+        return ""
+    declarations = styles.declarations()
+    if not declarations:
+        return ""
+    lines = [f"{scope} {{"]
+    lines += [f"  {name}: {value};" for name, value in declarations]
+    lines.append("}")
+    if rules:
+        for element in ("strong", "em", "code", "link"):
+            if getattr(styles, element) is not None:
+                lines.append(".steppy-guide .steppy-step-content " + _TEXT_STYLE_RULES[element])
+    return "\n".join(lines) + "\n"
 
 
 class BuildError(Exception):
@@ -945,6 +981,7 @@ class BuildAssembler:
                     role=role.title(),
                     steps=guide_steps,
                     include_styles=include_styles,
+                    text_styles_css=text_styles_css(self.build_config.text_styles, ".steppy-guide"),
                 )
                 fragments_by_locale[locale][layout_key] = html_content
                 steps_by_locale[locale][layout_key] = guide_steps
@@ -1164,6 +1201,9 @@ class BuildAssembler:
                 has_multiple_layouts=has_multiple_layouts,
                 cursor_mode=cursor_mode,
                 default_template=template,
+                # ViewEncapsulation.None: a :host selector would match nothing, so the
+                # properties go on the player element itself and inherit into its shadow root.
+                text_styles_css=text_styles_css(self.build_config.text_styles, ".steppy-guide-host", rules=False),
             )
             self._write_file(
                 guide_dir / f"{entry.slug}-interactive.component.ts",
@@ -2478,7 +2518,7 @@ class BuildAssembler:
         they can be reused verbatim instead of re-rendered against a new depth.
         """
         tpl = self.env.get_template("guide.book.html.j2")
-        css = self.env.get_template("static/guides.css").render()
+        css = self._static_css()
         groups_by_slug = self.build_config.groups_by_slug()
         default_locale = self.build_config.default_locale
         for locale in self.build_config.locales:
@@ -2571,9 +2611,15 @@ class BuildAssembler:
         """Render the shared guides.css through Jinja's loader so user template
         overrides in templates/static/guides.css take precedence over the bundled
         copy (same precedence rule as every other template)."""
-        tpl = self.env.get_template("static/guides.css")
-        content = tpl.render()
-        self._write_file(output_dir / "assets" / "guides.css", content, results, dry_run)
+        self._write_file(output_dir / "assets" / "guides.css", self._static_css(), results, dry_run)
+
+    def _static_css(self) -> str:
+        """``static/guides.css``, with the ``textStyles`` block appended on ``:root`` (the
+        interactive and video pages link this file too, and custom properties inherit
+        into the player's shadow root)."""
+        return self.env.get_template("static/guides.css").render(
+            text_styles_css=text_styles_css(self.build_config.text_styles, ":root")
+        )
 
     def _write_static_cursor_js(self, output_dir: Path, results: dict[str, str], dry_run: bool) -> None:
         """Render the shared cursor animation driver to assets/cursor.js. Static

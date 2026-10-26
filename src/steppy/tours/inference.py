@@ -33,7 +33,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..models import Scenario, Step
-from ..testids import TargetExtraction
+from ..testids import TargetExtraction, extract_test_id
 from ..tour_spec import MAX_STEPS, TARGETED_ADVANCE_KINDS
 from .actions import Candidate, infer_candidate, natural_target, page_change, replayable
 from .diagnostics import DiagSink
@@ -43,7 +43,22 @@ from .settings import ToursSettings
 
 
 def _annotated(step: Step) -> bool:
-    return bool(step.tour_text or step.tour_advance or step.tour_placement or step.tour)
+    return bool(step.tour_text or step.tour_advance or step.tour_placement or step.tour_hold or step.tour)
+
+
+def _hold_test_id(step: Step, attr: str, sink: DiagSink) -> Optional[str]:
+    """The test-id ``tour-hold`` names, held to the same single-test-id rule as a target."""
+    if not step.tour_hold:
+        return None
+    ext = extract_test_id(step.tour_hold, attr)
+    if not ext.ok:
+        sink.add(
+            "target-not-test-id",
+            f"tour-hold '{step.tour_hold}' is not a test-id: {ext.explain()}",
+            step=step,
+        )
+        return None
+    return ext.test_id
 
 
 def resolve_role(scenario: Scenario, configured_roles: set[str], sink: DiagSink) -> Optional[str]:
@@ -180,6 +195,8 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
     # (entry index, list of plans) so replay tour_steps can be filled after ids are assigned
     entries: list[tuple[int, str, str, list[TourStepPlan], bool]] = []
     pending_gate: Optional[str] = None
+    # The test-id (or None) of a hover the next kept clicks may need held open, once one ran.
+    hovered: Optional[tuple[Optional[str]]] = None
     # (gate, the step that dropped it, why): reported only if a kept step would have waited for it.
     stale: Optional[tuple[str, Step, str]] = None
     attr = settings.test_id_attribute
@@ -223,6 +240,7 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
             pending_gate, stale = cand.gate, None
             entries.append((i, "run", "gate", [], False))
         elif cand.kind == "kept":
+            hold = _hold_test_id(step, attr, sink)
             plans: list[TourStepPlan] = []
             for j, sub in enumerate(cand.subs):
                 tid = sub.extraction.test_id if sub.extraction is not None and sub.extraction.ok else None
@@ -254,12 +272,28 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
                         advance=advance,
                         wait_for=wait_for,
                         placement=step.tour_placement if step.tour_placement and tid else None,
+                        hold=hold if tid else None,
                         layouts=tuple(step.layouts) if step.layouts else None,
                         field=sub.field,
                     )
                 )
             if step.tour_placement and step.tour_placement != "auto" and not any(p.target for p in plans):
                 sink.add("placement-ignored", "a centred step has no side to place the popover on", step=step)
+            if hold and not any(p.target for p in plans):
+                sink.add("hold-ignored", "a centred step's popover covers no target, so it holds nothing", step=step)
+            if hovered is not None:
+                if cand.family != "click":
+                    hovered = None
+                elif not hold:
+                    if hovered[0] is None or hovered[0] not in {p.target for p in plans}:
+                        sink.add(
+                            "hover-collapse-risk",
+                            "this click follows a hover, and nothing keeps the hovered element open: "
+                            "when the popover covers it, the pointer leaves it and a hover menu closes",
+                            step=step,
+                            hint="add `tour-hold:` naming the element that must stay hovered (its test-id)",
+                        )
+                    hovered = None
             kept.extend(plans)
             pending_gate, stale = None, None
             entries.append((i, "tour", "tour-step", plans, False))
@@ -280,6 +314,11 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
                 )
             elif cand.reason != "tour-skip":
                 sink.add("step-skipped", f"left out of the tour ({cand.reason or step.action})", step=step)
+            if step.action == "hover":
+                ext = extract_test_id(step.selector, attr, within=step.within, match=step.match)
+                hovered = (ext.test_id if ext.ok else None,)
+            elif step.action == "navigate" or cand.reloads_page:
+                hovered = None
             why = page_change(step) if pending_gate else None
             if why:
                 stale, pending_gate = (pending_gate, step, why), None
@@ -326,6 +365,7 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
                 layouts=p.layouts,
                 field=p.field,
                 source_selector=p.source_selector,
+                hold=p.hold,
             )
             for p in plans
         )
@@ -439,7 +479,7 @@ def _navigate_still_open(steps: list[Step], navs: list[int], start: int, in_role
 def _apply_annotations(step: Step, cand: Candidate, settings: ToursSettings, sink: DiagSink) -> Candidate:
     """Fold ``tour`` / ``tour-advance`` / ``tour-placement`` / ``tour-text`` into the candidate."""
     attr = settings.test_id_attribute
-    extra = bool(step.tour_text or step.tour_advance or step.tour_placement)
+    extra = bool(step.tour_text or step.tour_advance or step.tour_placement or step.tour_hold)
 
     if cand.kind == "skip" and cand.reason == "conditional":
         if _marked(step, "keep"):

@@ -103,6 +103,15 @@ class FakeLocator:
         self.page.clicks.append(self.selector)
         self.page.buttons[self.selector]["on_click"]()
 
+    def evaluate(self, script):
+        assert ":hover" in script
+        return self.selector in self.page.hovered
+
+    def hover(self, timeout=None):
+        if self.page.hover_error:
+            raise RuntimeError(self.page.hover_error)
+        self.page.hovered.add(self.selector)
+
 
 class FakePage:
     """The overlay as the helper sees it: a snapshot dict plus scripted reactions."""
@@ -127,6 +136,8 @@ class FakePage:
         self.boxes = {}
         self.buttons = {}
         self.clicks = []
+        self.hovered = set()
+        self.hover_error = None
         self.evaluated = []
         self.start_args = None
         self.start_result = {"ok": True}
@@ -588,3 +599,54 @@ def test_an_error_without_a_step_reads_cleanly(mod):
 
 def test_a_failure_message_quotes_selectors_safely(mod):
     assert mod._css_string('a"b\\c') == '"a\\"b\\\\c"'
+
+
+# ── Hold zones ──────────────────────────────────────────────────────────────
+
+ZONE = '[data-testid="side-nav"]'
+
+
+def _held(mod):
+    spec = _spec()
+    spec["steps"][0]["hold"] = "side-nav"
+    page, tour = _started(mod, spec)
+    return page, tour
+
+
+def test_a_hold_zone_clear_of_the_popover_is_hovered(mod):
+    page, tour = _held(mod)
+    page.boxes[ZONE] = {"x": 0, "y": 0, "width": 90, "height": 800}  # the bubble starts at x=100
+    mod._tour_hold(tour, "new-invoice-btn")
+    assert ZONE in page.hovered
+
+
+def test_an_already_hovered_zone_is_left_alone(mod):
+    page, tour = _held(mod)
+    page.boxes[ZONE] = {"x": 0, "y": 0, "width": 90, "height": 800}
+    page.hovered.add(ZONE)
+    page.hover_error = "must not move the pointer"
+    mod._tour_hold(tour, "new-invoice-btn")
+
+
+def test_a_popover_over_the_hold_zone_fails_the_step(mod):
+    page, tour = _held(mod)
+    page.boxes[ZONE] = {"x": 0, "y": 0, "width": 240, "height": 800}
+    with pytest.raises(mod.TourReplayError) as excinfo:
+        mod._tour_hold(tour, "new-invoice-btn")
+    assert 'the popover covers its hold zone "side-nav"' in str(excinfo.value)
+
+
+def test_a_missing_hold_zone_fails_the_step(mod):
+    page, tour = _held(mod)
+    with pytest.raises(mod.TourReplayError) as excinfo:
+        mod._tour_hold(tour, "new-invoice-btn")
+    assert 'hold zone test-id "side-nav" is not on the page' in str(excinfo.value)
+
+
+def test_a_hold_zone_the_pointer_cannot_reach_fails_the_step(mod):
+    page, tour = _held(mod)
+    page.boxes[ZONE] = {"x": 0, "y": 0, "width": 90, "height": 800}
+    page.hover_error = "<steppy-tour-host> intercepts pointer events"
+    with pytest.raises(mod.TourReplayError) as excinfo:
+        mod._tour_hold(tour, "new-invoice-btn")
+    assert "intercepts pointer events" in str(excinfo.value)

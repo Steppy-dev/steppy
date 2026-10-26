@@ -22,7 +22,7 @@ from playwright.sync_api import Page, expect
 
 from .conftest import _assert_stays_hidden, _wait_until, _when, call_helper, take_screenshot_with_bbox, take_fillform_frames, take_fillform_progressive_frames, _safe_bbox, _safe_bbox_scrolled, _safe_bbox_locator, fill_login_credentials, capture, capture_dom, synthetic_click, _resolve_date, _pick_date, _pick_time, _interp, _interp_val, SKIP_ASSERTS, _step_runs, _steppy_mark_step, _steppy_end_step
 {% if tour_replay %}
-from ._steppy_tours import TourProbe, _tour_start, _tour_expect_step, _tour_ensure_advanced, _tour_expect_complete
+from ._steppy_tours import TourProbe, _tour_start, _tour_expect_step, _tour_ensure_advanced, _tour_expect_complete{% if tour_replay.spec.steps | selectattr("hold") | list %}, _tour_hold{% endif %}
 {% endif %}
 
 SCENARIO = "{{ scenario.slug }}"

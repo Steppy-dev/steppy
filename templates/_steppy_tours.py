@@ -372,6 +372,40 @@ def _anchored(tour, selector, snap):
     return None
 
 
+def _tour_hold(tour, step_id):
+    """The step's ``hold`` zone is on the page, uncovered by the popover, and hovered.
+
+    A hover menu stays open only while the pointer is over it, and the popover
+    is the overlay's one element that takes the pointer: a popover drawn over
+    the zone is exactly what closes the menu for a user.
+    """
+    zone = tour.steps[step_id].get("hold")
+    locator = tour.page.locator(f"[{tour.spec['attribute']}={_css_string(zone)}]").first
+    try:
+        box = locator.bounding_box(timeout=tour.timeout_ms)
+    except Exception:
+        box = None
+    if box is None:
+        tour.fail(step_id, f'its hold zone test-id "{zone}" is not on the page', "renamed in the app?")
+    bubble = (tour.snapshot().get("bubble") or {}).get("rect")
+    if bubble and _overlap(bubble, {"x": box["x"], "y": box["y"], "w": box["width"], "h": box["height"]}):
+        tour.fail(step_id, f'the popover covers its hold zone "{zone}"', "is the overlay older than its tour files?")
+    if not locator.evaluate("(el) => el.matches(':hover')"):
+        try:
+            locator.hover(timeout=ADVANCE_TIMEOUT_MS)
+        except Exception as exc:
+            tour.fail(step_id, f'the pointer cannot rest on its hold zone "{zone}": {exc}')
+
+
+def _overlap(a, b):
+    return (
+        a["x"] + SLACK_PX < b["x"] + b["w"]
+        and b["x"] + SLACK_PX < a["x"] + a["w"]
+        and a["y"] + SLACK_PX < b["y"] + b["h"]
+        and b["y"] + SLACK_PX < a["y"] + a["h"]
+    )
+
+
 def _tour_ensure_advanced(tour, step_id):
     kind = tour.steps[step_id]["advance"]
     if kind in ("input", "manual"):

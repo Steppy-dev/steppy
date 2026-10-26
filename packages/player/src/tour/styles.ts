@@ -22,6 +22,9 @@ import { TOUR_THEME_KEYS, privateProperty, themeProperty, type TourThemeKey } fr
 /** Tokens whose default is another token, so they follow its override. */
 const DERIVED = {
   link: `var(${privateProperty('bubbleFg')})`,
+  strongColor: `var(${privateProperty('bubbleFg')})`,
+  emColor: `var(${privateProperty('bubbleFg')})`,
+  codeColor: `var(${privateProperty('bubbleFg')})`,
   spotlightRadius: `var(${privateProperty('radius')})`,
 } as const;
 
@@ -32,6 +35,19 @@ const ALIASES: Partial<Record<TourThemeKey, string>> = {
   bubbleBg: '--steppy-tooltip-bg',
   bubbleFg: '--steppy-tooltip-fg',
   fontFamily: '--steppy-font-family',
+  // The guide's inline-markup properties (textStyles), so one set styles guides and tours alike.
+  link: '--steppy-link-color',
+  linkDecoration: '--steppy-link-decoration',
+  strongWeight: '--steppy-strong-weight',
+  strongColor: '--steppy-strong-color',
+  emStyle: '--steppy-em-style',
+  emColor: '--steppy-em-color',
+  codeFont: '--steppy-code-font',
+  codeSize: '--steppy-code-size',
+  codeColor: '--steppy-code-color',
+  codeBg: '--steppy-code-bg',
+  codePadding: '--steppy-code-padding',
+  codeRadius: '--steppy-code-radius',
 };
 
 const DARK: Defaults = TOUR_DEFAULTS;
@@ -173,13 +189,28 @@ export const tourStyles = css`
     color: var(--_pw-link);
     text-decoration: underline;
   }
+  .body a {
+    text-decoration: var(--_pw-link-decoration);
+  }
+  .body strong {
+    font-weight: var(--_pw-strong-weight);
+    color: var(--_pw-strong-color);
+  }
+  .body em {
+    font-style: var(--_pw-em-style);
+    color: var(--_pw-em-color);
+  }
   .guide {
     display: inline-block;
     margin-top: 6px;
   }
-  code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 0.92em;
+  .body code {
+    font-family: var(--_pw-code-font);
+    font-size: var(--_pw-code-size);
+    color: var(--_pw-code-color);
+    background: var(--_pw-code-bg);
+    padding: var(--_pw-code-padding);
+    border-radius: var(--_pw-code-radius);
   }
   footer {
     display: flex;

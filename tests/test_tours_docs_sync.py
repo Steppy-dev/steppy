@@ -34,7 +34,7 @@ def test_every_frontmatter_key_is_documented(key):
     assert _documented(key), f"tour.{key} is not in docs/tours.md"
 
 
-@pytest.mark.parametrize("key", ["tour", "tour-text", "tour-advance", "tour-placement"])
+@pytest.mark.parametrize("key", ["tour", "tour-text", "tour-advance", "tour-placement", "tour-hold"])
 def test_every_step_key_is_documented(key):
     assert f"`{key}`" in TEXT
 

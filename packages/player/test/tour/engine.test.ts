@@ -6,7 +6,7 @@ import { initialState, position, reduce, type Effect, type EngineEvent, type Eng
 import type { TourFile, TourStep } from '../../src/tour/validate.js';
 
 function step(id: string, advance: TourStep['advance'], extra: Partial<TourStep> = {}): TourStep {
-  return { id, target: advance === 'manual' ? null : id, advance, waitFor: null, title: null, text: null, placement: null, layouts: null, ...extra };
+  return { id, target: advance === 'manual' ? null : id, advance, waitFor: null, title: null, text: null, placement: null, hold: null, layouts: null, ...extra };
 }
 
 const TOUR: TourFile = {
@@ -207,5 +207,7 @@ describe('locale swap', () => {
     expect(run([{ type: 'LOCALE', tour: fr }], s).s.loaded!.tour.locale).toBe('fr');
     const other = { ...fr, steps: TOUR.steps.slice(1) };
     expect(run([{ type: 'LOCALE', tour: other }], s).s.loaded!.tour.locale).toBe('en');
+    const held = { ...fr, steps: TOUR.steps.map((st, i) => (i === 0 ? { ...st, hold: 'side-nav' } : st)) };
+    expect(run([{ type: 'LOCALE', tour: held }], s).s.loaded!.tour.locale).toBe('en');
   });
 });

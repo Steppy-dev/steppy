@@ -58,6 +58,8 @@ CODES: dict[str, Severity] = {
     "no-authored-text": "warning",
     "title-fallback": "warning",
     "placement-ignored": "warning",
+    "hold-ignored": "warning",
+    "hover-collapse-risk": "warning",
     "tour-text-locale-untargeted": "warning",
     "locale-not-emitted": "warning",
     "chrome-strings-missing": "warning",

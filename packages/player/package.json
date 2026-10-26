@@ -1,6 +1,6 @@
 {
   "name": "@steppy/player",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Steppy players — the interactive guide (Lit web component + manifest validator) and the in-app tour overlay",
   "license": "Apache-2.0",
   "repository": {

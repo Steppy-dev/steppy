@@ -64,7 +64,7 @@ ships, called by ref:
 ```yaml
 jobs:
   e2e:
-    uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.6.0
+    uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.7.0
     with:
       compose-file: docker-compose.yml
     secrets:

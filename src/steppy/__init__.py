@@ -1,6 +1,6 @@
 """Steppy - A Python CLI for generating Playwright tests from Markdown scenarios."""
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 # The name pip installs this package under. `steppy` on PyPI belongs to an
 # unrelated project, so the distribution is `steppy-dev` while the import

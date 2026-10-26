@@ -6,6 +6,45 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-26
+
+Hover menus stay open through an in-app tour, and the inline markup of step
+text (bold, italic, code, links) can be styled in guides and tours alike.
+
+### Added
+- **In-app tours: `tour-hold` for hover menus.** A step can name the element the
+  popover must never cover, as one test-id selector:
+  `tour-hold: '[data-testid="side-nav"]'`. The popover, the overlay's only
+  element that takes the pointer, is placed on a side clear of it (re-placed
+  when it grows on hover, a sheet when no side is clear), while the spotlight
+  still points at the step's own target. So a sidebar, flyout or mega menu that
+  closes on `mouseleave` stays open. The tour file carries it as a new optional
+  `hold` field; an older overlay ignores it. The CI replay checks the popover is
+  clear of the zone and the pointer rests on it. See "Hover menus" in
+  `docs/tours.md`.
+- **New tour warnings.** `hover-collapse-risk`: a `hover` followed by a click on
+  another element with no `tour-hold`. `hold-ignored`: `tour-hold` on a centred
+  step. A `tour-hold` that is not one test-id is `target-not-test-id`.
+- **`textStyles` in `steppy.guide.config.ts`.** Weight and colour of
+  `**strong**`, style and colour of `*em*`, font, size, colours, padding and
+  radius of `` `code` ``, colour and decoration of links in step text. Emitted
+  as `--steppy-strong-*`, `--steppy-em-*`, `--steppy-code-*` and
+  `--steppy-link-*` custom properties into the static pages, the Angular
+  fragments, the handbook and the interactive player; omitted, nothing is
+  emitted. Each value must be one CSS value. See "Inline text" in the
+  `steppy-template` skill.
+- **In-app tours: inline-text theme tokens.** `strongWeight`, `strongColor`,
+  `emStyle`, `emColor`, `codeFont`, `codeSize`, `codeColor`, `codeBg`,
+  `codePadding`, `codeRadius` and `linkDecoration` (`--steppy-tour-*`). Each
+  falls back to the guide's `--steppy-*` property, so setting
+  `--steppy-strong-color` once on `:root` styles an app's guides and its tours.
+
+### Changed
+- **The interactive player styles step-text markup through those properties.**
+  Unset, it renders as before, except that a link without a configured colour
+  no longer shows the browser's visited colour. Takes effect after
+  `steppy build` with the new release.
+
 ## [0.6.0] - 2026-10-24
 
 The in-app tour overlay can be themed to match the app, and the interactive
@@ -983,7 +1022,8 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Steppy-dev/steppy/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Steppy-dev/steppy/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Steppy-dev/steppy/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Steppy-dev/steppy/compare/v0.3.0...v0.4.0

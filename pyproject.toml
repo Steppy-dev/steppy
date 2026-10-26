@@ -2,7 +2,7 @@
 # `steppy` on PyPI is an unrelated project. The import package and the command
 # stay `steppy`; `steppy.DISTRIBUTION` must match this name.
 name = "steppy-dev"
-version = "0.6.0"
+version = "0.7.0"
 description = "Generate Playwright pytest suites from Markdown scenarios, and turn their screenshots into multi-locale user guides"
 readme = "README.md"
 # PEP 639 SPDX expression; needs hatchling>=1.27 (pinned in [build-system]).

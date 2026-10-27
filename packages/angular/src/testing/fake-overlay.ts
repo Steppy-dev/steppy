@@ -26,6 +26,7 @@ export const HOST_PROPS = [
   'strings',
   'theme',
   'appearance',
+  'infoTargetClick',
 ] as const;
 
 export interface Recorded {

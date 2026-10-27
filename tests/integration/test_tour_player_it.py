@@ -702,3 +702,30 @@ def test_strong_text_follows_the_guide_property_and_the_theme_wins(open_demo):
     assert page.evaluate(_STRONG_COLOR) == "rgb(154, 52, 18)"
     page.evaluate("document.querySelector('steppy-tour-host').theme = { strongColor: 'rgb(11, 92, 173)' }")
     poll(page, f"() => ({_STRONG_COLOR})() === 'rgb(11, 92, 173)'")
+
+
+@pytest.mark.parametrize(
+    "mode, completes, reaches",
+    [("pass", False, True), ("next", True, False), ("block", False, False)],
+)
+def test_a_click_on_an_information_steps_target(open_demo, mode, completes, reaches):
+    # ``invoice-detail`` is the tour's last step: targeted, advancing on Next.
+    page = open_demo()
+    page.evaluate("(m) => { document.querySelector('steppy-tour-host').infoTargetClick = m; }", mode)
+    start(page)
+    follow_create_invoice(page)
+    page.evaluate(
+        """() => { window.__hits = 0; const t = document.querySelector('[data-testid="invoice-detail"]');
+           for (const type of ['mousedown', 'click']) t.addEventListener(type, () => window.__hits++); }"""
+    )
+    # A double click: under ``next`` it advances once and its second half never reaches the app.
+    (page.dblclick if mode == "next" else page.click)('[data-testid="invoice-detail"]')
+    if completes:
+        wait_event(page, "tour-complete")
+    else:
+        page.wait_for_timeout(300)
+        assert not events(page, "tour-complete")
+        at_step(page, "invoice-detail")
+    assert (page.evaluate("window.__hits") > 0) is reaches
+    assert events(page, "tour-step")[-1]["detail"]["testId"] == "invoice-detail"
+    assert page.errors == []

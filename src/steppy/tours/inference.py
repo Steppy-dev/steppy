@@ -43,7 +43,14 @@ from .settings import ToursSettings
 
 
 def _annotated(step: Step) -> bool:
-    return bool(step.tour_text or step.tour_advance or step.tour_placement or step.tour_hold or step.tour)
+    return bool(
+        step.tour_text
+        or step.tour_advance
+        or step.tour_placement
+        or step.tour_hold
+        or step.tour_target_click
+        or step.tour
+    )
 
 
 def _hold_test_id(step: Step, attr: str, sink: DiagSink) -> Optional[str]:
@@ -261,6 +268,9 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
                         hint=f"add a `wait-for` on a test-id after this step if step {number} should wait for the page",
                     )
                 advance = cand.advance or "manual"
+                target_click = None
+                if tid and advance == "manual":
+                    target_click = step.tour_target_click or settings.info_target_click
                 plans.append(
                     TourStepPlan(
                         step_index=i,
@@ -273,12 +283,29 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
                         wait_for=wait_for,
                         placement=step.tour_placement if step.tour_placement and tid else None,
                         hold=hold if tid else None,
+                        target_click=target_click,
                         layouts=tuple(step.layouts) if step.layouts else None,
                         field=sub.field,
                     )
                 )
             if step.tour_placement and step.tour_placement != "auto" and not any(p.target for p in plans):
                 sink.add("placement-ignored", "a centred step has no side to place the popover on", step=step)
+            if step.tour_target_click:
+                acting = next((p.advance for p in plans if p.advance != "manual"), None)
+                if acting is not None:
+                    sink.add(
+                        "target-click-on-action-step",
+                        f"`tour-target-click` on a step that advances on {acting}: "
+                        "a click on its target is how it advances",
+                        step=step,
+                        hint="remove it, or use `tour-advance: manual` to make this an information step",
+                    )
+                elif not any(p.target for p in plans):
+                    sink.add(
+                        "target-click-ignored",
+                        "a centred step has no target to click",
+                        step=step,
+                    )
             if hold and not any(p.target for p in plans):
                 sink.add("hold-ignored", "a centred step's popover covers no target, so it holds nothing", step=step)
             if hovered is not None:
@@ -479,7 +506,7 @@ def _navigate_still_open(steps: list[Step], navs: list[int], start: int, in_role
 def _apply_annotations(step: Step, cand: Candidate, settings: ToursSettings, sink: DiagSink) -> Candidate:
     """Fold ``tour`` / ``tour-advance`` / ``tour-placement`` / ``tour-text`` into the candidate."""
     attr = settings.test_id_attribute
-    extra = bool(step.tour_text or step.tour_advance or step.tour_placement or step.tour_hold)
+    extra = bool(step.tour_text or step.tour_advance or step.tour_placement or step.tour_hold or step.tour_target_click)
 
     if cand.kind == "skip" and cand.reason == "conditional":
         if _marked(step, "keep"):

@@ -15,6 +15,8 @@ export interface TourEventMeta {
 
 export interface TourStepPosition extends TourEventMeta {
   stepId: string;
+  /** The step's target test-id, ``null`` for a centred step. ``stepId`` is not one: read this. */
+  testId: string | null;
   /** 0-based, counting only the steps that apply to the current layout. */
   index: number;
   total: number;

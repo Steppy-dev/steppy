@@ -96,6 +96,7 @@ def test_the_value_sets_are_the_contract_vocabulary():
     assert literal_args("tour") == tour_spec.STEP_TOUR_MODES
     assert literal_args("tour_advance") == tour_spec.ADVANCE_KINDS
     assert literal_args("tour_placement") == tour_spec.PLACEMENTS
+    assert literal_args("tour_target_click") == tour_spec.TARGET_CLICK_MODES
 
 
 def test_the_keys_are_registered_for_every_action():

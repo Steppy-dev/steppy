@@ -6,7 +6,7 @@ import { initialState, position, reduce, type Effect, type EngineEvent, type Eng
 import type { TourFile, TourStep } from '../../src/tour/validate.js';
 
 function step(id: string, advance: TourStep['advance'], extra: Partial<TourStep> = {}): TourStep {
-  return { id, target: advance === 'manual' ? null : id, advance, waitFor: null, title: null, text: null, placement: null, hold: null, layouts: null, ...extra };
+  return { id, target: advance === 'manual' ? null : id, advance, waitFor: null, title: null, text: null, placement: null, hold: null, targetClick: null, layouts: null, ...extra };
 }
 
 const TOUR: TourFile = {
@@ -83,7 +83,7 @@ describe('a shown step', () => {
     const { s, effects } = started();
     expect(s.phase).toBe('showing');
     const st = effects.find((e) => e.type === 'emit' && e.name === 'tour-step') as { detail: Record<string, unknown> };
-    expect(st.detail).toEqual({ tourId: 'create-invoice', buildId: 'b-1', locale: 'en', stepId: 'a', index: 0, total: 4, advance: 'click', reason: 'start' });
+    expect(st.detail).toEqual({ tourId: 'create-invoice', buildId: 'b-1', locale: 'en', stepId: 'a', testId: 'a', index: 0, total: 4, advance: 'click', reason: 'start' });
   });
 
   it('advances on its own trigger kind only', () => {

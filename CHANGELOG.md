@@ -6,6 +6,30 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **In-app tours: what a click on an information step's target does.** An
+  information step (one that advances on `manual`) often points at a button the
+  user should learn about, not use yet. `tour-target-click: next` makes a click
+  on it advance the tour as Next would, without reaching the element; `block`
+  swallows it; `pass` (the default) keeps today's behaviour. Set it per step,
+  for every information step with `tours.info_target_click` in `config.yaml`,
+  or from the app with the host's `infoTargetClick` property
+  (`provideSteppyTours({ infoTargetClick })` with `@steppy/angular`). The tour
+  file carries it as a new optional `targetClick` field; an older overlay
+  ignores it. The CI replay is unaffected. See "Clicks on an information step's
+  target" in `docs/tours.md`.
+- **New tour diagnostics.** `target-click-on-action-step` (error):
+  `tour-target-click` on a step that advances on a click, an input, a change or
+  a visibility. `target-click-ignored` (warning): on a centred step.
+- **`testId` on tour step events.** `tour-step`, `tour-dismiss`, `tour-offpath`,
+  the host's `current` and `SteppyTours.current()` now carry the step's target
+  test-id (`null` for a centred step). Read it instead of deriving one from
+  `stepId`, whose `-2`, `-3` suffixes are not part of the contract.
+
+### Changed
+- **The tour overlay's size budget is 28,700 B** (min + gzip), up from 27,750 B,
+  for the feature above.
+
 ## [0.7.0] - 2026-10-26
 
 Hover menus stay open through an in-app tour, and the inline markup of step

@@ -127,9 +127,9 @@ export class SteppyTours {
         this._lastError.set(null);
         break;
       case 'tour-step': {
-        const { tourId, stepId, index, total } = event.detail;
+        const { tourId, stepId, testId, index, total } = event.detail;
         this._active.set(true);
-        this._current.set({ tourId, stepId, index, total });
+        this._current.set({ tourId, stepId, testId, index, total });
         break;
       }
       case 'tour-complete':

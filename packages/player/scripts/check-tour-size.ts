@@ -23,9 +23,16 @@ import { transformWithEsbuild } from 'vite';
  * ``--steppy-tour-*`` tokens, the ``theme`` property and the light/auto
  * appearances) measured 27,251 B, about 630 B over the 26,618 B before it.
  * The new budget keeps the same ~500 B of headroom.
+ *
+ * Raised a second time, on purpose: information-step target clicks (the
+ * window capture listener in ``tour/triggers.ts`` that swallows a click on a
+ * ``manual`` step's target for ``next``/``block``, the ``targetClick`` file
+ * field, the ``infoTargetClick`` property) and ``testId`` on step events
+ * measured 28,183 B, about 440 B over the 27,744 B before them. The new
+ * budget again keeps ~500 B of headroom.
  */
 const TARGET = 25_600;
-const BUDGET = 27_750;
+const BUDGET = 28_700;
 const FORBIDDEN = ['ZodError', 'steppy-guide'];
 
 const file = resolve(import.meta.dirname, '../dist/steppy-tour.js');

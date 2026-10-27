@@ -138,6 +138,7 @@ a project without tours.
 | `test_id_attribute` | string | `data-testid` | The attribute targets are looked up by (`data-*` only). |
 | `layouts` | map | none | Layout name → media query, for scenarios with layout-specific steps. See [Layouts](#layouts). |
 | `replay` | bool | `true` | Append a CI replay to each tour's scenario test. |
+| `info_target_click` | `pass`, `next`, `block` | none | What a click on an information step's target does, for every step that does not set `tour-target-click`. See [Clicks on an information step's target](#info-target-click). |
 | `targets` | list | — | At least one; see [Targets](#targets). |
 
 `output.tours_dir` (default `./output/tours`) is where the canonical tree goes.
@@ -267,6 +268,7 @@ tour:
 | `tour-advance` | `click`, `input`, `change`, `visible`, `manual` | What moves the tour on. Must be something the step's own action does (`advance-not-replayable`). |
 | `tour-placement` | `top`, `bottom`, `left`, `right`, `auto` | The preferred side of the target. |
 | `tour-hold` | one test-id selector, like a target | An element the popover never covers while the step shows: the hover menu the target sits in (see [Hover menus](#hover-menus)). A `target-not-test-id` error when it is not one test-id. |
+| `tour-target-click` | `pass`, `next`, `block` | Information steps only: what a click on the target does (see [Clicks on an information step's target](#info-target-click)). On a step that advances another way it is the `target-click-on-action-step` error; on a centred step, the `target-click-ignored` warning. |
 
 `tour-*` keys on a step inference leaves out are an error unless the step also
 says `tour: keep`. Frontmatter `tour:` and step `- tour:` are different keys:
@@ -326,6 +328,36 @@ another element with no `tour-hold` is the `hover-collapse-risk` warning.
 `tour-hold` cannot stop a genuine `mouseleave`: on a `manual` step the user
 moves to the popover's Next button. For that, keep the menu open from the app
 while a tour runs (see the `steppy-app-tours` skill, "Hover menus").
+
+<a id="info-target-click"></a>
+**Clicks on an information step's target.** An information step (one that
+advances on `manual`: an assertion with text, or a step with
+`tour-advance: manual`) often points at a button the user should know about
+but not use yet. By default (`pass`) a click on it does what the element
+normally does, and the user leaves the tour's path. `tour-target-click: next`
+makes that click mean "got it": it never reaches the element, and the tour
+advances as if Next was pressed. `block` swallows it and does nothing.
+
+```markdown
+### 3. The create button
+- action: assert
+- expect: visible([data-testid="create-community-btn"])
+- guide-text:
+    en: "**Create my community** starts a new one. You will do that later."
+- tour-target-click: next
+```
+
+`tours.info_target_click` sets the same thing for every information step, and
+a step's own key wins over it. When neither is set, the tour file says nothing
+and the app's choice applies: the host's `infoTargetClick`
+(`provideSteppyTours({ infoTargetClick })` with the Angular adapter), else
+`pass`. With `next` or `block`, the overlay swallows the presses and the click
+on the target ahead of the app's own handlers (`pointerdown`, `mousedown`,
+`pointerup`, `mouseup`, `click`, `dblclick`, `auxclick`, so a component that
+opens on `mousedown` stays shut and a field does not take focus). A double
+click advances one step. Enter or Space on a focused target arrives as a
+click, so it is covered too. The CI replay presses Next on information steps
+and never clicks their target, so it is unaffected.
 
 **Test-ids** are values of `^[A-Za-z0-9_.:/-]{1,128}$` — colons and slashes
 are allowed, quotes and spaces are not.
@@ -576,6 +608,7 @@ left out.
 | `tour-id-duplicate` | error | Two scenarios produce the same tour id (case-insensitively) | Set distinct `tour.id`s |
 | `advance-not-replayable` | error | `tour-advance` the step's action cannot perform (warning when `replay: false`) | Choose an advance the action does (see [Advance kinds](#scenario-annotations)) |
 | `advance-needs-target` | error | An advance other than `manual` on a step with no target | Use `manual`, or give the step a test-id |
+| `target-click-on-action-step` | error | `tour-target-click` on a step that advances on `click`, `input`, `change` or `visible`: a click on its target is how it advances | Remove it, or make it an information step with `tour-advance: manual` |
 | `annotation-on-skipped-step` | error | `tour-*` keys on a step the tour leaves out | Add `tour: keep` or remove the keys |
 | `annotation-outside-tour` | error | `tour*` keys on a step before the start or after `tour: end`, on an `only-in: test` step, or on another role's step | Remove them; they would have no effect |
 | `skip-and-annotations` | error | `tour: skip` together with other `tour-*` keys | Keep one or the other |
@@ -605,6 +638,7 @@ left out.
 | `entry-unknown` | warning | `tour: start` follows steps that may change the page (or no `navigate`), and there is no `tour.entry`: the tour has no entry route | Set `tour.entry` to the route of the page the tour starts on |
 | `placement-ignored` | warning | `tour-placement` on a centred step | Remove it |
 | `hold-ignored` | warning | `tour-hold` on a centred step, whose popover covers no target | Remove it |
+| `target-click-ignored` | warning | `tour-target-click` on a centred step, which has no target to click | Remove it |
 | `hover-collapse-risk` | warning | A `hover`, then a click on another element with no `tour-hold`: if the popover lands on the hovered menu, the menu closes | Add `tour-hold` naming the hovered element (see [Hover menus](#hover-menus)) |
 | `text-link-dropped` | warning | A link to neither an app route nor the guide (or one that resolves off-site, such as `/.//host`) | It renders as text |
 | `app-url-unresolved` | warning | `apps.<role>.url` or `tours.guide_base_url` still holds an unset `${VAR}` at compile time | Set the variable where you compile |
@@ -779,6 +813,7 @@ One file per tour and locale:
 | `integrity` | SHA-384 SRI value of each file's exact bytes. |
 | `entry.route` | The route the tour starts on, relative to the app's base URL. |
 | `target` / `waitFor` / `hold` | Test-id values (not selectors). `hold` is present only on a step with `tour-hold`. |
+| `targetClick` | `pass`, `next` or `block`, on a targeted `manual` step only, and only when `tour-target-click` or `tours.info_target_click` set it. Absent: the host's `infoTargetClick`. |
 | `advance.on` | `click`, `input`, `change`, `visible`, `manual`. |
 | `guideUrl` | The "Open the full guide" link, on `guide_base_url`'s origin only. |
 
@@ -898,6 +933,7 @@ copies need.
 | `strings` | — | — | Chrome string overrides per locale. See [Localization](#localization). |
 | `appearance` | `appearance` | `dark` | Default palette: `dark`, `light`, or `auto` (follows `prefers-color-scheme`). See [Theming](#theming). |
 | `theme` | — | — | `--steppy-tour-*` values as camelCase keys, set on the element. See [Theming](#theming). |
+| `infoTargetClick` | `info-target-click` | `pass` | What a click on an information step's target does when its tour file does not say: `pass`, `next` or `block`. See [Clicks on an information step's target](#info-target-click). |
 
 Methods:
 
@@ -909,7 +945,12 @@ Methods:
 - `stop(reason)` ends the tour; `reason` is passed through to `tour-dismiss`.
 - `next()` advances the current step, whatever its kind.
 
-State: `isActive`, `current` (`{tourId, stepId, index, total}` or `null`).
+State: `isActive`, `current` (`{tourId, stepId, testId, index, total}` or `null`).
+
+`testId` is the step's target test-id, `null` for a centred step. Read it
+rather than deriving one from `stepId`: a step id is its test-id only until
+a tour targets the same test-id twice (desktop and mobile twins get `-2`,
+`-3`, …), and that format is not part of the contract.
 
 <a id="exports"></a>
 
@@ -926,7 +967,7 @@ type declarations:
 | `TOUR_EVENTS`, `TourEventDetailMap`, `TOUR_ERROR_REASONS`, `TOUR_PARTS` | Event names and details, error reasons, `::part` names. |
 | `TOUR_HOST_TAG`, `TOURS_KILL_SWITCH_GLOBAL` | `steppy-tour-host` and `__STEPPY_TOURS_DISABLED__`. |
 | `TourHostApi`, `TourStartOptions`, `TourPosition`, `TourNavigate`, `TourSource`, … | Types for adapters. |
-| `ADVANCE_KINDS`, `PLACEMENTS`, `TOUR_SCHEMA_VERSION` | Contract vocabulary. |
+| `ADVANCE_KINDS`, `PLACEMENTS`, `TARGET_CLICK_MODES`, `TOUR_SCHEMA_VERSION` | Contract vocabulary. |
 
 ### Events
 
@@ -937,10 +978,10 @@ types):
 | Event | Detail |
 |---|---|
 | `tour-start` | `tourId, buildId, locale, total, source` (`bundled`/`remote`/`custom`)`, resumed, entryNavigated` |
-| `tour-step` | `tourId, buildId, locale, stepId, index, total, advance, reason` (`start`/`advance`/`jump`/`skip`/`resume`/`recovered`) |
+| `tour-step` | `tourId, buildId, locale, stepId, testId, index, total, advance, reason` (`start`/`advance`/`jump`/`skip`/`resume`/`recovered`) |
 | `tour-complete` | `tourId, buildId, locale, total` |
-| `tour-dismiss` | `…, stepId, index, total, via` (`close`/`escape`/`end`/`api`/`replaced`/`disabled`)`, reason?` |
-| `tour-offpath` | `…, stepId, index, total, reason: "target-lost"` |
+| `tour-dismiss` | `…, stepId, testId, index, total, via` (`close`/`escape`/`end`/`api`/`replaced`/`disabled`)`, reason?` |
+| `tour-offpath` | `…, stepId, testId, index, total, reason: "target-lost"` |
 | `tour-error` | `reason, fatal, message`, and when known `tourId, stepId, testId, kind` (`target`/`waitFor`)`, missing, issues` |
 
 `index` and `total` count only the steps that apply to the current layout.
@@ -1057,7 +1098,7 @@ inject(SteppyTours).start('send-invoice', { params: { invoiceId: 1001 } });
 
 | API | What |
 |---|---|
-| `provideSteppyTours(config)` | In the root providers. `fallbackManifest`, `manifest`, `buildId`, `guideOrigin`, `targetTimeout`, `baseZIndex`, `disabled`, `strings`, `source` as on the [host](#host-api); `locale`: a string, a signal, or a function run once in an injection context that returns either; `navigate`: `'router'` (default), `'document'` or your own function; `readyTimeout` (10 s). |
+| `provideSteppyTours(config)` | In the root providers. `fallbackManifest`, `manifest`, `buildId`, `guideOrigin`, `targetTimeout`, `baseZIndex`, `disabled`, `strings`, `source`, `infoTargetClick` as on the [host](#host-api); `locale`: a string, a signal, or a function run once in an injection context that returns either; `navigate`: `'router'` (default), `'document'` or your own function; `readyTimeout` (10 s). |
 | `<steppy-tours>` | The overlay, placed once in the shell. Its inputs override the config. Outputs `tourStart`, `tourStep`, `tourComplete`, `tourDismiss`, `tourOffpath` and `tourError` carry the [event details](#events). |
 | `SteppyTours` | `start(id, {params, step})` waits for the overlay to mount and load (up to `readyTimeout`), lets the last call win, and resolves `false` — never rejects — when a tour cannot start. `stop(reason)`, `next()`; signals `active`, `current`, `lastError`; `events`, an Observable delivered inside the zone. |
 | `steppyTourStart` | `<button steppyTourStart="create-invoice" [steppyTourParams]="…" steppyTourStep="…">` starts a tour on click. |

@@ -12,7 +12,15 @@
  */
 
 import { InjectionToken } from '@angular/core';
-import type { TourAppearance, TourEventName, TourHostApi, TourSource, TourStringOverrides, TourTheme } from '@steppy/player/tour';
+import type {
+  TargetClickMode,
+  TourAppearance,
+  TourEventName,
+  TourHostApi,
+  TourSource,
+  TourStringOverrides,
+  TourTheme,
+} from '@steppy/player/tour';
 
 export const TOUR_HOST_TAG = 'steppy-tour-host';
 export const TOUR_EVENT_NAMES = ['tour-start', 'tour-step', 'tour-complete', 'tour-dismiss', 'tour-offpath', 'tour-error'] as const;
@@ -50,6 +58,7 @@ export interface HostProps {
   targetTimeout?: number;
   baseZIndex?: number;
   appearance?: TourAppearance;
+  infoTargetClick?: TargetClickMode;
 }
 
 /**
@@ -69,4 +78,5 @@ export function applyProps(el: TourHostElement, p: HostProps): void {
   if (p.targetTimeout !== undefined) el.targetTimeout = p.targetTimeout;
   if (p.baseZIndex !== undefined) el.baseZIndex = p.baseZIndex;
   if (p.appearance !== undefined) el.appearance = p.appearance;
+  if (p.infoTargetClick !== undefined) el.infoTargetClick = p.infoTargetClick;
 }

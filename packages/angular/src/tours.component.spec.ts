@@ -88,6 +88,17 @@ describe('<steppy-tours>', () => {
     setup();
     await mountDefined();
     expect(overlay.calls.some((c) => c.kind === 'set' && c.name === 'appearance')).toBe(false);
+    expect(overlay.calls.some((c) => c.kind === 'set' && c.name === 'infoTargetClick')).toBe(false);
+  });
+
+  it('passes infoTargetClick through, input over configuration', async () => {
+    setup({ infoTargetClick: 'next' });
+    const fixture = await mountDefined();
+    const el = overlay.element()!;
+    expect(el.infoTargetClick).toBe('next');
+    fixture.componentRef.setInput('infoTargetClick', 'block');
+    await fixture.whenStable();
+    expect(el.infoTargetClick).toBe('block');
   });
 
   it('emits each overlay event as an output and records it in the service', async () => {
@@ -101,7 +112,7 @@ describe('<steppy-tours>', () => {
     c.tourOffpath.subscribe((d) => seen.push(`offpath:${d.stepId}`));
     c.tourDismiss.subscribe((d) => seen.push(`dismiss:${d.via}`));
     c.tourComplete.subscribe((d) => seen.push(`complete:${d.total}`));
-    const step = { ...META, stepId: 'new-invoice-btn', index: 0, total: 5 };
+    const step = { ...META, stepId: 'new-invoice-btn', testId: 'new-invoice-btn', index: 0, total: 5 };
     emit(overlay, 'tour-start', { ...META, total: 5, source: 'bundled', resumed: false, entryNavigated: false });
     emit(overlay, 'tour-step', { ...step, advance: 'click', reason: 'start' });
     emit(overlay, 'tour-error', { reason: 'target-timeout', fatal: false, message: 'late' } as TourEventDetailMap['tour-error']);
@@ -174,7 +185,7 @@ describe('<steppy-tours>', () => {
     overlay.resolveLoad();
     await settle();
     expect(fixture.nativeElement.querySelector('output').textContent).toBe('idle');
-    emit(overlay, 'tour-step', { ...META, stepId: 'invoice-title', index: 1, total: 5, advance: 'input', reason: 'advance' });
+    emit(overlay, 'tour-step', { ...META, stepId: 'invoice-title', testId: 'invoice-title', index: 1, total: 5, advance: 'input', reason: 'advance' });
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('output').textContent).toBe('invoice-title');
   });

@@ -37,6 +37,7 @@ CODES: dict[str, Severity] = {
     "skip-and-annotations": "error",
     "keep-not-allowed": "error",
     "advance-needs-target": "error",
+    "target-click-on-action-step": "error",
     "advance-not-replayable": "error",  # downgraded to a warning when tours.replay is off
     "limit-exceeded": "error",
     "layout-media-mismatch": "error",
@@ -59,6 +60,7 @@ CODES: dict[str, Severity] = {
     "title-fallback": "warning",
     "placement-ignored": "warning",
     "hold-ignored": "warning",
+    "target-click-ignored": "warning",
     "hover-collapse-risk": "warning",
     "tour-text-locale-untargeted": "warning",
     "locale-not-emitted": "warning",

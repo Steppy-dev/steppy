@@ -1080,3 +1080,71 @@ def test_no_hover_collapse_risk_when_the_hover_no_longer_matters(tmp_path, betwe
     clicked = "side-nav" if not between else "monthly"
     result = _compile(tmp_path, OPEN + HOVER + between + _click(5, clicked))
     assert "hover-collapse-risk" not in _codes(result)
+
+
+# ── tour-target-click ─────────────────────────────────────────────────────────
+
+
+def _info(n: int, test_id: str, extra: str = "") -> str:
+    return (
+        f'\n### {n}. Look\n- role: editor\n- action: assert\n- expect: visible([data-testid="{test_id}"])\n'
+        '- guide-text:\n    en: "This button creates one."\n' + extra
+    )
+
+
+def _payload_steps(result):
+    from steppy.tours.emit import tour_file_payload
+
+    return tour_file_payload(result.tours[0], "en", "b-1")["steps"]
+
+
+def test_nothing_set_emits_no_target_click_key(tmp_path):
+    result = _compile(tmp_path, OPEN + _info(2, "create"))
+    assert [s.advance for s in result.tours[0].steps] == ["manual"]
+    assert "targetClick" not in _payload_steps(result)[0]
+
+
+@pytest.mark.parametrize("mode", ["pass", "next", "block"])
+def test_a_step_target_click_reaches_an_info_step(tmp_path, mode):
+    result = _compile(tmp_path, OPEN + _info(2, "create", f"- tour-target-click: {mode}\n"))
+    assert not _codes(result, "error")
+    assert _payload_steps(result)[0]["targetClick"] == mode
+
+
+def test_the_config_default_applies_to_targeted_info_steps_only(tmp_path):
+    result = _compile(tmp_path, OPEN + _info(2, "create") + _click(3, "go"), info_target_click="next")
+    assert [s.get("targetClick") for s in _payload_steps(result)] == ["next", None]
+    assert not {"target-click-on-action-step", "target-click-ignored"} & set(_codes(result))
+
+
+def test_a_step_value_wins_over_the_config_default(tmp_path):
+    result = _compile(tmp_path, OPEN + _info(2, "create", "- tour-target-click: pass\n"), info_target_click="next")
+    assert _payload_steps(result)[0]["targetClick"] == "pass"
+
+
+def test_a_target_click_on_an_action_step_is_an_error(tmp_path):
+    result = _compile(tmp_path, OPEN + _click(2, "go", "- tour-target-click: next\n"))
+    assert _codes(result, "error") == ["target-click-on-action-step"]
+
+
+def test_tour_advance_manual_makes_a_click_step_an_info_step(tmp_path):
+    result = _compile(
+        tmp_path, OPEN + _click(2, "go", "- tour-advance: manual\n- tour-target-click: block\n"), replay=False
+    )
+    assert "target-click-on-action-step" not in _codes(result)
+    assert _payload_steps(result)[0]["targetClick"] == "block"
+
+
+def test_a_target_click_on_a_centred_step_is_ignored_with_a_warning(tmp_path):
+    result = _compile(
+        tmp_path,
+        OPEN
+        + "\n### 2. Note\n- role: editor\n- action: wait\n- duration: 1s\n- tour: keep\n- tour-target-click: next\n",
+    )
+    assert "target-click-ignored" in _codes(result, "warning")
+    assert "targetClick" not in _payload_steps(result)[0]
+
+
+def test_a_target_click_on_a_skipped_step_is_an_annotation_error(tmp_path):
+    result = _compile(tmp_path, OPEN + HOVER + "- tour-target-click: next\n" + _click(3, "go"))
+    assert "annotation-on-skipped-step" in _codes(result, "error")

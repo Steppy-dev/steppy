@@ -28,6 +28,7 @@ class TourStepPlan:
     wait_for: Optional[str] = None
     placement: Optional[str] = None
     hold: Optional[str] = None  # test-id of the element the popover must not cover
+    target_click: Optional[str] = None  # info steps only: `pass` / `next` / `block`, None = the host's default
     layouts: Optional[tuple[str, ...]] = None
     field: Optional[str] = None  # fill-form: the `fields` key this sub-step fills
     step_id: str = ""

@@ -1,6 +1,7 @@
 /**
  * Turns what the user does *in the app* into engine events: document-level
- * capture listeners that never stop or alter the app's own events.
+ * capture listeners that never stop or alter the app's own events — with one
+ * opt-in exception, below.
  *
  * - A click whose path holds the current step's test-id advances a ``click``
  *   step; a click on a *later* step's target jumps there (performed when that
@@ -11,12 +12,22 @@
  * - Any interaction outside the overlay arms a ``change`` step's watcher.
  * - Escape dismisses the tour unless the app is using it (a dialog, an open
  *   popup, ``preventDefault``, an IME composition).
+ * - On an information step (a targeted ``manual`` step) whose ``targetClick``
+ *   (else the host's ``infoTargetClick``) is ``next`` or ``block``, a window
+ *   capture listener — ahead of every handler the app puts on the element or
+ *   the document — swallows the presses and the click on the target: ``next``
+ *   advances once, ``block`` does nothing. The swallowed element stays
+ *   swallowed for a double click's length after it advanced, so a double click
+ *   neither skips two steps nor reaches the app. ``touchstart`` is left alone:
+ *   cancelling it would cancel the click itself. Enter / Space on a focused
+ *   button arrive as a click, so they are covered.
  *
  * Events whose path goes through the overlay are its own UI and are ignored.
  * Untrusted (scripted) events count like trusted ones: the CI replay clicks
  * with synthetic events.
  */
 
+import type { TargetClickMode } from './contract.js';
 import type { EngineEvent, EngineState } from './engine.js';
 import type { TourStep } from './validate.js';
 import { isExpanded, readFieldValue } from './signature.js';
@@ -34,8 +45,16 @@ export interface TriggerContext {
   interacted(): void;
   /** A ``change`` event or a document click: re-check a ``change`` step. */
   tick(): void;
-  defer(cb: () => void): void;
+  defer(cb: () => void, ms?: number): void;
+  /** The host's ``infoTargetClick``: what a step whose file says nothing does. */
+  infoTargetClick(): TargetClickMode;
+  now(): number;
 }
+
+/** Presses that make up a click; swallowed with it so a component opening on ``mousedown`` stays shut. */
+const PRESS_EVENTS = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'dblclick', 'auxclick'] as const;
+/** How long the element of a click that advanced stays swallowed: a double click's second half. */
+export const TARGET_CLICK_HOLD_MS = 500;
 
 /** An app dialog: Escape inside one is the app's, and a centred bubble moves off an open one. */
 export const APP_DIALOG = 'dialog,[role=dialog],[role=alertdialog],[aria-modal="true"]';
@@ -122,7 +141,35 @@ export function attachTriggers(ctx: TriggerContext): () => void {
     ctx.dispatch({ type: 'DISMISS', via: 'escape' });
   };
 
+  // The element whose click advanced, swallowed until the hold runs out (even past the tour's end).
+  let spent: { el: Element; at: number } | null = null;
+  const onTargetPress = (e: Event) => {
+    if (!appPath(e, host)) return;
+    const path = e.composedPath();
+    if (spent) {
+      if (ctx.now() - spent.at >= TARGET_CLICK_HOLD_MS) spent = null;
+      else if (path.includes(spent.el)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+    }
+    const cur = current();
+    if (!cur || cur.s.phase !== 'showing' || cur.step.advance !== 'manual' || cur.step.target === null) return;
+    const mode = cur.step.targetClick ?? ctx.infoTargetClick();
+    const target = ctx.target();
+    // Anything else (an unknown value set on the host) is ``pass``.
+    if ((mode !== 'next' && mode !== 'block') || target === null || !path.includes(target)) return;
+    // ``mousedown``'s default is focus; the others' defaults are harmless but cancelled alike.
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (e.type !== 'click' || mode !== 'next') return;
+    spent = { el: target, at: ctx.now() };
+    ctx.dispatch({ type: 'NEXT', token: cur.s.token });
+  };
+
   const opts = { capture: true };
+  for (const type of PRESS_EVENTS) window.addEventListener(type, onTargetPress, opts);
   document.addEventListener('click', onClick, opts);
   document.addEventListener('input', onInput, opts);
   document.addEventListener('change', onChange, opts);
@@ -138,6 +185,13 @@ export function attachTriggers(ctx: TriggerContext): () => void {
     document.removeEventListener('mousedown', onPress, opts);
     document.removeEventListener('keydown', onPress, opts);
     window.removeEventListener('keydown', onEscape);
+    const off = () => {
+      for (const type of PRESS_EVENTS) window.removeEventListener(type, onTargetPress, opts);
+    };
+    // The last step's click ended the tour: its double click's second half is still swallowed.
+    const left = spent ? TARGET_CLICK_HOLD_MS - (ctx.now() - spent.at) : 0;
+    if (left > 0) ctx.defer(off, left);
+    else off();
   };
 }
 

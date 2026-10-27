@@ -103,12 +103,12 @@ describe('SteppyTours state', () => {
     await settle();
     const seen: SteppyTourEvent['type'][] = [];
     tours.events.subscribe((e) => seen.push(e.type));
-    const step = { ...META, stepId: 'invoice-title', index: 1, total: 5 };
+    const step = { ...META, stepId: 'invoice-title', testId: 'invoice-title', index: 1, total: 5 };
 
     emit(overlay, 'tour-start', { ...META, total: 5, source: 'bundled', resumed: false, entryNavigated: false });
     expect([tours.active(), tours.current(), tours.lastError()]).toEqual([true, null, null]);
     emit(overlay, 'tour-step', { ...step, advance: 'input', reason: 'advance' });
-    expect(tours.current()).toEqual({ tourId: 'create-invoice', stepId: 'invoice-title', index: 1, total: 5 });
+    expect(tours.current()).toEqual({ tourId: 'create-invoice', stepId: 'invoice-title', testId: 'invoice-title', index: 1, total: 5 });
     const late = { reason: 'target-timeout', fatal: false, message: 'late', tourId: 'create-invoice' } as TourEventDetailMap['tour-error'];
     emit(overlay, 'tour-error', late);
     expect([tours.active(), tours.lastError()]).toEqual([true, late]);

@@ -44,6 +44,7 @@ describe('public API', () => {
         'DEFAULT_TOUR_STRINGS',
         'PLACEMENTS',
         'SteppyTourHost',
+        'TARGET_CLICK_MODES',
         'TOURS_KILL_SWITCH_GLOBAL',
         'TOUR_ERROR_REASONS',
         'TOUR_EVENTS',

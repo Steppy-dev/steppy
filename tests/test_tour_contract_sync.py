@@ -56,6 +56,7 @@ def test_product_names_match(name):
         "TOUR_SCHEMA_VERSION",
         "ADVANCE_KINDS",
         "PLACEMENTS",
+        "TARGET_CLICK_MODES",
         "TOUR_EVENTS",
         "TOUR_ERROR_REASONS",
         "CHROME_STRING_LOCALES",

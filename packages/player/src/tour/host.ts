@@ -17,7 +17,7 @@ import { TOUR_ACTIVE_SYMBOL_KEY, TOUR_HOST_TAG, TOURS_KILL_SWITCH_GLOBAL } from 
 import type { LinkPolicy } from '../ui/markdown.js';
 import type { Rect, TooltipSide } from '../ui/placement.js';
 import type { TourHostApi, TourNavigate, TourPosition, TourStartOptions } from './api.js';
-import { DEFAULT_BASE_Z_INDEX, DEFAULT_TARGET_TIMEOUT_MS } from './contract.js';
+import { DEFAULT_BASE_Z_INDEX, DEFAULT_TARGET_TIMEOUT_MS, type TargetClickMode } from './contract.js';
 import { defaultDom, type DomAdapter } from './dom.js';
 import {
   initialState,
@@ -88,6 +88,7 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
     strings: { attribute: false },
     theme: { attribute: false },
     appearance: { type: String, reflect: true },
+    infoTargetClick: { type: String, attribute: 'info-target-click' },
   };
 
   /** Test seam: geometry and timing. */
@@ -106,6 +107,7 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
   strings: TourStringOverrides | undefined = undefined;
   theme: TourTheme | undefined = undefined;
   appearance: TourAppearance = 'dark';
+  infoTargetClick: TargetClickMode = 'pass';
 
   private _s: EngineState = initialState();
   private _queue: EngineEvent[] = [];
@@ -155,7 +157,7 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
   get current(): TourPosition | null {
     if (!isActive(this._s) || !this._s.loaded) return null;
     const step = this._s.loaded.tour.steps[this._s.index]!;
-    return { tourId: this._s.loaded.tour.id, stepId: step.id, ...position(this._s) };
+    return { tourId: this._s.loaded.tour.id, stepId: step.id, testId: step.target, ...position(this._s) };
   }
 
   async start(tourId: string, options: TourStartOptions = {}): Promise<boolean> {
@@ -633,7 +635,9 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
       },
       interacted: () => this._change?.arm(),
       tick: () => this._change?.tick(),
-      defer: (cb) => this._dom.scheduler.setTimeout(cb, 0),
+      defer: (cb, ms = 0) => this._dom.scheduler.setTimeout(cb, ms),
+      infoTargetClick: () => this.infoTargetClick,
+      now: () => this._dom.scheduler.now(),
     });
     document.addEventListener('focusin', this._onFocusIn, true);
   }

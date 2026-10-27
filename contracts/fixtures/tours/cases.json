@@ -192,6 +192,62 @@
     }
   },
   {
+    "name": "target-click-next",
+    "rule": "targetClick is for a targeted manual step",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "ok",
+    "python": "accept",
+    "set": {
+      "steps.4.targetClick": "next"
+    }
+  },
+  {
+    "name": "target-click-block",
+    "rule": "targetClick is for a targeted manual step",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "ok",
+    "python": "accept",
+    "set": {
+      "steps.4.targetClick": "block"
+    }
+  },
+  {
+    "name": "target-click-unknown",
+    "rule": "targetClick is for a targeted manual step",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.4.targetClick": "swallow"
+    }
+  },
+  {
+    "name": "target-click-on-click-step",
+    "rule": "targetClick is for a targeted manual step",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.0.targetClick": "next"
+    }
+  },
+  {
+    "name": "target-click-centred",
+    "rule": "targetClick is for a targeted manual step",
+    "kind": "tour",
+    "base": "create-invoice.en.json",
+    "player": "invalid-data",
+    "python": "reject",
+    "set": {
+      "steps.4.target": null,
+      "steps.4.targetClick": "next"
+    }
+  },
+  {
     "name": "placement-unknown",
     "rule": "contract enum",
     "kind": "tour",

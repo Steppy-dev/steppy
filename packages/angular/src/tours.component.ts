@@ -17,7 +17,14 @@ import {
   type OutputEmitterRef,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import type { TourAppearance, TourEventDetailMap, TourSource, TourStringOverrides, TourTheme } from '@steppy/player/tour';
+import type {
+  TargetClickMode,
+  TourAppearance,
+  TourEventDetailMap,
+  TourSource,
+  TourStringOverrides,
+  TourTheme,
+} from '@steppy/player/tour';
 
 import { createNavigate } from './navigate';
 import { OVERLAY_LOADER, TOUR_EVENT_NAMES, applyProps, type HostProps, type TourHostElement } from './overlay';
@@ -73,6 +80,7 @@ export class SteppyToursComponent {
   readonly strings = input<TourStringOverrides>();
   readonly theme = input<TourTheme>();
   readonly appearance = input<TourAppearance>();
+  readonly infoTargetClick = input<TargetClickMode>();
   readonly source = input<TourSource | null>();
 
   readonly tourStart = output<TourEventDetailMap['tour-start']>();
@@ -118,6 +126,7 @@ export class SteppyToursComponent {
       targetTimeout: this.targetTimeout() ?? c.targetTimeout,
       baseZIndex: this.baseZIndex() ?? c.baseZIndex,
       appearance: this.appearance() ?? c.appearance,
+      infoTargetClick: this.infoTargetClick() ?? c.infoTargetClick,
     };
   });
 

@@ -104,6 +104,23 @@
           ],
           "title": "Target"
         },
+        "targetClick": {
+          "anyOf": [
+            {
+              "enum": [
+                "pass",
+                "next",
+                "block"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Targetclick"
+        },
         "text": {
           "anyOf": [
             {

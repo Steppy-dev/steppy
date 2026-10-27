@@ -58,6 +58,7 @@ from ..tour_spec import (
     SRI_PATTERN,
     STEP_ID_PATTERN,
     TARGETED_ADVANCE_KINDS,
+    TARGET_CLICK_MODES,
     TEST_ID_ATTRIBUTE_PATTERN,
     TEST_ID_PATTERN,
     TOUR_ID_PATTERN,
@@ -76,6 +77,8 @@ AdvanceKind = Literal["click", "input", "change", "visible", "manual"]
 Placement = Literal["top", "bottom", "left", "right", "auto"]
 assert ADVANCE_KINDS == AdvanceKind.__args__  # type: ignore[attr-defined]
 assert PLACEMENTS == Placement.__args__  # type: ignore[attr-defined]
+TargetClickMode = Literal["pass", "next", "block"]
+assert TARGET_CLICK_MODES == TargetClickMode.__args__  # type: ignore[attr-defined]
 
 
 class TourSchemaUnsupported(ValueError):
@@ -145,6 +148,7 @@ class TourStep(_Strict):
     text: Optional[str] = None
     placement: Optional[Placement] = None
     hold: Optional[str] = Field(None, pattern=TEST_ID_PATTERN)
+    targetClick: Optional[TargetClickMode] = None
     layouts: Optional[list[str]] = None
 
     @field_validator("id")
@@ -187,6 +191,8 @@ class TourStep(_Strict):
     def _target_for_kind(self) -> "TourStep":
         if self.target is None and self.advance.on in TARGETED_ADVANCE_KINDS:
             raise ValueError(f"step {self.id!r}: advance.on={self.advance.on!r} needs a target")
+        if self.targetClick is not None and (self.target is None or self.advance.on != "manual"):
+            raise ValueError(f"step {self.id!r}: targetClick is for a targeted step that advances on manual")
         return self
 
 

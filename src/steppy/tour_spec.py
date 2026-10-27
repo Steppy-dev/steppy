@@ -35,6 +35,11 @@ TARGETED_ADVANCE_KINDS = frozenset({"click", "input", "change", "visible"})
 
 PLACEMENTS = ("top", "bottom", "left", "right", "auto")
 
+#: What a click on an information step's target does (a targeted ``manual``
+#: step): ``pass`` lets it reach the element, ``next`` swallows it and advances,
+#: ``block`` swallows it and does nothing.
+TARGET_CLICK_MODES = ("pass", "next", "block")
+
 #: Values of the step-level ``tour:`` annotation.
 STEP_TOUR_MODES = ("skip", "keep", "start", "end")
 

@@ -1728,6 +1728,7 @@ tour:
 | `tour-advance` | `click`, `input`, `change`, `visible`, `manual` | What moves the tour on. Must be something the step's own action does (table below) |
 | `tour-placement` | `top`, `bottom`, `left`, `right`, `auto` | The preferred side of the target (ignored, with `placement-ignored`, on a centred step) |
 | `tour-hold` | one test-id selector | An element the popover never covers while the step shows — the hover menu the target sits in (ignored, with `hold-ignored`, on a centred step) |
+| `tour-target-click` | `pass`, `next`, `block` | Information steps only (advance `manual`): what a click on the target does — reaches the element (`pass`, default), advances instead (`next`), or nothing (`block`). Config default: `tours.info_target_click`. On a step that advances another way: `target-click-on-action-step`; on a centred step: `target-click-ignored` |
 
 `tour-advance` values a step accepts — anything else is `advance-not-replayable`, because the CI replay performs the step's own action and would wait forever:
 
@@ -1774,6 +1775,7 @@ The test still types the value, the guide keeps its wording, and the tour shows 
       desktop: "(min-width: 768px)"
       mobile: "(max-width: 767.98px)"
   ```
+- **Keep users on the path at information steps that point at buttons.** A step that only explains a button ("**Invite a manager** opens the invitation dialog") lets a click on it through by default, and the user leaves the tour. Add `tour-target-click: next` (the click means "got it") or `block`, or set `tours.info_target_click: next` for the whole project. It is only for `manual` steps: on a click step the click *is* the advance (`target-click-on-action-step`).
 - **Hold hover menus open with `tour-hold`.** The popover is the overlay's one element that takes the pointer, so a menu that closes on `mouseleave` closes when the popover lands on it. After a `hover`, put `tour-hold: '[data-testid="<menu>"]'` on every kept click into that menu — keep the step's own selector on the exact link; only the popover's placement changes. A click after a `hover` with no `tour-hold` is `hover-collapse-risk`:
 
   ```markdown
@@ -1843,6 +1845,8 @@ Every message names the tour, the scenario, the step and its heading, and ends w
 | `entry-unknown` | warning | `tour: start` after clicks (or no `navigate`) and no `tour.entry`: set `tour.entry` to the start page's route |
 | `placement-ignored` | warning | Drop `tour-placement` from the centred step |
 | `hold-ignored` | warning | Drop `tour-hold` from the centred step |
+| `target-click-ignored` | warning | Drop `tour-target-click` from the centred step |
+| `target-click-on-action-step` | error | Drop `tour-target-click`, or make the step an information step (`tour-advance: manual`) |
 | `hover-collapse-risk` | warning | Add `tour-hold` naming the hovered menu to each click into it |
 | `text-link-dropped` | warning | Link only app routes or the guide site |
 | `no-tours` | warning | Tours are enabled but no scenario opts in: add `tour: true` to one |

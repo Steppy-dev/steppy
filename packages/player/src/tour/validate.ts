@@ -33,12 +33,14 @@ import {
   SRI_PATTERN,
   STEP_ID_PATTERN,
   TARGETED_ADVANCE_KINDS,
+  TARGET_CLICK_MODES,
   TEST_ID_ATTRIBUTE_PATTERN,
   TEST_ID_PATTERN,
   TOUR_ID_PATTERN,
   TOUR_SCHEMA_VERSION,
   type AdvanceKind,
   type Placement,
+  type TargetClickMode,
 } from './contract.js';
 
 export interface TourEntry {
@@ -75,6 +77,8 @@ export interface TourStep {
   readonly placement: Placement | null;
   /** Test-id of an element the bubble must never cover (a hover menu the target sits in). */
   readonly hold: string | null;
+  /** Information steps only: what a click on the target does. ``null``: the host's ``infoTargetClick``. */
+  readonly targetClick: TargetClickMode | null;
   readonly layouts: readonly string[] | null;
 }
 
@@ -396,6 +400,13 @@ export function validateTour(raw: unknown, ctx: TourContext): Result<TourFile> {
       if (advance && (TARGETED_ADVANCE_KINDS as readonly string[]).includes(advance) && target === null) {
         c.fail(`${p}.target`, `is required for advance "${advance}"`);
       }
+      let targetClick: TargetClickMode | null = null;
+      if (o.targetClick !== undefined && o.targetClick !== null) {
+        targetClick = c.oneOf(o.targetClick, `${p}.targetClick`, TARGET_CLICK_MODES);
+        if (target === null || (advance !== null && advance !== 'manual')) {
+          c.fail(`${p}.targetClick`, 'is only for a targeted step that advances on manual');
+        }
+      }
       let layouts: string[] | null = null;
       if (o.layouts !== undefined && o.layouts !== null) {
         if (!Array.isArray(o.layouts) || o.layouts.length < 1 || o.layouts.length > MAX_LAYOUTS) {
@@ -415,6 +426,7 @@ export function validateTour(raw: unknown, ctx: TourContext): Result<TourFile> {
           text: c.text(o.text, `${p}.text`, MAX_TEXT_CHARS, true),
           placement: o.placement === undefined || o.placement === null ? null : c.oneOf(o.placement, `${p}.placement`, PLACEMENTS),
           hold: c.optStr(o.hold, `${p}.hold`, RX.testId),
+          targetClick,
           layouts: layouts && Object.freeze(layouts),
         }),
       );

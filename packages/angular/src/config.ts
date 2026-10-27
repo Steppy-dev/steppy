@@ -1,5 +1,5 @@
 import { InjectionToken, type Signal } from '@angular/core';
-import type { TourAppearance, TourNavigate, TourSource, TourStringOverrides, TourTheme } from '@steppy/player/tour';
+import type { TargetClickMode, TourAppearance, TourNavigate, TourSource, TourStringOverrides, TourTheme } from '@steppy/player/tour';
 
 /**
  * Where the tours' language comes from. A string or a signal is used as is; a
@@ -36,6 +36,12 @@ export interface SteppyToursConfig {
   theme?: TourTheme;
   /** The overlay's default palette: ``'dark'`` (the overlay's default), ``'light'`` or ``'auto'``. */
   appearance?: TourAppearance;
+  /**
+   * What a click on an information step's target does when its tour file does
+   * not say: ``'pass'`` (the overlay's default, the click reaches the element),
+   * ``'next'`` (it advances instead) or ``'block'`` (it does nothing).
+   */
+  infoTargetClick?: TargetClickMode;
   /** Supply tour files yourself; see the overlay's ``source`` property. */
   source?: TourSource | null;
   /** The tours' language. Default: ``<html lang>``. */

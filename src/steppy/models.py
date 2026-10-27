@@ -292,6 +292,7 @@ _UNIVERSAL_FIELDS: frozenset[str] = frozenset(
         "tour_advance",
         "tour_placement",
         "tour_hold",
+        "tour_target_click",
         "action",
         "role",
         "expect",
@@ -370,6 +371,7 @@ _FIELD_ALIASES: dict[str, str] = {
     "tour_advance": "tour-advance",
     "tour_placement": "tour-placement",
     "tour_hold": "tour-hold",
+    "tour_target_click": "tour-target-click",
 }
 
 #: Spellings of a boolean a step-level ``tour:`` must not take (step scalars
@@ -512,7 +514,9 @@ class Step(BaseModel):
     # `tour-placement` override what inference picks. The value sets are
     # `steppy.tour_spec`'s, pinned by a test. `tour-hold` names, as one test-id
     # selector, an element the popover must never cover (a hover menu the step's
-    # target sits in), so the pointer can stay over it.
+    # target sits in), so the pointer can stay over it. `tour-target-click`
+    # says what a click on an information step's target does (`pass` reaches
+    # the element, `next` advances instead, `block` swallows it).
     tour: Optional[list[Literal["skip", "keep", "start", "end"]]] = None
     tour_text: Optional[GuideText] = Field(default=None, alias="tour-text")
     tour_advance: Optional[Literal["click", "input", "change", "visible", "manual"]] = Field(
@@ -522,6 +526,7 @@ class Step(BaseModel):
         default=None, alias="tour-placement"
     )
     tour_hold: Optional[str] = Field(default=None, alias="tour-hold")
+    tour_target_click: Optional[Literal["pass", "next", "block"]] = Field(default=None, alias="tour-target-click")
 
     # Progressive capture for fill-form: snapshot once per field with a
     # single-target cursor on the next-to-fill field, then a settled "all
@@ -2362,7 +2367,8 @@ class ToursConfig(BaseModel):
     rejected when tours are emitted, so unrelated commands keep working.
     ``layouts`` maps the layout names scenario steps use to CSS media queries
     the overlay evaluates (skip-only: a step whose layouts do not match is
-    skipped, never re-routed).
+    skipped, never re-routed). ``info_target_click`` is the default of the
+    step-level ``tour-target-click`` for every targeted information step.
     """
 
     enabled: bool = False
@@ -2374,6 +2380,7 @@ class ToursConfig(BaseModel):
     test_id_attribute: str = "data-testid"
     layouts: Optional[dict[str, str]] = None
     replay: bool = True
+    info_target_click: Optional[Literal["pass", "next", "block"]] = None
     targets: list[TourTarget] = Field(default_factory=list)
 
     class Config:

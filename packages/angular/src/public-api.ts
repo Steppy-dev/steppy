@@ -11,6 +11,7 @@ export { routerNavigate } from './navigate';
 
 // Types only: erased at build time, so nothing from the overlay loads on the server.
 export type {
+  TargetClickMode,
   TourAppearance,
   TourErrorDetail,
   TourEventDetailMap,

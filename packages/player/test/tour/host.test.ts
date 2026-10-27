@@ -136,7 +136,8 @@ describe('a tour, followed', () => {
     expect(part('next')).toBeNull();
     expect(part('spotlight')).not.toBeNull();
     expect(b.hasAttribute('data-testid')).toBe(false);
-    expect(host.current).toEqual({ tourId: 'create-invoice', stepId: 'new-invoice-btn', index: 0, total: 5 });
+    expect(host.current).toEqual({ tourId: 'create-invoice', stepId: 'new-invoice-btn', testId: 'new-invoice-btn', index: 0, total: 5 });
+    expect(of('tour-step')[0]!.detail.testId).toBe('new-invoice-btn');
   });
 
   it('advances click → input (Next gated on a value) → change → click → manual, then completes', async () => {
@@ -542,5 +543,80 @@ describe('language', () => {
     host.strings = { ar: { progress: 'الخطوة {current} من {total}' } };
     await tick();
     expect(part('progress')!.textContent).toBe('الخطوة 1 من 5');
+  });
+});
+
+describe("a click on an information step's target", () => {
+  // ``invoice-detail`` is the last step: targeted, advancing on Next.
+  function counted(id: string): { clicks: number; presses: number } {
+    const n = { clicks: 0, presses: 0 };
+    const el = app(id);
+    el.addEventListener('click', () => n.clicks++);
+    el.addEventListener('mousedown', () => n.presses++);
+    return n;
+  }
+  async function atInfo(mode?: 'pass' | 'next' | 'block'): Promise<void> {
+    if (mode) host.infoTargetClick = mode;
+    await begin('create-invoice', { step: 'invoice-detail' });
+    expect(host.current!.stepId).toBe('invoice-detail');
+  }
+
+  it('reaches the element by default (pass)', async () => {
+    const n = counted('invoice-detail');
+    await atInfo();
+    press(app('invoice-detail'));
+    await tick();
+    expect(n).toEqual({ clicks: 1, presses: 1 });
+    expect(host.current!.stepId).toBe('invoice-detail');
+  });
+
+  it('next: never reaches the element, advances as Next would', async () => {
+    const n = counted('invoice-detail');
+    await atInfo('next');
+    const md = new MouseEvent('mousedown', { bubbles: true, composed: true, cancelable: true });
+    app('invoice-detail').dispatchEvent(md);
+    expect(md.defaultPrevented).toBe(true);
+    app('invoice-detail').dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true, detail: 1 }));
+    await tick();
+    expect(n).toEqual({ clicks: 0, presses: 0 });
+    expect(of('tour-complete')).toHaveLength(1);
+  });
+
+  it('next: a double click advances one step and never leaks to the app', async () => {
+    const n = counted('invoice-detail');
+    await atInfo('next');
+    press(app('invoice-detail'));
+    press(app('invoice-detail'));
+    app('invoice-detail').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, composed: true }));
+    await tick();
+    expect(of('tour-complete')).toHaveLength(1);
+    expect(n).toEqual({ clicks: 0, presses: 0 });
+    // Once the hold ran out, the element is the app's again.
+    dom.scheduler.advance(600);
+    press(app('invoice-detail'));
+    expect(n.clicks).toBe(1);
+  });
+
+  it('block: never reaches the element, and nothing happens', async () => {
+    const n = counted('invoice-detail');
+    await atInfo('block');
+    press(app('invoice-detail'));
+    await tick();
+    expect(n).toEqual({ clicks: 0, presses: 0 });
+    expect(host.current!.stepId).toBe('invoice-detail');
+    press(part('next')!);
+    await tick();
+    expect(of('tour-complete')).toHaveLength(1);
+  });
+
+  it('leaves clicks elsewhere and on action steps alone', async () => {
+    host.infoTargetClick = 'block';
+    const list = counted('invoice-list');
+    await begin();
+    app('new-invoice-btn').click();
+    await tick(1);
+    expect(host.current!.stepId).toBe('invoice-title');
+    app('invoice-list').click();
+    expect(list.clicks).toBeGreaterThan(0);
   });
 });

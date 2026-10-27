@@ -13,6 +13,7 @@ export const TOUR_SCHEMA_VERSION = 1;
 export const ADVANCE_KINDS = ['click', 'input', 'change', 'visible', 'manual'] as const;
 export const TARGETED_ADVANCE_KINDS = ['click', 'input', 'change', 'visible'] as const;
 export const PLACEMENTS = ['top', 'bottom', 'left', 'right', 'auto'] as const;
+export const TARGET_CLICK_MODES = ['pass', 'next', 'block'] as const;
 export const TOUR_EVENTS = ['tour-start', 'tour-step', 'tour-complete', 'tour-dismiss', 'tour-offpath', 'tour-error'] as const;
 export const TOUR_ERROR_REASONS = ['target-timeout', 'entry-params', 'load-failed', 'schema-unsupported', 'invalid-data'] as const;
 export const TOUR_PARTS = ['layer', 'spotlight', 'bubble', 'title', 'body', 'progress', 'button', 'primary', 'secondary', 'next', 'close', 'skip', 'end', 'resume', 'pill', 'guide-link'] as const;
@@ -55,6 +56,8 @@ export const DEFAULT_BASE_Z_INDEX = 2147483000;
 
 export type AdvanceKind = (typeof ADVANCE_KINDS)[number];
 export type Placement = (typeof PLACEMENTS)[number];
+/** What a click on an information step's target does: reach the element, advance, or nothing. */
+export type TargetClickMode = (typeof TARGET_CLICK_MODES)[number];
 export type TourEventName = (typeof TOUR_EVENTS)[number];
 export type TourErrorReason = (typeof TOUR_ERROR_REASONS)[number];
 export type TourPart = (typeof TOUR_PARTS)[number];

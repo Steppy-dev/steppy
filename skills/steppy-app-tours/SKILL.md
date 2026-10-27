@@ -176,7 +176,7 @@ await tours.start('send-invoice', { params: { invoiceId: 1001 } }); // resolves 
 
 | API | What |
 |---|---|
-| `provideSteppyTours(config)` | Root providers. Keys: `fallbackManifest`, `manifest`, `buildId`, `guideOrigin`, `targetTimeout`, `baseZIndex`, `disabled`, `strings`, `theme`, `appearance`, `source` (as on the host, below); `locale` — a string, a signal, or a function run once in an injection context that returns either; `navigate` — `'router'` (default), `'document'` (full page loads) or your own function; `readyTimeout` — how long `start()` waits for the overlay (10 s). |
+| `provideSteppyTours(config)` | Root providers. Keys: `fallbackManifest`, `manifest`, `buildId`, `guideOrigin`, `targetTimeout`, `baseZIndex`, `disabled`, `strings`, `theme`, `appearance`, `infoTargetClick`, `source` (as on the host, below); `locale` — a string, a signal, or a function run once in an injection context that returns either; `navigate` — `'router'` (default), `'document'` (full page loads) or your own function; `readyTimeout` — how long `start()` waits for the overlay (10 s). |
 | `<steppy-tours />` (`SteppyToursComponent`) | The overlay. Place it **once**, in the shell, never in a routed page. Its inputs override the config; outputs `tourStart`, `tourStep`, `tourComplete`, `tourDismiss`, `tourOffpath`, `tourError` carry the event details. |
 | `SteppyTours` (root service) | `start(id, {params, step})` waits for the overlay, lets the last call win, resolves `false` when a tour cannot start. `stop(reason)`, `next()`. Signals `active`, `current`, `lastError`; `events`, an Observable delivered inside the zone. |
 | `steppyTourStart` (`SteppyTourStart`) | `<button steppyTourStart="create-invoice" [steppyTourParams]="{invoiceId: id}" steppyTourStep="…">` starts a tour on click. |
@@ -298,11 +298,16 @@ injected scripts and no sanitizer bypass.
 | `strings` | — | — | Chrome string overrides per language (below). |
 | `appearance` | `appearance` | `dark` | The default palette: `dark`, `light`, or `auto` (follows the user's colour scheme). |
 | `theme` | — | — | `{ accent: '#0b5cad', width: '360px', … }`: `--steppy-tour-*` values written onto the element, winning over the app's stylesheet. Keys and look: the `steppy-template` skill. |
+| `infoTargetClick` | `info-target-click` | `pass` | What a click on an information step's target does when the tour file does not say (the scenario's `tour-target-click` / `tours.info_target_click` win): `pass` reaches the element, `next` advances instead, `block` swallows it. Replaces any app-side capture listener that swallowed such clicks. |
 
 Methods: `start(tourId, {params, step})` resolves `true` once the tour started and
 `false` when it could not (a `tour-error` says why) — it never rejects, and starting a
 tour ends any other one. `stop(reason)` ends the tour. `next()` advances the current
-step. State: `isActive`, and `current` (`{tourId, stepId, index, total}` or `null`).
+step. State: `isActive`, and `current` (`{tourId, stepId, testId, index, total}` or `null`).
+`testId` — also on `tour-step`, `tour-dismiss` and `tour-offpath` — is the step's target
+test-id (`null` when centred). Use it to find the step's element (to open the panel it
+sits in, say); never parse `stepId`, which gets `-2`, `-3` suffixes when a tour targets
+one test-id twice.
 
 ## 4. Start tours from the app's UI
 

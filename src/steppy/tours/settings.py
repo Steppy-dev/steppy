@@ -43,6 +43,7 @@ class ToursSettings:
     publishes_guide: bool
     app_urls: dict = field(default_factory=dict)  # role -> configured app URL
     screenshot_widths: dict = field(default_factory=dict)  # layout -> viewport width
+    info_target_click: Optional[str] = None  # default `tour-target-click` of a targeted info step
 
     @property
     def layout_map(self) -> dict[str, str]:
@@ -77,6 +78,7 @@ class ToursSettings:
             publishes_guide=any(t.type == "guide" for t in tours.targets),
             app_urls={role: app.url for role, app in config.apps.items()},
             screenshot_widths={name: layout.width for name, layout in config.screenshot.layouts.items()},
+            info_target_click=tours.info_target_click,
         )
 
 

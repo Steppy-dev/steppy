@@ -1339,7 +1339,7 @@
     },
     "ToursConfig": {
       "additionalProperties": false,
-      "description": "In-app tours: guided popovers over the live app, compiled from scenarios.\n\nAbsent or ``enabled: false`` \u21d2 no tour output at all and every existing\noutput byte-identical. When enabled, ``steppy generate`` and ``steppy\ntours`` compile every opted-in scenario into ``<output.tours_dir>/<build-id>/``\nplus a flat copy per ``app-assets`` target, and ``generate`` appends a CI\nreplay to each opted-in scenario's test file (``replay``). A ``guide``\ntarget makes the static ``steppy build`` republish the tree.\n\n``build_id`` is ``git-sha``, ``git-sha:<repo-path>`` or a literal (see\n:mod:`steppy.buildid`); an unset ``${VAR}`` is accepted here and only\nrejected when tours are emitted, so unrelated commands keep working.\n``layouts`` maps the layout names scenario steps use to CSS media queries\nthe overlay evaluates (skip-only: a step whose layouts do not match is\nskipped, never re-routed).",
+      "description": "In-app tours: guided popovers over the live app, compiled from scenarios.\n\nAbsent or ``enabled: false`` \u21d2 no tour output at all and every existing\noutput byte-identical. When enabled, ``steppy generate`` and ``steppy\ntours`` compile every opted-in scenario into ``<output.tours_dir>/<build-id>/``\nplus a flat copy per ``app-assets`` target, and ``generate`` appends a CI\nreplay to each opted-in scenario's test file (``replay``). A ``guide``\ntarget makes the static ``steppy build`` republish the tree.\n\n``build_id`` is ``git-sha``, ``git-sha:<repo-path>`` or a literal (see\n:mod:`steppy.buildid`); an unset ``${VAR}`` is accepted here and only\nrejected when tours are emitted, so unrelated commands keep working.\n``layouts`` maps the layout names scenario steps use to CSS media queries\nthe overlay evaluates (skip-only: a step whose layouts do not match is\nskipped, never re-routed). ``info_target_click`` is the default of the\nstep-level ``tour-target-click`` for every targeted information step.",
       "properties": {
         "build_id": {
           "default": "git-sha",
@@ -1379,6 +1379,23 @@
           ],
           "default": null,
           "title": "Guide Base Url"
+        },
+        "info_target_click": {
+          "anyOf": [
+            {
+              "enum": [
+                "pass",
+                "next",
+                "block"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Info Target Click"
         },
         "layouts": {
           "anyOf": [

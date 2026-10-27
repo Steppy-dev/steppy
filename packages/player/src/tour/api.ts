@@ -3,10 +3,12 @@
  * framework adapter) programs against.
  */
 
+import type { TargetClickMode } from './contract.js';
 import type { TourSource } from './loader.js';
 import type { TourStringOverrides } from './strings.js';
 import type { TourAppearance, TourTheme } from './theme.js';
 
+export type { TargetClickMode } from './contract.js';
 export type { TourSource } from './loader.js';
 export type { TourStringOverrides } from './strings.js';
 export type { TourAppearance, TourTheme } from './theme.js';
@@ -21,6 +23,8 @@ export interface TourStartOptions {
 export interface TourPosition {
   tourId: string;
   stepId: string;
+  /** The step's target test-id, ``null`` for a centred step. ``stepId`` is not one: read this. */
+  testId: string | null;
   /** 0-based among the steps that apply to the current layout. */
   index: number;
   total: number;
@@ -57,6 +61,8 @@ export interface TourHostApi {
   theme: TourTheme | undefined;
   /** Default palette: ``dark`` (default), ``light``, or ``auto`` (follows the colour scheme). */
   appearance: TourAppearance;
+  /** What a click on an information step's target does when its tour file does not say: ``pass`` (default), ``next``, ``block``. */
+  infoTargetClick: TargetClickMode;
   /** Start a tour. Resolves true once it started; never rejects. */
   start(tourId: string, options?: TourStartOptions): Promise<boolean>;
   stop(reason?: string): void;

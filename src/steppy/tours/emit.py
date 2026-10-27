@@ -73,6 +73,8 @@ def tour_file_payload(tour: CompiledTour, locale: str, build_id: str) -> dict:
             step["placement"] = plan.placement
         if plan.hold:
             step["hold"] = plan.hold
+        if plan.target_click:
+            step["targetClick"] = plan.target_click
         if plan.layouts:
             step["layouts"] = list(plan.layouts)
         steps.append(step)

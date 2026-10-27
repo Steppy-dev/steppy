@@ -116,7 +116,7 @@ function meta(s: EngineState) {
 
 function stepDetail(s: EngineState) {
   const step = s.loaded!.tour.steps[s.index]!;
-  return { ...meta(s), stepId: step.id, ...position(s) };
+  return { ...meta(s), stepId: step.id, testId: step.target, ...position(s) };
 }
 
 const emit = (name: Extract<Effect, { type: 'emit' }>['name'], detail: object): Effect => ({ type: 'emit', name, detail });
@@ -298,7 +298,8 @@ export function reduce(s: EngineState, e: EngineEvent): Transition {
         e.tour.steps.every((st, i) => st.id === old[i]!.id &&
             st.target === old[i]!.target &&
             st.advance === old[i]!.advance &&
-            st.hold === old[i]!.hold,
+            st.hold === old[i]!.hold &&
+            st.targetClick === old[i]!.targetClick,
         );
       return same ? { state: { ...s, loaded: { ...s.loaded!, tour: e.tour } }, effects: [] } : none;
     }

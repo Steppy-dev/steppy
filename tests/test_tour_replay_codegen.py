@@ -265,3 +265,15 @@ def test_without_a_hold_the_replay_neither_imports_nor_calls_it(tmp_path):
         tmp_path, OPEN + "\n### 2. Go\n- role: editor\n- action: click\n- selector: '[data-testid=\"go\"]'\n"
     )
     assert "_tour_hold" not in code and "'hold'" not in code
+
+
+def test_a_target_click_leaves_the_replay_unchanged(tmp_path):
+    # The replay presses the bubble's Next on an information step and never its
+    # target, so swallowing target clicks cannot change what CI does.
+    info = (
+        '\n### 2. Look\n- role: editor\n- action: assert\n- expect: visible([data-testid="create"])\n'
+        '- guide-text:\n    en: "This button creates one."\n'
+    )
+    plain = _render(tmp_path, OPEN + info)
+    swallowed = _render(tmp_path, OPEN + info + "- tour-target-click: next\n")
+    assert swallowed == plain

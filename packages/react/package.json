@@ -1,6 +1,6 @@
 {
   "name": "@steppy/react",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Thin React wrapper around the Steppy <steppy-guide> web component",
   "type": "module",
   "main": "./dist/index.js",

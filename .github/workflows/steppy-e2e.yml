@@ -7,7 +7,7 @@
 #
 #   jobs:
 #     e2e:
-#       uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.8.0
+#       uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.8.1
 #       with:
 #         compose-file: docker-compose.yml
 #       secrets:
@@ -57,7 +57,7 @@ on:
       steppy-ref:
         description: 'Git ref of Steppy to install. Defaults to the version this workflow ships with.'
         type: string
-        default: 'v0.8.0'
+        default: 'v0.8.1'
       extras:
         description: 'Extras to install. `report` enables report.html, `retry` enables --retries.'
         type: string

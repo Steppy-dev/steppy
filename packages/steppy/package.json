@@ -1,6 +1,6 @@
 {
   "name": "steppy",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "TypeScript types and config helper for Steppy guide builds",
   "type": "module",
   "main": "./index.js",

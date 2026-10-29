@@ -1,6 +1,6 @@
 {
   "name": "@steppy/angular",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Angular adapter for the Steppy in-app tour overlay: provideSteppyTours(), <steppy-tours> and the SteppyTours service",
   "license": "Apache-2.0",
   "repository": {
@@ -23,7 +23,7 @@
     "@angular/common": ">=20.0.0 <23.0.0",
     "@angular/core": ">=20.0.0 <23.0.0",
     "@angular/router": ">=20.0.0 <23.0.0",
-    "@steppy/player": "0.8.0",
+    "@steppy/player": "0.8.1",
     "rxjs": "^7.4.0"
   },
   "dependencies": {

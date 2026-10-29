@@ -913,6 +913,118 @@ def test_layout_steps_need_media_queries(tmp_path):
     assert result.replay_plans["editor--case"].layouts == (("mobile", "(max-width: 767.98px)"),)
 
 
+MEDIA = {"desktop": "(min-width: 768px)", "mobile": "(max-width: 767.98px)"}
+
+
+def _on(n: int, test_id: str, layout: str, extra: str = "") -> str:
+    """A click limited to one layout — half of a layout twin."""
+    return (
+        f"\n### {n}. Click\n- role: editor\n- action: click\n- selector: '[data-testid=\"{test_id}\"]'\n"
+        f"- layouts: [{layout}]\n" + extra
+    )
+
+
+def _expect(test_id: str) -> str:
+    return f'- expect: visible([data-testid="{test_id}"])\n'
+
+
+def test_a_twins_gate_does_not_reach_the_other_layouts_twin(tmp_path):
+    # The first consumer's shape: the desktop click's check landed on the mobile
+    # tap, which then waited for an element only the tap shows, and the tour stalled.
+    shared = "\n### 4. Your publications\n- role: editor\n- action: hover\n"
+    shared += "- selector: '[data-testid=\"history-title\"]'\n- tour: keep\n"
+    result = _compile(
+        tmp_path,
+        OPEN
+        + _on(2, "nav-history", "desktop", _expect("history-title"))
+        + _on(3, "tab-history", "mobile", _expect("history-title"))
+        + shared,
+        layouts=MEDIA,
+    )
+    assert _steps(result) == [
+        ("nav-history", "nav-history", "click", None),
+        ("tab-history", "tab-history", "click", None),
+        # Both layouts hold its gate, which is its own target.
+        ("history-title", "history-title", "manual", None),
+    ]
+    assert "gate-layouts-differ" not in _codes(result)
+
+
+def test_a_one_sided_twin_check_does_not_gate_the_other_layout(tmp_path):
+    result = _compile(
+        tmp_path,
+        OPEN + _on(2, "nav-plan", "desktop", _expect("plan-card")) + _on(3, "menu-btn", "mobile"),
+        layouts=MEDIA,
+    )
+    assert [s[3] for s in _steps(result)] == [None, None]
+
+
+def test_twins_with_the_same_check_gate_the_shared_step_on_every_layout(tmp_path):
+    result = _compile(
+        tmp_path,
+        OPEN
+        + _on(2, "nav-history", "desktop", _expect("history-title"))
+        + _on(3, "tab-history", "mobile", _expect("history-title"))
+        + _click(4, "history-filter"),
+        layouts=MEDIA,
+    )
+    assert _steps(result)[-1] == ("history-filter", "history-filter", "click", "history-title")
+    (plan,) = result.replay_plans.values()
+    assert [ts.wait_for for entry in plan.entries for ts in entry.tour_steps] == [None, None, "history-title"]
+    assert "gate-layouts-differ" not in _codes(result)
+
+
+@pytest.mark.parametrize(
+    "mobile_check, shown",
+    [(_expect("tab-panel"), "mobile: 'tab-panel'"), ("", "mobile: none")],
+    ids=["different", "one-sided"],
+)
+def test_twins_with_different_checks_leave_the_shared_step_ungated(tmp_path, mobile_check, shown):
+    result = _compile(
+        tmp_path,
+        OPEN
+        + _on(2, "nav-panel", "desktop", _expect("side-panel"))
+        + _on(3, "tab-panel", "mobile", mobile_check)
+        + _click(4, "go"),
+        layouts=MEDIA,
+    )
+    assert _steps(result)[-1] == ("go", "go", "click", None)
+    (differ,) = [d for d in result.diagnostics if d.code == "gate-layouts-differ"]
+    assert (differ.severity, differ.step_number) == ("info", 4)
+    assert "desktop: 'side-panel'" in differ.message and shown in differ.message
+
+
+def test_a_shared_gate_reaches_the_next_step_on_each_layout(tmp_path):
+    # A step without `layouts:` gates every layout; each twin consumes its own.
+    result = _compile(tmp_path, OPEN + GATE + _on(3, "drawer-go", "mobile") + _on(4, "go", "desktop"), layouts=MEDIA)
+    assert [s[3] for s in _steps(result)] == ["list", "list"]
+
+
+def test_a_page_change_on_one_layout_drops_the_gate_there_only(tmp_path):
+    skip = _on(3, "row", "desktop", "- tour: skip\n")
+    result = _compile(
+        tmp_path, OPEN + GATE + skip + _on(4, "drawer-go", "mobile") + _on(5, "go", "desktop"), layouts=MEDIA
+    )
+    assert [s[3] for s in _steps(result)] == ["list", None]
+    (stale,) = [d for d in result.diagnostics if d.code == "gate-stale"]
+    assert stale.step_number == 3
+    assert "on desktop" in stale.message and "step 5" in stale.message
+
+
+DESKTOP_HOVER = "\n### 2. Open the menu\n- role: editor\n- action: hover\n"
+DESKTOP_HOVER += "- selector: '[data-testid=\"side-nav\"]'\n- layouts: [desktop]\n"
+
+
+def test_a_hover_on_one_layout_only_puts_that_layouts_clicks_at_risk(tmp_path):
+    mobile_only = _compile(tmp_path, OPEN + DESKTOP_HOVER + _on(3, "drawer-reports", "mobile"), layouts=MEDIA)
+    assert "hover-collapse-risk" not in _codes(mobile_only)
+    then_shared = _compile(
+        tmp_path, OPEN + DESKTOP_HOVER + _on(3, "drawer-reports", "mobile") + _click(4, "monthly"), layouts=MEDIA
+    )
+    (warning,) = [d for d in then_shared.diagnostics if d.code == "hover-collapse-risk"]
+    assert warning.step_number == 4
+
+
 def test_step_ids_are_stable_when_a_step_is_inserted(tmp_path):
     a = _compile(tmp_path, OPEN + "\n### 2. Go\n- role: editor\n- action: click\n- selector: '[data-testid=\"go\"]'\n")
     b = _compile(

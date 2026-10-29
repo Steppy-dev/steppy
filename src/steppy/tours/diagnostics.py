@@ -73,6 +73,7 @@ CODES: dict[str, Severity] = {
     "step-skipped": "info",
     "gate-dropped": "info",
     "gate-stale": "info",
+    "gate-layouts-differ": "info",
     "reduced-to-host": "info",
     "conditional-skipped": "info",
     "layout-media-unchecked": "info",

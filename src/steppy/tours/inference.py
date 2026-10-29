@@ -25,7 +25,11 @@ Order of decisions:
    unless a skipped step in between may change the page
    (``actions.page_change``), which drops it: the element may be gone by then,
    and a step waiting for it would never show. ``gate-stale`` says so when a
-   kept step loses its wait that way.
+   kept step loses its wait that way. Gates (and the hover a click may need
+   held open) are tracked per layout: a step limited by ``layouts:`` sets and
+   drops them on those layouts only, and a kept step waits for a gate only when
+   every layout it runs on holds that gate (``gate-layouts-differ`` otherwise —
+   ``waitFor`` is one value per step).
 """
 
 from __future__ import annotations
@@ -201,11 +205,17 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
     kept: list[TourStepPlan] = []
     # (entry index, list of plans) so replay tour_steps can be filled after ids are assigned
     entries: list[tuple[int, str, str, list[TourStepPlan], bool]] = []
-    pending_gate: Optional[str] = None
+    # One entry per layout the overlay tells apart; a step without `layouts:` covers them all.
+    lanes = _lanes(settings, steps)
+
+    def lanes_of(step: Step) -> tuple[Optional[str], ...]:
+        return tuple(step.layouts) if step.layouts else lanes
+
+    pending_gate: dict[Optional[str], Optional[str]] = dict.fromkeys(lanes)
     # The test-id (or None) of a hover the next kept clicks may need held open, once one ran.
-    hovered: Optional[tuple[Optional[str]]] = None
+    hovered: dict[Optional[str], Optional[tuple[Optional[str]]]] = dict.fromkeys(lanes)
     # (gate, the step that dropped it, why): reported only if a kept step would have waited for it.
-    stale: Optional[tuple[str, Step, str]] = None
+    stale: dict[Optional[str], Optional[tuple[str, Step, str]]] = dict.fromkeys(lanes)
     attr = settings.test_id_attribute
 
     for i, step in enumerate(steps):
@@ -243,8 +253,10 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
             continue
 
         cand = _apply_annotations(step, infer_candidate(step, attr), settings, sink)
+        here = lanes_of(step)
         if cand.kind == "gate":
-            pending_gate, stale = cand.gate, None
+            for lane in here:
+                pending_gate[lane], stale[lane] = cand.gate, None
             entries.append((i, "run", "gate", [], False))
         elif cand.kind == "kept":
             hold = _hold_test_id(step, attr, sink)
@@ -257,16 +269,9 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
                         f"'{sub.selector}' points at the host test-id {tid!r}",
                         step=step,
                     )
-                wait_for = pending_gate if j == 0 and pending_gate and pending_gate != tid else None
-                if j == 0 and stale is not None and stale[0] != tid:
-                    gate, cause, why = stale
-                    number = step.step_number or i + 1
-                    sink.add(
-                        "gate-stale",
-                        f"{why}, so step {number} no longer waits for {gate!r} (an earlier check)",
-                        step=cause,
-                        hint=f"add a `wait-for` on a test-id after this step if step {number} should wait for the page",
-                    )
+                wait_for = _wait_for(step, here, pending_gate, tid, sink) if j == 0 else None
+                if j == 0:
+                    _report_stale(step, i, here, stale, tid, sink)
                 advance = cand.advance or "manual"
                 target_click = None
                 if tid and advance == "manual":
@@ -308,21 +313,22 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
                     )
             if hold and not any(p.target for p in plans):
                 sink.add("hold-ignored", "a centred step's popover covers no target, so it holds nothing", step=step)
-            if hovered is not None:
-                if cand.family != "click":
-                    hovered = None
-                elif not hold:
-                    if hovered[0] is None or hovered[0] not in {p.target for p in plans}:
-                        sink.add(
-                            "hover-collapse-risk",
-                            "this click follows a hover, and nothing keeps the hovered element open: "
-                            "when the popover covers it, the pointer leaves it and a hover menu closes",
-                            step=step,
-                            hint="add `tour-hold:` naming the element that must stay hovered (its test-id)",
-                        )
-                    hovered = None
+            hovers = [hovered[lane] for lane in here if hovered[lane] is not None]
+            if hovers and (cand.family != "click" or not hold):
+                targets = {p.target for p in plans}
+                if cand.family == "click" and any(h[0] is None or h[0] not in targets for h in hovers):
+                    sink.add(
+                        "hover-collapse-risk",
+                        "this click follows a hover, and nothing keeps the hovered element open: "
+                        "when the popover covers it, the pointer leaves it and a hover menu closes",
+                        step=step,
+                        hint="add `tour-hold:` naming the element that must stay hovered (its test-id)",
+                    )
+                for lane in here:
+                    hovered[lane] = None
             kept.extend(plans)
-            pending_gate, stale = None, None
+            for lane in here:
+                pending_gate[lane], stale[lane] = None, None
             entries.append((i, "tour", "tour-step", plans, False))
         else:
             entries.append((i, "run", cand.reason or step.action, [], cand.reloads_page))
@@ -343,16 +349,21 @@ def infer_scenario(scenario: Scenario, settings: ToursSettings, sink: DiagSink) 
                 sink.add("step-skipped", f"left out of the tour ({cand.reason or step.action})", step=step)
             if step.action == "hover":
                 ext = extract_test_id(step.selector, attr, within=step.within, match=step.match)
-                hovered = (ext.test_id if ext.ok else None,)
+                for lane in here:
+                    hovered[lane] = (ext.test_id if ext.ok else None,)
             elif step.action == "navigate" or cand.reloads_page:
-                hovered = None
-            why = page_change(step) if pending_gate else None
+                for lane in here:
+                    hovered[lane] = None
+            gated = [lane for lane in here if pending_gate[lane]]
+            why = page_change(step) if gated else None
             if why:
-                stale, pending_gate = (pending_gate, step, why), None
+                for lane in gated:
+                    stale[lane], pending_gate[lane] = (pending_gate[lane], step, why), None
         for code, message, hint in cand.notes:
             sink.add(code, message, step=step, hint=hint)
         for gate in cand.trailing_gates:
-            pending_gate, stale = gate, None
+            for lane in here:
+                pending_gate[lane], stale[lane] = gate, None
 
     if not kept:
         sink.add(
@@ -424,6 +435,56 @@ def _marked(step: Step, mode: str) -> bool:
 
 def _number(steps: list[Step], i: int) -> int:
     return steps[i].step_number or i + 1
+
+
+def _lanes(settings: ToursSettings, steps: list[Step]) -> tuple[Optional[str], ...]:
+    """The layouts the overlay tells apart: the mapped ones, plus any a step names (``layouts-unmapped``).
+
+    ``(None,)`` when there are none, so a project without layouts keeps one lane.
+    """
+    names = dict.fromkeys(settings.layout_map)
+    for step in steps:
+        names.update(dict.fromkeys(step.layouts or ()))
+    return tuple(names) or (None,)
+
+
+def _wait_for(step: Step, lanes, pending_gate: dict, tid: Optional[str], sink: DiagSink) -> Optional[str]:
+    """The gate a kept step waits for: the one every layout it runs on holds, else none.
+
+    A gate equal to the step's own target is redundant, so it counts as none.
+    """
+    waits = {lane: pending_gate[lane] if pending_gate[lane] != tid else None for lane in lanes}
+    if len(set(waits.values())) == 1:
+        return next(iter(waits.values()))
+    shown = ", ".join(f"{lane}: {gate!r}" if gate else f"{lane}: none" for lane, gate in waits.items())
+    sink.add(
+        "gate-layouts-differ",
+        f"the layouts reach this step after different checks ({shown}), "
+        "and a step waits for the same element on every layout, so it waits for none",
+        step=step,
+        hint="give each layout's step the same check, or add a `wait-for` on a test-id every layout shows",
+    )
+    return None
+
+
+def _report_stale(step: Step, i: int, lanes, stale: dict, tid: Optional[str], sink: DiagSink) -> None:
+    """``gate-stale`` for each gate a skipped step dropped on a layout this kept step runs on."""
+    seen: set[tuple[str, int]] = set()
+    for lane in lanes:
+        if stale[lane] is None or stale[lane][0] == tid:
+            continue
+        gate, cause, why = stale[lane]
+        if (gate, id(cause)) in seen:
+            continue
+        seen.add((gate, id(cause)))
+        number = step.step_number or i + 1
+        on = f" on {', '.join(cause.layouts)}" if cause.layouts else ""
+        sink.add(
+            "gate-stale",
+            f"{why}{on}, so step {number} no longer waits for {gate!r} (an earlier check)",
+            step=cause,
+            hint=f"add a `wait-for` on a test-id after this step if step {number} should wait for the page",
+        )
 
 
 def _range_markers_ok(steps: list[Step], starts: list[int], ends: list[int], sink: DiagSink) -> bool:

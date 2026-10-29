@@ -234,6 +234,14 @@ same steps. The compiler checks each query against the layout's
 `screenshot.layouts` width when it can parse it (`layout-media-mismatch`), and
 warns when two queries can match the same width.
 
+Gates follow layouts too. A twin's `expect:` (or a `wait-for` limited to one
+layout) gates the next step on that layout only, so the other layout's twin
+never waits for an element that only its sibling's click shows. Twins with the
+same check gate the shared step after them on every layout. When the twins
+check for different elements, or only one of them checks, the shared step
+waits for none (`gate-layouts-differ`): a step waits for one element on every
+screen. A step without `layouts:` sets or drops a gate on every layout.
+
 ## Scenario annotations
 
 **Frontmatter** — `tour:` opts the scenario in:
@@ -560,7 +568,7 @@ tour.
 | `fill`, `fill-date` | input |
 | `fill-form` | one input step per field, with the same text |
 | `upload` | with `guide-cursor`: the cursor's target, manual. Otherwise: change (warns when the target is the bare file input) |
-| `assert`, `wait-for`, a trailing `expect:` | no text: a hidden gate — the next step waits for that test-id (`waitFor`), unless a skipped step in between may change the page (`gate-stale`). With text: an information step (manual) |
+| `assert`, `wait-for`, a trailing `expect:` | no text: a hidden gate — the next step on the same layouts waits for that test-id (`waitFor`, see [Layouts](#layouts)), unless a skipped step in between may change the page (`gate-stale`). With text: an information step (manual) |
 | `custom`, `call` | with `guide-cursor` click/type: click/input. Text without a cursor: a centred manual step (`unguided-action`). Otherwise skipped |
 | `confirm` | skipped (`unguided-action`). With `tour: keep` and text: a manual note shown beside the open dialog, never over it |
 | `navigate`, `login`, a reload after the start | skipped (`navigate-in-tour`, `reloads-page`) |
@@ -649,6 +657,7 @@ left out.
 | `conditional-skipped` | info | A `when:`/`optional:` step, left out | — |
 | `gate-dropped` | info | A check whose selector is not a test-id, so the next step does not wait for it | Point the check at a test-id |
 | `gate-stale` | info | A skipped step between a gate and the next tour step may change the page, so that step no longer waits for the gate: any action but `assert`, `wait-for`, `wait`, `wait-for-text`, `hover`, `scroll` and `capture`; `custom` code that calls anything but locating, reading, waiting and asserting; a `call` without `page: false` | Add a `wait-for` on a test-id after that step |
+| `gate-layouts-differ` | info | The layouts a step runs on reach it after different checks (one layout's twin checks for an element, the other's for another or for nothing); a step waits for one element on every layout, so it waits for none | Give each twin the same check, or add a `wait-for` on a test-id every layout shows |
 | `reduced-to-host` | info | A `[data-testid="x"] input`-style selector was reduced to its host test-id | — |
 | `layout-media-unchecked` | info | A layout query too complex to compare with its screenshot width | The replay still checks it |
 

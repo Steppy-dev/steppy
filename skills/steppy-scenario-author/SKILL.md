@@ -1775,6 +1775,7 @@ The test still types the value, the guide keeps its wording, and the tour shows 
       desktop: "(min-width: 768px)"
       mobile: "(max-width: 767.98px)"
   ```
+  A twin's `expect:` gates the next step on its own layouts only. Give both twins the same check and the shared step after them waits for it on every layout; different or one-sided checks leave the shared step with no wait (`gate-layouts-differ`).
 - **Keep users on the path at information steps that point at buttons.** A step that only explains a button ("**Invite a manager** opens the invitation dialog") lets a click on it through by default, and the user leaves the tour. Add `tour-target-click: next` (the click means "got it") or `block`, or set `tours.info_target_click: next` for the whole project. It is only for `manual` steps: on a click step the click *is* the advance (`target-click-on-action-step`).
 - **Hold hover menus open with `tour-hold`.** The popover is the overlay's one element that takes the pointer, so a menu that closes on `mouseleave` closes when the popover lands on it. After a `hover`, put `tour-hold: '[data-testid="<menu>"]'` on every kept click into that menu — keep the step's own selector on the exact link; only the popover's placement changes. A click after a `hover` with no `tour-hold` is `hover-collapse-risk`:
 
@@ -1799,7 +1800,7 @@ The test still types the value, the guide keeps its wording, and the tour shows 
 
 ### Errors and warnings
 
-Every message names the tour, the scenario, the step and its heading, and ends with a fix. Errors fail `steppy validate` (exit 1) and stop `generate` before anything is written; warnings never change an exit code. Infos (`step-skipped`, `conditional-skipped`, `gate-dropped`, `gate-stale`, `reduced-to-host`, `layout-media-unchecked`) print only with `steppy tours --explain`, which says why each step was left out.
+Every message names the tour, the scenario, the step and its heading, and ends with a fix. Errors fail `steppy validate` (exit 1) and stop `generate` before anything is written; warnings never change an exit code. Infos (`step-skipped`, `conditional-skipped`, `gate-dropped`, `gate-stale`, `gate-layouts-differ`, `reduced-to-host`, `layout-media-unchecked`) print only with `steppy tours --explain`, which says why each step was left out.
 
 | Code | Severity | Fix |
 |---|---|---|

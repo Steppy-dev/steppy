@@ -26,6 +26,17 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   test-id (`null` for a centred step). Read it instead of deriving one from
   `stepId`, whose `-2`, `-3` suffixes are not part of the contract.
 
+### Fixed
+- **In-app tours: a layout twin's gate no longer leaks onto the other layout.**
+  A step limited by `layouts:` handed its trailing `expect:` (or `wait-for`) to
+  the next tour step whatever that step's layouts, so a mobile twin waited for
+  an element only the desktop click shows, and the tour stalled on a phone. The
+  compiler now tracks gates per layout: twins with the same check gate the
+  shared step after them on every layout, and twins with different checks give
+  it none, with the new info `gate-layouts-differ`. A layout-limited step that
+  may change the page (`gate-stale`) and a layout-limited `hover`
+  (`hover-collapse-risk`) likewise only affect their own layouts.
+
 ### Changed
 - **The tour overlay's size budget is 28,700 B** (min + gzip), up from 27,750 B,
   for the feature above.

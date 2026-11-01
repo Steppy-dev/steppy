@@ -36,6 +36,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it none, with the new info `gate-layouts-differ`. A layout-limited step that
   may change the page (`gate-stale`) and a layout-limited `hover`
   (`hover-collapse-risk`) likewise only affect their own layouts.
+- **`auth.mode: bypass` now writes `auth.bypass.local_storage` in the generated
+  suite.** The generated conftest only added the bypass cookie, so an app
+  authenticated through a localStorage token ran every test logged out. The
+  values are set by an init script, on the app's origin only, before the app's
+  own scripts run.
 
 ### Changed
 - **The tour overlay's size budget is 28,700 B** (min + gzip), up from 27,750 B,

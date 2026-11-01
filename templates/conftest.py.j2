@@ -599,6 +599,8 @@ def get_authenticated_context(browser: Browser, role: str) -> BrowserContext:
         bypass = app["auth"].get("bypass", {})
         if bypass.get("cookie"):
             context.add_cookies([bypass["cookie"]])
+        if bypass.get("local_storage"):
+            context.add_init_script(_bypass_local_storage_script(app["url"], bypass["local_storage"]))
         return context
 
     elif mode == "token":
@@ -606,6 +608,26 @@ def get_authenticated_context(browser: Browser, role: str) -> BrowserContext:
 
     else:
         raise ValueError(f"Unknown auth mode: {mode}")
+
+
+def _bypass_local_storage_script(app_url: str, items: dict) -> str:
+    """Init script writing ``auth.bypass.local_storage`` before any page script runs.
+
+    An init script rather than ``steppy.auth``'s goto + ``setItem``: the values
+    are in place before the app's own bootstrap reads them, on every page of the
+    context, with no extra navigation. Guarded on the app's origin so an identity
+    provider or third-party page never receives them. Keys and values go through
+    ``json.dumps``, never into the script source as-is.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(app_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    sets = "".join(
+        "window.localStorage.setItem(" + json.dumps(str(k)) + ", " + json.dumps(str(v)) + ");"
+        for k, v in items.items()
+    )
+    return "try { if (window.location.origin === " + json.dumps(origin) + ") { " + sets + " } } catch (e) {}"
 
 
 def _authenticate_token(browser: Browser, role: str) -> BrowserContext:

@@ -89,7 +89,7 @@ def test_bypass_without_local_storage_adds_no_script():
 
 def test_hostile_value_stays_a_string_literal():
     ns, _ = _load({})
-    hostile = "x\"); alert(1); (\"'</script>"
+    hostile = 'x"); alert(1); ("\'</script>'
     script = ns["_bypass_local_storage_script"]("http://app.test", {"k": hostile})
     assert json.dumps(hostile) in script
     assert 'alert(1); ("' not in script.replace(json.dumps(hostile), "")
@@ -98,7 +98,7 @@ def test_hostile_value_stays_a_string_literal():
 @pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
 @pytest.mark.parametrize(
     ("origin", "expected"),
-    [("http://app.test", {"k": "va\"l", "n": "1"}), ("https://idp.example", {})],
+    [("http://app.test", {"k": 'va"l', "n": "1"}), ("https://idp.example", {})],
 )
 def test_script_sets_values_on_the_app_origin_only(origin, expected):
     ns, _ = _load({})

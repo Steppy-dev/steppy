@@ -54,6 +54,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its overlay to close (pressing `Escape` on one that stays open, such as a
   multiselect driven with `option:`), which also keeps a half-faded list out of
   the step's screenshot.
+- **French colons no longer need quoting.** `title: Segment : factures` in the
+  frontmatter, or under `guide-text:` / `tour-text:`, failed as invalid YAML (a
+  plain YAML value cannot contain `": "`). When a header or nested block fails to
+  parse, Steppy now quotes such values and retries; valid YAML parses exactly as
+  before, and YAML that is still broken reports the original error.
 
 ### Changed
 - **The tour overlay's size budget is 28,700 B** (min + gzip), up from 27,750 B,

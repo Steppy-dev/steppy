@@ -64,7 +64,7 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
 #}
 {% macro assert_body(role, assertion, loc, timeout, toast_timeout, unknown_comment) -%}
 {% if assertion.type == "toast" %}
-        expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.message ~ '"') | pystr }}, _vars)){% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ toast_timeout }})
+        expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.message ~ '"') | pystr }}, _vars)).first{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ toast_timeout }})
 {% elif assertion.type == "visible" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ timeout }})
 {% elif assertion.type == "hidden" %}
@@ -74,13 +74,13 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
 {% elif assertion.type == "contains" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_contain_text(_interp({{ assertion.text | pystr }}, _vars), timeout={{ timeout }})
 {% elif assertion.type == "url-contains" %}
-        expect({{ role }}_page{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_url(re.compile(r".*" + {{ assertion.path | pystr }} + r".*"), timeout={{ timeout }})
+        expect({{ role }}_page{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_url(re.compile(r".*" + re.escape(_interp({{ assertion.path | pystr }}, _vars)) + r".*"), timeout={{ timeout }})
 {% elif assertion.type == "count" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_count({{ assertion.count }}, timeout={{ timeout }})
 {% elif assertion.type == "count-cmp" %}
         _wait_until({{ loc }}, {{ ("count:" ~ assertion.comparator ~ assertion.count) | pystr }}, {{ timeout }}, message={% if assertion.fail_message %}_interp({{ assertion.fail_message | pystr }}, _vars){% else %}{{ ("expected count " ~ assertion.comparator ~ " " ~ assertion.count) | pystr }}{% endif %})
 {% elif assertion.type == "row-contains" %}
-        expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.text ~ '"') | pystr }}, _vars)){% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ timeout }})
+        expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.text ~ '"') | pystr }}, _vars)).first{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ timeout }})
 {% elif assertion.type == "value" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_value(_interp({{ assertion.text | pystr }}, _vars), timeout={{ timeout }})
 {% elif assertion.type == "attribute" %}

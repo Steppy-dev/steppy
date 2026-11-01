@@ -41,6 +41,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   authenticated through a localStorage token ran every test logged out. The
   values are set by an init script, on the app's origin only, before the app's
   own scripts run.
+- **`url-contains(...)` substitutes `{{var}}` and matches literally.** The path
+  reached the URL check untouched, so `url-contains("/invoices/{{id}}")` looked
+  for the braces, and a `?` or `.` in a query string was read as a regular
+  expression.
+- **`toast("...")` and `row-contains("...")` pass with duplicates on screen.**
+  Two identical toasts (or two matching rows) made the assertion a strict-mode
+  violation; it now checks the first match.
 
 ### Changed
 - **The tour overlay's size budget is 28,700 B** (min + gzip), up from 27,750 B,

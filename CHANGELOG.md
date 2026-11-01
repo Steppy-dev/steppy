@@ -48,6 +48,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`toast("...")` and `row-contains("...")` pass with duplicates on screen.**
   Two identical toasts (or two matching rows) made the assertion a strict-mode
   violation; it now checks the first match.
+- **Two `select-option` steps in a row pick from the right list.** The second
+  step's wait for the overlay passed at once on the first step's list, still
+  animating out, and the pick landed there. Every `select-option` now waits for
+  its overlay to close (pressing `Escape` on one that stays open, such as a
+  multiselect driven with `option:`), which also keeps a half-faded list out of
+  the step's screenshot.
 
 ### Changed
 - **The tour overlay's size budget is 28,700 B** (min + gzip), up from 27,750 B,

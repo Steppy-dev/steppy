@@ -20,7 +20,7 @@ import time
 import pytest
 from playwright.sync_api import Page, expect
 
-from .conftest import _assert_stays_hidden, _wait_until, _when, call_helper, take_screenshot_with_bbox, take_fillform_frames, take_fillform_progressive_frames, _safe_bbox, _safe_bbox_scrolled, _safe_bbox_locator, fill_login_credentials, capture, capture_dom, synthetic_click, _resolve_date, _pick_date, _pick_time, _interp, _interp_val, SKIP_ASSERTS, _step_runs, _steppy_mark_step, _steppy_end_step
+from .conftest import _assert_stays_hidden, _wait_until, _when, call_helper, take_screenshot_with_bbox, take_fillform_frames, take_fillform_progressive_frames, _safe_bbox, _safe_bbox_scrolled, _safe_bbox_locator, _wait_dropdown_closed, fill_login_credentials, capture, capture_dom, synthetic_click, _resolve_date, _pick_date, _pick_time, _interp, _interp_val, SKIP_ASSERTS, _step_runs, _steppy_mark_step, _steppy_end_step
 {% if tour_replay %}
 from ._steppy_tours import TourProbe, _tour_start, _tour_expect_step, _tour_ensure_advanced, _tour_expect_complete{% if tour_replay.spec.steps | selectattr("hold") | list %}, _tour_hold{% endif %}
 {% endif %}
@@ -304,6 +304,7 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
     {{ step.role }}_page.locator({{ config.dropdown.overlay | pystr }}).locator({{ config.dropdown.option | pystr }}).filter(has_text=_interp({{ opt.text | pystr }}, _vars)).first.click(force=True)
 {% endif %}
 {% endif %}
+    _wait_dropdown_closed({{ step.role }}_page, {{ config.dropdown.overlay | pystr }}, {{ step | resolve_timeout(scenario, config) }})
 {% if step.wait_after %}
     time.sleep({{ step.wait_after / 1000 }})
 {% endif %}

@@ -161,3 +161,90 @@ def test_select_option_cursor_targets_trigger():
             "bbox": {"x": 1, "y": 2, "width": 3, "height": 4},
         },
     }
+
+
+# ── Closing the overlay (two select-option steps in a row) ──────────────────
+#
+# The next select-option waits for the overlay to be *visible*. While the
+# previous one is still animating out that wait passed at once, and the next
+# pick landed in the closing list. Every select-option now ends closed.
+
+
+@pytest.mark.parametrize("body", ["    - option: first", "    - multiple:\n      - Role A\n      - Role B"])
+def test_codegen_waits_for_the_overlay_to_close(temp_scenario_file, body):
+    src = _gen(temp_scenario_file, body)
+    assert "_wait_dropdown_closed(editor_page, '.p-select-overlay', " in src
+    assert src.index("click(force=True)") < src.index("_wait_dropdown_closed(editor_page")
+    # Imported from the conftest along with the other helpers.
+    assert "_wait_dropdown_closed, " in src
+
+
+def test_close_wait_comes_before_the_after_screenshot(temp_scenario_file):
+    content = """
+    ---
+    title: Select option
+    auth: false
+    ---
+
+    ### 1. Pick from dropdown
+    - role: editor
+    - action: select-option
+    - selector: '[data-testid="schedule-select-product"]'
+    - option: first
+    - screenshot: editor
+    - guide-text:
+        en: "Pick the product."
+    """
+    scenario = parse_scenario_file(temp_scenario_file(content))
+    src = SteppyGenerator(load_config()).generate_test_file(scenario)
+    assert src.index("_wait_dropdown_closed(editor_page") < src.rindex('"select-option"')
+
+
+_CONFTEST = Path(__file__).resolve().parents[1] / "templates" / "conftest.py.j2"
+
+
+def _wait_dropdown_closed():
+    text = _CONFTEST.read_text(encoding="utf-8")
+    start = text.index("_DROPDOWN_CLOSE_GRACE_MS = ")
+    end = text.index("def synthetic_click(")
+    ns: dict = {}
+    exec(compile(text[start:end], "<conftest>", "exec"), ns)
+    return ns["_wait_dropdown_closed"]
+
+
+class _FakeKeyboard:
+    def __init__(self, log):
+        self.log = log
+
+    def press(self, key):
+        self.log.append(("press", key))
+
+
+class _FakePage:
+    def __init__(self, closes_on_its_own: bool):
+        self.log: list = []
+        self.keyboard = _FakeKeyboard(self.log)
+        self._closes = closes_on_its_own
+
+    def wait_for_selector(self, selector, state, timeout):
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+        self.log.append(("wait", selector, state, timeout))
+        if not self._closes and ("press", "Escape") not in self.log:
+            raise PlaywrightTimeoutError("still open")
+
+
+def test_helper_returns_once_the_overlay_has_closed():
+    page = _FakePage(closes_on_its_own=True)
+    _wait_dropdown_closed()(page, ".p-select-overlay", 30000)
+    assert page.log == [("wait", ".p-select-overlay", "hidden", 1000)]
+
+
+def test_helper_presses_escape_for_an_overlay_that_stays_open():
+    page = _FakePage(closes_on_its_own=False)
+    _wait_dropdown_closed()(page, ".p-multiselect-overlay", 30000)
+    assert page.log == [
+        ("wait", ".p-multiselect-overlay", "hidden", 1000),
+        ("press", "Escape"),
+        ("wait", ".p-multiselect-overlay", "hidden", 30000),
+    ]

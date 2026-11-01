@@ -1931,6 +1931,30 @@ def call_helper(page, dotted: str, args=None, kwargs=None, _vars=None, pass_page
     return fn(*resolved_args, **resolved_kwargs)
 
 
+#: How long a picked dropdown gets to close on its own before ``Escape``. Covers
+#: the overlay's close animation; a ``p-multiselect`` never closes on a pick.
+_DROPDOWN_CLOSE_GRACE_MS = 1000
+
+
+def _wait_dropdown_closed(page, overlay: str, timeout: int) -> None:
+    """End a ``select-option`` step with its overlay gone.
+
+    The next ``select-option`` waits for the overlay to be *visible*; while this
+    one is still animating out, that wait passes at once and the next pick lands
+    in the closing list. A dropdown that stays open after a pick (a multiselect
+    driven with ``option:``) is closed with ``Escape``, as ``multiple:`` does.
+    """
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+    try:
+        page.wait_for_selector(overlay, state="hidden", timeout=min(_DROPDOWN_CLOSE_GRACE_MS, timeout))
+        return
+    except PlaywrightTimeoutError:
+        pass
+    page.keyboard.press("Escape")
+    page.wait_for_selector(overlay, state="hidden", timeout=timeout)
+
+
 def synthetic_click(locator) -> None:
     """Dispatch a manual mousedown/mouseup/click sequence on a locator's element
     (Cmd 12 — ``click synthetic: true``). For custom widgets that swallow

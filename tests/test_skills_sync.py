@@ -8,6 +8,7 @@ and fail when the surface they cover grows without them:
 - the skill set itself — ``skills/`` and ``init_cli.SKILL_NAMES`` list the same
   skills, each named after its folder;
 - every visible CLI command is named in some skill;
+- every action is a row of the author skill's action table;
 - every in-app tour diagnostic code is in the author skill's table;
 - the app-side skill covers the overlay's and the Angular adapter's public API
   (the host's properties, the six events, the error reasons, the adapter's
@@ -23,6 +24,7 @@ from typer.main import get_command
 
 from steppy.cli import app
 from steppy.init_cli import APP_SKILL_NAMES, LEGACY_SKILLS, SKILL_NAMES
+from steppy.models import VALID_ACTIONS
 from steppy.tours.diagnostics import CODES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +95,16 @@ def test_every_command_is_named_in_a_skill():
 
     missing = [" ".join(path) for path in _commands(get_command(app)) if not named(path)]
     assert not missing, f"commands no skill names: {missing}"
+
+
+def test_every_action_is_in_the_author_skill_table():
+    # `call` shipped without a row, so assistants never offered it.
+    text = _skill("steppy-scenario-author")
+    table = text[text.index("## Actions") :]
+    table = table[: table.index("\n## ", 1)]
+    rows = set(re.findall(r"^\| `([\w-]+)` \|", table, re.M))
+    missing = sorted(VALID_ACTIONS - rows)
+    assert not missing, f"actions missing from the table: {missing}"
 
 
 def test_every_tour_diagnostic_is_in_the_author_skill():

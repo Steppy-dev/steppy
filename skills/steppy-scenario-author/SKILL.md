@@ -110,7 +110,8 @@ guide:                        # optional; cursor animation timings for the HTML 
 | `assert` | `expect` | See Assertions below; cursor hidden. `contains(...)` and comparator `count(...)` supported |
 | `capture` | `store`, `from` | Fetch value from redis/http/shell/**dom** into a variable. See Capture below |
 | `upload` | `selector`, `value` | File upload via Playwright `set_input_files`. `selector` targets the `<input type="file">`; `value` is the file path (resolved from project root). For hidden inputs behind a styled trigger, add `guide-cursor` so the screenshot/cursor lands on the visible button — see Uploads below. |
-| `custom` | `code` | Arbitrary Playwright Python; cursor hidden unless `guide-cursor` override. **Last resort** — prefer the first-class actions above (see Component dropdowns, Dialogs, Dates, Toggles, etc.) |
+| `call` | `fn` (`module.function`) | Runs a project helper as a step: `args:`, `kwargs:`, `store:` (keep the return value as `{{var}}`), `page: false` for a helper that takes no page. Cursor hidden unless `guide-cursor`. See `call` below |
+| `custom` | `code` | Arbitrary Playwright Python; cursor hidden unless `guide-cursor` override. **Last resort** — prefer the first-class actions above (see Component dropdowns, Dialogs, Dates, Toggles, etc.), and `call` when the code already lives in a helper |
 | `login` | (nothing) | Runs the login-form flow for `role`; cursor hidden (`auth0-login` is a kept-forever alias) |
 
 Every step except `wait` needs `role` (matching an app in `config.yaml`).
@@ -375,7 +376,7 @@ For more control over guide presentation, use the structured format:
 
 | Form | Example |
 |---|---|
-| Toast/snackbar visible | `toast("Projet créé")` |
+| Toast/snackbar visible (passes with duplicates on screen) | `toast("Projet créé")` |
 | Row contains text | `row-contains("Website redesign")` |
 | Element visible | `visible([data-testid="foo"])` |
 | Element hidden | `hidden([data-testid="foo"])` |
@@ -384,7 +385,7 @@ For more control over guide presentation, use the structured format:
 | Element count (exact) | `count(.row, 3)` |
 | Element count (**comparator**) | `count([data-testid^="site-list-row-"], >=1)` |
 | Element count == 0 (removed from DOM) | `count([data-testid="temp-picker"], 0)` |
-| URL contains path | `url-contains(/orders)` |
+| URL contains path (literal, `{{var}}` works) | `url-contains(/orders/{{order_id}})` |
 | Not empty | `not-empty([data-testid="list"])` |
 | Disabled / enabled | `disabled(button#submit)` / `enabled(...)` |
 
@@ -522,6 +523,51 @@ The optional **`guide-cursor`** block tells the HTML guide renderer to show a cu
 
 ---
 
+## `call` — run a project helper
+
+When the logic already lives in a Python helper of the project, call it instead of pasting it into `custom`. `fn` is a dotted path, `module.function`, imported from the **project root** (where `steppy run` starts pytest — no `sys.path` setup needed). The helper receives the step's role page as its first argument, then `args` and `kwargs`.
+
+```markdown
+### 6. Make sure the invoice has a line
+- role: editor
+- action: call
+- fn: ui_helpers.ensure_invoice_line
+- args:
+    - "{{invoice_id}}"
+    - 2
+- kwargs:
+    product: "Consulting"
+- store: line_id
+```
+
+- `fn` (required) — `module.function`; a bare name is rejected by `steppy validate`.
+- `args:` / `kwargs:` — an indented YAML list / mapping (inline `[a, b]` and `{k: v}` work too). String values go through `{{var}}` interpolation; other values keep their type (`2` stays an int).
+- `store:` — keeps the helper's return value in `_vars`, so later steps can use `{{line_id}}`.
+- `page: false` — for a helper that takes no page (a backend call, a fixture builder). The step still needs `role`.
+- `timeout:` and `screenshot:` work as on any action.
+
+Like `custom`, a `call` step shows **no guide cursor** unless it carries a `guide-cursor:` block, and with one it is guided in an in-app tour too:
+
+```markdown
+### 7. Open the advanced options
+- role: editor
+- action: call
+- fn: ui_helpers.ensure_open
+- args:
+    - '[data-testid="invoice-advanced"]'
+- screenshot: editor
+- guide-cursor:
+    behavior: click
+    target: '[data-testid="invoice-advanced"]'
+- guide-text:
+    fr: "Ouvrez les options avancées."
+    en: "Open the advanced options."
+```
+
+Prefer a first-class action when one fits (`expand` for the example above); `call` is for the helpers a project already has, and it beats `custom` because the dependency is visible to `steppy validate` and to a reader.
+
+---
+
 ## `upload` — file uploads
 
 `action: upload` codegens to Playwright's `locator(selector).set_input_files(value)` and wires up bbox capture, screenshots, and cursor animation the same way `click` / `fill` do.
@@ -643,6 +689,8 @@ PrimeNG-style component dropdowns (`p-select`, `p-autocomplete`, `p-multiselect`
 ```
 
 `option` and `multiple` are mutually exclusive. Framework selectors come from the `dropdown:` config preset (PrimeNG defaults, so it works with no config — see Config presets below). The guide cursor auto-targets the trigger.
+
+Every `select-option` step ends with its list **closed**: it waits for the overlay to disappear, and presses `Escape` on one that stays open (a multiselect driven with `option:`). Two `select-option` steps can follow each other with no `wait` in between.
 
 ---
 
@@ -890,7 +938,7 @@ A scenario can appear in multiple role guides: add both `user-guide-editor` and 
 6. **Using relative URLs without a leading slash** — `target: orders` is ambiguous. Always write `target: /tasks`.
 7. **Missing `auth: false` on a login-flow scenario** — the runner will try to pre-auth before the test runs, short-circuiting the flow. Login scenarios must opt out.
 8. **Raw `page.*` calls outside `custom`** — every non-custom action generates the right Playwright call for you. Don't embed Python in regular steps.
-9. **Multi-line string in simple `guide-text` format without quotes** — wrap in double quotes: `fr: "First sentence. Second sentence."`. Or switch to structured format with explicit `title` and `text` fields.
+9. **Multi-line string in simple `guide-text` format without quotes** — wrap in double quotes: `fr: "First sentence. Second sentence."`. Or switch to structured format with explicit `title` and `text` fields. A French colon on its own (`title: Segment : factures`, in the frontmatter or a nested block) does **not** need quotes: Steppy quotes such a value for you when the YAML would otherwise be invalid.
 10. **Missing `title` in structured `guide-text`** — when using the structured format (`fr: { title: ..., subtitle: ..., text: ... }`), the `title` field is mandatory. `subtitle` and `text` are optional.
 11. **Selectors with single quotes inside double-quoted `custom` code** — use Python triple quotes or escape, same as any Python string.
 12. **Click step whose screenshot shows the *next* page, not the button you're clicking** — the default is `screenshot-when: after`, so a click that navigates unmounts the target before the screenshot. Add `screenshot-when: before` to that step. Same applies to "Submit" clicks whose post-action state is a toast + redirect.
@@ -928,6 +976,7 @@ A scenario can appear in multiple role guides: add both `user-guide-editor` and 
 
 Anywhere a value supports `{{var}}` (target, selector, value, fields, custom code), Steppy substitutes from `_vars`. Variables come from:
 - `capture` steps (`store: X` → `{{X}}`)
+- `call` steps (`store: X` keeps the helper's return value)
 - Seed scripts writing to Redis/env/etc.
 - Anything you set in a `custom` step: `_vars['foo'] = 'bar'`
 

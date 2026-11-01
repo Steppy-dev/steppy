@@ -59,6 +59,10 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   plain YAML value cannot contain `": "`). When a header or nested block fails to
   parse, Steppy now quotes such values and retries; valid YAML parses exactly as
   before, and YAML that is still broken reports the original error.
+- **The `steppy-scenario-author` skill documents the `call` action.** It shipped
+  in 0.8 without a row in the skill's action table, so an assistant never
+  offered it. A test now fails when an action is missing from that table. Run
+  `steppy update` in a project to refresh its installed skills.
 
 ### Changed
 - **The tour overlay's size budget is 28,700 B** (min + gzip), up from 27,750 B,

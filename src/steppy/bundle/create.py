@@ -257,7 +257,7 @@ def plan_bundle(
     if not tests:
         warnings.append(
             "no test outcomes recorded — manifest.tests[] is empty. "
-            "Re-run with `steppy run` (0.10 or later, or `--bundle` before) so per-test event records are captured"
+            "Re-run with `steppy run` (0.9.1 or later, or `--bundle` before) so per-test event records are captured"
         )
 
     junit_xml = _results.merge_junit(junit_dir)

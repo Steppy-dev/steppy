@@ -1065,7 +1065,7 @@ Traces and videos are **named, not copied**: a Playwright trace needs
 
 ### Honest about what it cannot know
 
-A report of an `output/` tree with no recorded run (one from a Steppy older than 0.10,
+A report of an `output/` tree with no recorded run (one from a Steppy older than 0.9.1,
 run without `--bundle`) says so and lists the scenarios it found
 captures for, rather than rendering an empty page. A run with no per-step events
 says *that* instead of drawing an empty timeline. Coverage rebuilt from a detached
@@ -1128,7 +1128,7 @@ steppy run --guide                   # records events + JUnit, like every run
 steppy bundle create                 # → output/bundles/steppy-bundle-<run-id>.tar.zst
 ```
 
-Every run records them since 0.10. Before, `--bundle` opted in; the flag is still accepted and does nothing more. The ten newest runs' `output/events/<run-id>/` and `output/junit/<run-id>/` directories are kept. Without a recorded run a bundle is still valid, but `manifest.tests[]` will be empty — there is nothing on disk recording what passed.
+Every run records them since 0.9.1. Before, `--bundle` opted in; the flag is still accepted and does nothing more. The ten newest runs' `output/events/<run-id>/` and `output/junit/<run-id>/` directories are kept. Without a recorded run a bundle is still valid, but `manifest.tests[]` will be empty — there is nothing on disk recording what passed.
 
 It also records step boundaries, so a failure names the step rather than only the test:
 

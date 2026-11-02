@@ -133,7 +133,7 @@ def _attribute_nodeid(stem: str, ctx: ClassifyContext) -> tuple[Optional[str], O
     """``(scenario, locale, layout)`` for a nodeid-named artifact.
 
     Failure screenshots, traces and videos carry a trailing ``__<fixture>``
-    (traces and videos from 0.10; older runs have none), so try the whole stem
+    (traces and videos from 0.9.1; older runs have none), so try the whole stem
     first and then progressively shorter prefixes.
     An exact hit is authoritative; a miss returns all-``None`` rather than a
     guess, because the sanitiser is not invertible.

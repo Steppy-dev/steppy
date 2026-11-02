@@ -94,7 +94,7 @@ def build_project(tmp_path: Path) -> Path:
     _write(out / "guides" / "editor" / "fr" / "mobile" / "order-lifecycle.html", "<html/>")
     _write(out / "guides" / "editor" / "fr" / "mobile" / "order-lifecycle.md", "# guide")
 
-    # Pre-0.10 names (no suffix) and per-role names attribute the same way.
+    # Pre-0.9.1 names (no suffix) and per-role names attribute the same way.
     _write(out / "traces" / f"{SANITISED}.zip", "trace")
     _write(out / "videos" / f"{SANITISED}.webm", "video")
     _write(out / "traces" / f"{SANITISED}__reviewer_page.zip", "trace")

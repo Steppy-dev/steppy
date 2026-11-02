@@ -1,7 +1,7 @@
 """The plumbing that records a run: what ``steppy report`` and ``steppy bundle
 create`` read afterwards.
 
-``--bundle`` opted into it until 0.10; every run is recorded now, and the flag
+``--bundle`` opted into it until 0.9.1; every run is recorded now, and the flag
 is accepted and does nothing more. ``tests/test_run_byte_identical.py`` pins the
 same three env vars and one argv flag on the default path.
 """
@@ -84,7 +84,7 @@ def test_bundle_flag_adds_junitxml_at_a_fixed_path(fake_tests_dir: Path, tmp_pat
 
 
 def test_a_plain_run_is_recorded_like_a_bundle_run(fake_tests_dir: Path, tmp_path: Path):
-    """0.10: `--bundle` was the only way to get outcomes `steppy report` could
+    """0.9.1: `--bundle` was the only way to get outcomes `steppy report` could
     read, and a plain run after a `--bundle` one left the older run's sidecar
     in place, so the report showed stale outcomes beside fresh screenshots."""
     cmd, env = _invoke(fake_tests_dir, [], tmp_path)

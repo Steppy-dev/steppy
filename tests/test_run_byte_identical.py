@@ -9,7 +9,7 @@ behavior.
 Why this matters:
 - v0.1 sacred invariant: ``steppy run`` (no flags) and ``steppy run
   --workers 1`` produce identical behavior to today's main branch. Changed
-  once on purpose, in 0.10: every run is now recorded (``--junitxml`` at the
+  once on purpose, in 0.9.1: every run is now recorded (``--junitxml`` at the
   run's fixed path, ``STEPPY_EVENTS_DIR`` / ``STEPPY_RUN_ID`` /
   ``STEPPY_STEP_EVENTS``), which ``--bundle`` used to opt into.
 - This test catches accidental drift in how cli.run constructs pytest_cmd
@@ -113,14 +113,14 @@ def test_workers_1_produces_expected_pytest_cmd(fake_tests_dir):
     # Last positional arg is the tests dir (no scenario/tag filter).
     assert cmd[-4] == str(fake_tests_dir)
     assert cmd[-3:-1] == ["--browser", "chromium"]
-    # Every run is recorded (0.10): the run's JUnit file, at its fixed path.
+    # Every run is recorded (0.9.1): the run's JUnit file, at its fixed path.
     expected = Path("output") / "junit" / "20260101T000000Z-abcdef" / "run.xml"
     assert cmd[-1] == f"--junitxml={Path.cwd() / expected}"
 
 
 def test_workers_1_sets_only_the_recording_env_vars(fake_tests_dir):
     """With no flags, the existing path sets exactly the env vars that record
-    the run (0.10; before, none) — plus HEADED, and only when --headed."""
+    the run (0.9.1; before, none) — plus HEADED, and only when --headed."""
     _cmd, env = _capture_subprocess_call(fake_tests_dir, ["--workers", "1"])
     steppy_keys = _steppy_env_keys(env)
     assert steppy_keys == {

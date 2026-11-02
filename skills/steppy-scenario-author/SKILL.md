@@ -1128,7 +1128,7 @@ steppy report          # → output/report/index.html, for the last run
 
 A self-contained static site for **one** run: outcomes, failure causes grouped so one broken selector across forty scenarios is one row instead of forty tracebacks, **the failing step named** with its timeline and the screenshot at that moment, and the coverage buckets. It also reads a `.tar.zst` bundle or an unpacked bundle directory, so a failure from CI is one download away from being readable.
 
-The part that matters for authoring: the per-step records every run writes are what make the report able to say *step 7 of `order-lifecycle` in nl/mobile*, rather than only *the test failed*. A run made with `STEPPY_STEP_EVENTS=0` (or by a Steppy older than 0.10 without `--bundle`) gives outcomes and no step detail, and the report says so rather than rendering an empty timeline.
+The part that matters for authoring: the per-step records every run writes are what make the report able to say *step 7 of `order-lifecycle` in nl/mobile*, rather than only *the test failed*. A run made with `STEPPY_STEP_EVENTS=0` (or by a Steppy older than 0.9.1 without `--bundle`) gives outcomes and no step detail, and the report says so rather than rendering an empty timeline.
 
 > Publishing it, the Pages warnings, the badge and the CI wiring: **`steppy-ci-report`**.
 
@@ -1141,7 +1141,7 @@ steppy bundle inspect <file>  # print the manifest without extracting
 steppy bundle verify <file>   # re-hash every member against the manifest
 ```
 
-Every `steppy run` records what a bundle needs (since 0.10; before, only `steppy run --bundle` did, and the flag is still accepted). `steppy bundle create` then packages `output/` **exactly as Steppy wrote it** — no path rewriting — plus a generated `manifest.json`, a merged `junit.xml`, and the event JSONL. Unpacking it yields a tree `steppy guide` and `steppy build` consume unchanged.
+Every `steppy run` records what a bundle needs (since 0.9.1; before, only `steppy run --bundle` did, and the flag is still accepted). `steppy bundle create` then packages `output/` **exactly as Steppy wrote it** — no path rewriting — plus a generated `manifest.json`, a merged `junit.xml`, and the event JSONL. Unpacking it yields a tree `steppy guide` and `steppy build` consume unchanged.
 
 Useful with no server involved at all: a self-describing archive to attach to a CI job, so a failed run is one download rather than a scavenger hunt through artifacts. Per-step events are what let the manifest name the *step* a test died on, not just the test. `--no-videos` / `--no-traces` / `--no-guides` trim it; `--max-size 2GiB` drops the cheapest-to-lose artifacts first and marks the manifest `truncated`.
 
@@ -1156,7 +1156,7 @@ steppy run                       # 1. records the artifacts a bundle needs
 steppy bundle upload             # 2. push straight from output/ — no archive written
 ```
 
-**Run `steppy run` first** (a Steppy older than 0.10 needs `steppy run --bundle`). Two things depend on what it records, and both fail quietly otherwise:
+**Run `steppy run` first** (a Steppy older than 0.9.1 needs `steppy run --bundle`). Two things depend on what it records, and both fail quietly otherwise:
 
 - **Per-test event records.** Without them the plane receives an empty `tests[]` — the upload succeeds and the run shows no failure detail at all.
 - **The run identity** in `output/.steppy-run.json`, which doubles as the **idempotency key**. With it, a retried upload *attaches* to the same run; without it a fresh run id is minted per invocation, so a flaky network turns one run into three. Pin it with `--run-id` if the identity was never recorded, or `--attach <run-id>` to upload into a run the plane already created.

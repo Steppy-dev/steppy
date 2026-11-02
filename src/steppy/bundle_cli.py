@@ -152,7 +152,7 @@ def create(
     junit.xml, and the run's per-test event records.
 
     Run your scenarios with `steppy run` first: it records the event records
-    and JUnit XML the bundle reads (before 0.10 only `steppy run --bundle` did).
+    and JUnit XML the bundle reads (before 0.9.1 only `steppy run --bundle` did).
     Without them the bundle is still valid, but manifest.tests[] will be empty.
     """
     with _cli_errors():

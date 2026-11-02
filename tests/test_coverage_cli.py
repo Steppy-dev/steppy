@@ -57,7 +57,7 @@ def test_run_without_coverage_sets_no_coverage_env(fake_tests_dir):
     env, result = _capture_run_env(fake_tests_dir, [])
     assert result.exit_code == 0, result.output
     assert "STEPPY_COVERAGE" not in env
-    # Every run has an identity since 0.10; coverage only reuses it.
+    # Every run has an identity since 0.9.1; coverage only reuses it.
     assert _RUN_ID_RE.match(env.get("STEPPY_RUN_ID", ""))
 
 

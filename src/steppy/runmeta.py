@@ -20,7 +20,7 @@ is why that resolution was only ever correct on the single-worker path.
 or a CI step after the run itself, and cannot otherwise know what the run was
 asked to do. Re-deriving the spec from flags the user retypes is guaranteed to
 drift, and drift here means a results bundle that misreports its own
-dimensions. So every run records them (``--bundle`` only did before 0.10).
+dimensions. So every run records them (``--bundle`` only did before 0.9.1).
 """
 
 from __future__ import annotations

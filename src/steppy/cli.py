@@ -1212,7 +1212,7 @@ def run(
 
         # Every run is recorded: one identity, plus the two artifact sinks
         # `steppy report` and `steppy bundle create` read. Opt-in (`--bundle`)
-        # until 0.10, which left `steppy report` with no outcomes, or with an
+        # until 0.9.1, which left `steppy report` with no outcomes, or with an
         # older recorded run's, after a plain run.
         if bundle:
             console.print("[dim]--bundle: every run is recorded now; the flag is no longer needed[/dim]")

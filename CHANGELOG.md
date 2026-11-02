@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-02
+
 ### Added
 - **`within:` / `match:` on one `expect:` entry.** The list form takes them
   beside `check:` and `message:`, and they scope that one check. A step's own
@@ -1187,7 +1189,8 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/Steppy-dev/steppy/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Steppy-dev/steppy/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Steppy-dev/steppy/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Steppy-dev/steppy/compare/v0.7.0...v0.8.0

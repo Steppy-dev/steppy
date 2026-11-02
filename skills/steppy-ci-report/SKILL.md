@@ -64,7 +64,7 @@ ships, called by ref:
 ```yaml
 jobs:
   e2e:
-    uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.9.0
+    uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.9.1
     with:
       compose-file: docker-compose.yml
     secrets:
@@ -129,7 +129,7 @@ stack per worker** from `parallel.compose_file` and tears them down itself, so t
 explicit compose steps come out. N copies of an app on one hosted runner is a lot — that
 mode earns its keep on a large suite or a self-hosted runner, not on a thirty-scenario one.
 
-**Every run is recorded** (since 0.10; before, only `steppy run --bundle` was, and the
+**Every run is recorded** (since 0.9.1; before, only `steppy run --bundle` was, and the
 flag is still accepted, so a pipeline that passes it keeps working). A run sets three
 things: `STEPPY_EVENTS_DIR` (per-test and per-step JSONL under `output/events/<run-id>/`),
 a fixed-path `--junitxml` under `output/junit/<run-id>/` (unless `report.junit_xml` or a
@@ -291,8 +291,8 @@ same information for a machine:
 
 | What you see | What it means |
 |---|---|
-| "No per-step timeline was recorded" | The run set `STEPPY_STEP_EVENTS=0`, was made by a Steppy older than 0.10 without `--bundle`, or the tests were generated before per-step markers existed (`steppy generate` again). |
-| "This run recorded no test outcomes" + verdict `unknown` | No run was recorded (an `output/` tree from a Steppy older than 0.10 run without `--bundle`), so there are no event records. The scenarios listed were reconstructed from captures on disk. **Not** `passed` — that would be a claim with no evidence. |
+| "No per-step timeline was recorded" | The run set `STEPPY_STEP_EVENTS=0`, was made by a Steppy older than 0.9.1 without `--bundle`, or the tests were generated before per-step markers existed (`steppy generate` again). |
+| "This run recorded no test outcomes" + verdict `unknown` | No run was recorded (an `output/` tree from a Steppy older than 0.9.1 run without `--bundle`), so there are no event records. The scenarios listed were reconstructed from captures on disk. **Not** `passed` — that would be a claim with no evidence. |
 | "Assert strength is not shown" | Coverage was rebuilt from a detached bundle's raw records, which carry no scenario markdown to count assert steps in. Every endpoint would otherwise read as weakly covered. |
 | "Truncated" | A `--max-size` budget dropped artifacts that belonged in the bundle. Screenshots and sidecars are never dropped. |
 
@@ -530,7 +530,7 @@ scope here — everything above works with no plane at all.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Report says "no test outcomes", verdict `unknown` | No recorded run in `output/` (a Steppy older than 0.10 needed `--bundle`) | `steppy run` |
+| Report says "no test outcomes", verdict `unknown` | No recorded run in `output/` (a Steppy older than 0.9.1 needed `--bundle`) | `steppy run` |
 | Report shows outcomes but no step detail | `STEPPY_STEP_EVENTS=0`, or tests generated before per-step markers | Unset the env var; re-run `steppy generate` |
 | Badge says `n/a` | Nothing declared — no `coverage.apis`, or `refresh` never ran | Configure `coverage.apis[].openapi`, then `steppy coverage refresh` |
 | Coverage percentage far lower in CI than locally | Triage flags live in the gitignored `.steppy/coverage.db`; CI starts empty | Declare `coverage.non_ui` in `config.yaml` |

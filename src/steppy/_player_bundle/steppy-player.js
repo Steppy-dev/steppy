@@ -264,7 +264,7 @@ oe.elementStyles = [], oe.shadowRootOptions = { mode: "open" }, oe[ge("elementPr
  */
 const ht = globalThis, Ot = (t) => t, Ne = ht.trustedTypes, Rt = Ne ? Ne.createPolicy("lit-html", { createHTML: (t) => t }) : void 0, rs = "$lit$", B = `lit$${Math.random().toFixed(9).slice(2)}$`, is = "?" + B, ws = `<${is}>`, Q = document, $e = () => Q.createComment(""), we = (t) => t === null || typeof t != "object" && typeof t != "function", ft = Array.isArray, ks = (t) => ft(t) || typeof t?.[Symbol.iterator] == "function", Ye = `[ 	
 \f\r]`, fe = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, It = /-->/g, Nt = />/g, K = RegExp(`>|${Ye}(?:([^\\s"'>=/]+)(${Ye}*=${Ye}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), Lt = /'/g, Pt = /"/g, ns = /^(?:script|style|textarea|title)$/i, Ss = (t) => (e, ...s) => ({ _$litType$: t, strings: e, values: s }), _ = Ss(1), ce = Symbol.for("lit-noChange"), b = Symbol.for("lit-nothing"), Mt = /* @__PURE__ */ new WeakMap(), Y = Q.createTreeWalker(Q, 129);
+\f\r"'\`<>=]|("|')|))|$)`, "g"), Pt = /'/g, Lt = /"/g, ns = /^(?:script|style|textarea|title)$/i, Ss = (t) => (e, ...s) => ({ _$litType$: t, strings: e, values: s }), _ = Ss(1), ce = Symbol.for("lit-noChange"), b = Symbol.for("lit-nothing"), Mt = /* @__PURE__ */ new WeakMap(), Y = Q.createTreeWalker(Q, 129);
 function as(t, e) {
   if (!ft(t) || !t.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return Rt !== void 0 ? Rt.createHTML(e) : e;
@@ -275,7 +275,7 @@ const Ts = (t, e) => {
   for (let o = 0; o < s; o++) {
     const l = t[o];
     let d, f, m = -1, A = 0;
-    for (; A < l.length && (a.lastIndex = A, f = a.exec(l), f !== null); ) A = a.lastIndex, a === fe ? f[1] === "!--" ? a = It : f[1] !== void 0 ? a = Nt : f[2] !== void 0 ? (ns.test(f[2]) && (i = RegExp("</" + f[2], "g")), a = K) : f[3] !== void 0 && (a = K) : a === K ? f[0] === ">" ? (a = i ?? fe, m = -1) : f[1] === void 0 ? m = -2 : (m = a.lastIndex - f[2].length, d = f[1], a = f[3] === void 0 ? K : f[3] === '"' ? Pt : Lt) : a === Pt || a === Lt ? a = K : a === It || a === Nt ? a = fe : (a = K, i = void 0);
+    for (; A < l.length && (a.lastIndex = A, f = a.exec(l), f !== null); ) A = a.lastIndex, a === fe ? f[1] === "!--" ? a = It : f[1] !== void 0 ? a = Nt : f[2] !== void 0 ? (ns.test(f[2]) && (i = RegExp("</" + f[2], "g")), a = K) : f[3] !== void 0 && (a = K) : a === K ? f[0] === ">" ? (a = i ?? fe, m = -1) : f[1] === void 0 ? m = -2 : (m = a.lastIndex - f[2].length, d = f[1], a = f[3] === void 0 ? K : f[3] === '"' ? Lt : Pt) : a === Lt || a === Pt ? a = K : a === It || a === Nt ? a = fe : (a = K, i = void 0);
     const R = a === K && t[o + 1].startsWith("/>") ? " " : "";
     n += a === fe ? l + ws : m >= 0 ? (r.push(d), l.slice(0, m) + rs + l.slice(m) + B + R) : l + B + (m === -2 ? o : R);
   }
@@ -294,8 +294,8 @@ class ke {
     for (; (i = Y.nextNode()) !== null && l.length < o; ) {
       if (i.nodeType === 1) {
         if (i.hasAttributes()) for (const m of i.getAttributeNames()) if (m.endsWith(rs)) {
-          const A = f[a++], R = i.getAttribute(m).split(B), P = /([.?@])?(.*)/.exec(A);
-          l.push({ type: 1, index: n, name: P[2], strings: R, ctor: P[1] === "." ? Cs : P[1] === "?" ? Es : P[1] === "@" ? Os : Ge }), i.removeAttribute(m);
+          const A = f[a++], R = i.getAttribute(m).split(B), L = /([.?@])?(.*)/.exec(A);
+          l.push({ type: 1, index: n, name: L[2], strings: R, ctor: L[1] === "." ? Cs : L[1] === "?" ? Es : L[1] === "@" ? Os : Ge }), i.removeAttribute(m);
         } else m.startsWith(B) && (l.push({ type: 6, index: n }), i.removeAttribute(m));
         if (ns.test(i.tagName)) {
           const m = i.textContent.split(B), A = m.length - 1;
@@ -516,15 +516,15 @@ let ve = class extends oe {
   }
 };
 ve._$litElement$ = !0, ve.finalized = !0, mt.litElementHydrateSupport?.({ LitElement: ve });
-const Ls = mt.litElementPolyfillSupport;
-Ls?.({ LitElement: ve });
+const Ps = mt.litElementPolyfillSupport;
+Ps?.({ LitElement: ve });
 (mt.litElementVersions ??= []).push("4.2.2");
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const Ps = (t) => (e, s) => {
+const Ls = (t) => (e, s) => {
   s !== void 0 ? s.addInitializer(() => {
     customElements.define(t, e);
   }) : customElements.define(t, e);
@@ -607,7 +607,7 @@ const _e = (t, e) => {
   if (s === void 0) return !1;
   for (const r of s) r._$AO?.(e, !1), _e(r, e);
   return !0;
-}, Le = (t) => {
+}, Pe = (t) => {
   let e, s;
   do {
     if ((e = t._$AM) === void 0) break;
@@ -622,12 +622,12 @@ const _e = (t, e) => {
   }
 };
 function Vs(t) {
-  this._$AN !== void 0 ? (Le(this), this._$AM = t, os(this)) : this._$AM = t;
+  this._$AN !== void 0 ? (Pe(this), this._$AM = t, os(this)) : this._$AM = t;
 }
 function Fs(t, e = !1, s = 0) {
   const r = this._$AH, i = this._$AN;
-  if (i !== void 0 && i.size !== 0) if (e) if (Array.isArray(r)) for (let n = s; n < r.length; n++) _e(r[n], !1), Le(r[n]);
-  else r != null && (_e(r, !1), Le(r));
+  if (i !== void 0 && i.size !== 0) if (e) if (Array.isArray(r)) for (let n = s; n < r.length; n++) _e(r[n], !1), Pe(r[n]);
+  else r != null && (_e(r, !1), Pe(r));
   else _e(this, t);
 }
 const Hs = (t) => {
@@ -641,7 +641,7 @@ class Bs extends Us {
     super._$AT(e, s, r), os(this), this.isConnected = e._$AU;
   }
   _$AO(e, s = !0) {
-    e !== this.isConnected && (this.isConnected = e, e ? this.reconnected?.() : this.disconnected?.()), s && (_e(this, e), Le(this));
+    e !== this.isConnected && (this.isConnected = e, e ? this.reconnected?.() : this.disconnected?.()), s && (_e(this, e), Pe(this));
   }
   setValue(e) {
     if (js(this._$Ct)) this._$Ct._$AI(e, this);
@@ -1002,8 +1002,8 @@ function sr(t, e, s, r) {
     m = St.room >= d ? St.side : f.side;
   }
   const A = t.x + t.width / 2, R = t.y + t.height / 2;
-  let P = 0, he = 0;
-  return m === "bottom" ? (P = Ee(A - e.width / 2, 0, s.width - e.width), he = Math.min(t.y + t.height + r, s.height - e.height)) : m === "top" ? (P = Ee(A - e.width / 2, 0, s.width - e.width), he = Math.max(0, t.y - e.height - r)) : m === "right" ? (P = Math.min(t.x + t.width + r, s.width - e.width), he = Ee(R - e.height / 2, 0, s.height - e.height)) : (P = Math.max(0, t.x - e.width - r), he = Ee(R - e.height / 2, 0, s.height - e.height)), { side: m, x: P, y: he };
+  let L = 0, he = 0;
+  return m === "bottom" ? (L = Ee(A - e.width / 2, 0, s.width - e.width), he = Math.min(t.y + t.height + r, s.height - e.height)) : m === "top" ? (L = Ee(A - e.width / 2, 0, s.width - e.width), he = Math.max(0, t.y - e.height - r)) : m === "right" ? (L = Math.min(t.x + t.width + r, s.width - e.width), he = Ee(R - e.height / 2, 0, s.height - e.height)) : (L = Math.max(0, t.x - e.width - r), he = Ee(R - e.height / 2, 0, s.height - e.height)), { side: m, x: L, y: he };
 }
 function Ee(t, e, s) {
   return Math.max(e, Math.min(s, t));
@@ -1379,7 +1379,7 @@ class E {
 }
 const y = Object.freeze({
   status: "aborted"
-}), me = (t) => ({ status: "dirty", value: t }), L = (t) => ({ status: "valid", value: t }), Vt = (t) => t.status === "aborted", Ft = (t) => t.status === "dirty", ue = (t) => t.status === "valid", Pe = (t) => typeof Promise < "u" && t instanceof Promise;
+}), me = (t) => ({ status: "dirty", value: t }), P = (t) => ({ status: "valid", value: t }), Vt = (t) => t.status === "aborted", Ft = (t) => t.status === "dirty", ue = (t) => t.status === "valid", Le = (t) => typeof Promise < "u" && t instanceof Promise;
 var h;
 (function(t) {
   t.errToObj = (e) => typeof e == "string" ? { message: e } : e || {}, t.toString = (e) => typeof e == "string" ? e : e?.message;
@@ -1450,7 +1450,7 @@ class x {
   }
   _parseSync(e) {
     const s = this._parse(e);
-    if (Pe(s))
+    if (Le(s))
       throw new Error("Synchronous parse encountered promise.");
     return s;
   }
@@ -1529,7 +1529,7 @@ class x {
       parent: null,
       data: e,
       parsedType: H(e)
-    }, i = this._parse({ data: e, path: r.path, parent: r }), n = await (Pe(i) ? i : Promise.resolve(i));
+    }, i = this._parse({ data: e, path: r.path, parent: r }), n = await (Le(i) ? i : Promise.resolve(i));
     return Ht(r, n);
   }
   refine(e, s) {
@@ -2374,7 +2374,7 @@ class it extends x {
         received: r.parsedType
       }), y;
     }
-    return L(e.data);
+    return P(e.data);
   }
 }
 it.create = (t) => new it({
@@ -2470,7 +2470,7 @@ class Bt extends x {
         received: r.parsedType
       }), y;
     }
-    return L(e.data);
+    return P(e.data);
   }
 }
 Bt.create = (t) => new Bt({
@@ -2487,7 +2487,7 @@ class nt extends x {
         received: r.parsedType
       }), y;
     }
-    return L(e.data);
+    return P(e.data);
   }
 }
 nt.create = (t) => new nt({
@@ -2504,7 +2504,7 @@ class at extends x {
         received: r.parsedType
       }), y;
     }
-    return L(e.data);
+    return P(e.data);
   }
 }
 at.create = (t) => new at({
@@ -2516,7 +2516,7 @@ class Wt extends x {
     super(...arguments), this._any = !0;
   }
   _parse(e) {
-    return L(e.data);
+    return P(e.data);
   }
 }
 Wt.create = (t) => new Wt({
@@ -2528,7 +2528,7 @@ class qt extends x {
     super(...arguments), this._unknown = !0;
   }
   _parse(e) {
-    return L(e.data);
+    return P(e.data);
   }
 }
 qt.create = (t) => new qt({
@@ -2559,7 +2559,7 @@ class Gt extends x {
         received: r.parsedType
       }), y;
     }
-    return L(e.data);
+    return P(e.data);
   }
 }
 Gt.create = (t) => new Gt({
@@ -3405,7 +3405,7 @@ class te extends x {
         options: r
       }), y;
     }
-    return L(e.data);
+    return P(e.data);
   }
   get options() {
     return this._def.values;
@@ -3461,7 +3461,7 @@ class ct extends x {
         options: i
       }), y;
     }
-    return L(e.data);
+    return P(e.data);
   }
   get enum() {
     return this._def.values;
@@ -3485,7 +3485,7 @@ class Ue extends x {
         received: s.parsedType
       }), y;
     const r = s.parsedType === p.promise ? s.data : Promise.resolve(s.data);
-    return L(r.then((i) => this._def.type.parseAsync(i, {
+    return P(r.then((i) => this._def.type.parseAsync(i, {
       path: s.path,
       errorMap: s.common.contextualErrorMap
     })));
@@ -3590,7 +3590,7 @@ se.createWithPreprocess = (t, e, s) => new se({
 });
 class V extends x {
   _parse(e) {
-    return this._getType(e) === p.undefined ? L(void 0) : this._def.innerType._parse(e);
+    return this._getType(e) === p.undefined ? P(void 0) : this._def.innerType._parse(e);
   }
   unwrap() {
     return this._def.innerType;
@@ -3603,7 +3603,7 @@ V.create = (t, e) => new V({
 });
 class re extends x {
   _parse(e) {
-    return this._getType(e) === p.null ? L(null) : this._def.innerType._parse(e);
+    return this._getType(e) === p.null ? P(null) : this._def.innerType._parse(e);
   }
   unwrap() {
     return this._def.innerType;
@@ -3649,7 +3649,7 @@ class Fe extends x {
         ...r
       }
     });
-    return Pe(i) ? i.then((n) => ({
+    return Le(i) ? i.then((n) => ({
       status: "valid",
       value: n.status === "valid" ? n.value : this._def.catchValue({
         get error() {
@@ -3750,7 +3750,7 @@ class _t extends x {
 class He extends x {
   _parse(e) {
     const s = this._def.innerType._parse(e), r = (i) => (ue(i) && (i.value = Object.freeze(i.value)), i);
-    return Pe(s) ? s.then((i) => r(i)) : r(s);
+    return Le(s) ? s.then((i) => r(i)) : r(s);
   }
   unwrap() {
     return this._def.innerType;
@@ -3769,14 +3769,14 @@ const q = U.create, I = pe.create, Nr = it.create;
 G.create;
 const be = M.create, O = T.create;
 ze.create;
-const Lr = vt.create;
+const Pr = vt.create;
 je.create;
 ee.create;
 const Ke = Ze.create, ye = De.create, Je = te.create;
 Ue.create;
 V.create;
 re.create;
-const Yt = 1, Pr = /^\d+\.\d+$/, C = q().min(1), ps = O({
+const Yt = 1, Lr = /^\d+\.\d+$/, C = q().min(1), ps = O({
   x: I(),
   y: I(),
   width: I().positive(),
@@ -3791,7 +3791,7 @@ const Yt = 1, Pr = /^\d+\.\d+$/, C = q().min(1), ps = O({
   selector: C.optional(),
   bbox: ps,
   value: q().optional()
-}).strict(), jr = Lr("kind", [
+}).strict(), jr = Pr("kind", [
   O({ kind: ye("click"), target: et }).strict(),
   O({ kind: ye("hover"), target: et }).strict(),
   O({
@@ -3863,7 +3863,7 @@ const Yt = 1, Pr = /^\d+\.\d+$/, C = q().min(1), ps = O({
   // cursor property for the precedence rules.
   mode: Gr.optional()
 }).strict(), Xr = O({
-  version: q().regex(Pr, 'version must match "<major>.<minor>"'),
+  version: q().regex(Lr, 'version must match "<major>.<minor>"'),
   slug: C,
   mode: ye("interactive"),
   role: C,
@@ -4874,11 +4874,11 @@ let w = class extends ve {
   constructor() {
     super(...arguments), this.src = "", this.locale = null, this.variant = null, this.autoplay = !1, this.startIndex = 1, this.cursor = null, this.template = null, this.hideLayoutSwitcher = !1, this.manifest = null, this.loadError = null, this.currentStepIndex = 0, this.currentFrameIndex = 0, this.currentTargetIndex = 0, this.waitingForInput = !1, this.completed = !1, this.missCount = 0, this.hotspotRect = null, this.tooltipPlacement = null, this.stageSize = { width: 0, height: 0 }, this._activeTemplate = "overlay", this._observedStage = null, this.maxReachedStepIndex = 0, this.animator = null, this.stageRef = ie(), this.imgRef = ie(), this.cursorRef = ie(), this.rippleRef = ie(), this.kbdRef = ie(), this.tooltipRef = ie(), this.resizeObserver = null, this.autoAdvanceTimer = null, this.playToken = 0, this.waitForClick = null, this.resolveClick = null, this._handleKeyDown = (t) => {
       this.manifest && (t.key === "ArrowRight" ? this.next() : t.key === "ArrowLeft" && this.prev());
-    }, this._onLocaleChange = (t) => {
+    }, this._userPicked = /* @__PURE__ */ new Set(), this._onLocaleChange = (t) => {
       const e = t.target.value;
-      this.manifest && this.manifest.locales.includes(e) && (this.locale = e, this._playCurrentPosition());
+      this.manifest && this.manifest.locales.includes(e) && (this._userPicked.add("locale"), this.locale = e, this._playCurrentPosition());
     }, this._onVariantChange = (t) => {
-      this.variant = this._resolveVariant(t.target.value);
+      this._userPicked.add("variant"), this.variant = this._resolveVariant(t.target.value);
     }, this._onImgLoad = () => {
       this._recomputeHotspot();
     };
@@ -4893,11 +4893,13 @@ let w = class extends ve {
   willUpdate(t) {
     if (t.has("src") && this._loadManifest(), t.has("locale") && this.manifest && this.locale && this._emit("steppy:locale", {
       from: t.get("locale"),
-      to: this.locale
+      to: this.locale,
+      ...this._userPicked.has("locale") ? { user: !0 } : {}
     }), t.has("variant") && this.manifest && this.variant && this._emit("steppy:variant", {
       from: t.get("variant"),
-      to: this.variant
-    }), t.has("variant") && this.manifest && !t.has("manifest")) {
+      to: this.variant,
+      ...this._userPicked.has("variant") ? { user: !0 } : {}
+    }), this._userPicked.clear(), t.has("variant") && this.manifest && !t.has("manifest")) {
       this.currentFrameIndex = 0, this.currentTargetIndex = 0, this.waitingForInput = !1, this.hotspotRect = null, this.tooltipPlacement = null;
       const e = this.resolveClick;
       this.resolveClick = null, e?.(), this._playCurrentPosition();
@@ -5432,7 +5434,7 @@ k([
   N()
 ], w.prototype, "_activeTemplate", 2);
 w = k([
-  Ps("steppy-guide")
+  Ls("steppy-guide")
 ], w);
 export {
   X as CursorAnimator,

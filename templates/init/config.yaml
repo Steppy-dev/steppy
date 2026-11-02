@@ -20,7 +20,7 @@ apps:
     auth:
       # `form` = generic hosted-login form-fill (works with any IdP that has a
       # fillable login form: Auth0, Keycloak, …). Other modes: storage-state,
-      # bypass, token. See STEPPY-REFERENCE.md.
+      # bypass, token. See .claude/skills/steppy-scenario-author/SKILL.md.
       mode: form
       credentials:
         username: "${STEPPY_ADMIN_USERNAME}"

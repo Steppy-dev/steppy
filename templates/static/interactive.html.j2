@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ pick_locale(entry.title, default_locale, default_locale) }} — {{ pick_locale(site_title, default_locale, default_locale) }}</title>
     {% include "static/_seo_head.html.j2" %}
+    {% include "static/_steppy_detect.html.j2" %}
     <link rel="stylesheet" href="../assets/guides.css">
     <style>
       body {
@@ -64,37 +65,6 @@
         </header>
         <steppy-guide src="./guide.json" locale="{{ default_locale }}"{% if default_layout %} variant="{{ default_layout }}"{% endif %}{% if layouts | length > 1 %} hide-layout-switcher{% endif %}{% if cursor_mode %} cursor="{{ cursor_mode }}"{% endif %} template="{{ default_template }}"></steppy-guide>
     </div>
-{% if layouts | length > 1 %}
-    <script>
-      (function () {
-        const persistKey = 'steppy:active-layout';
-        const layouts = {{ layouts | tojson }};
-        const guide = document.querySelector('steppy-guide');
-        const persisted = (function () {
-          try { return localStorage.getItem(persistKey); } catch (_) { return null; }
-        })();
-        const initial = (persisted && layouts.indexOf(persisted) !== -1)
-          ? persisted
-          : {{ default_layout | tojson }};
-        function applyLayout(name) {
-          if (layouts.indexOf(name) === -1) return;
-          if (guide) guide.setAttribute('variant', name);
-          document.querySelectorAll('.steppy-layout-switch button').forEach(function (b) {
-            if (b.getAttribute('data-layout') === name) {
-              b.setAttribute('aria-current', 'true');
-            } else {
-              b.removeAttribute('aria-current');
-            }
-          });
-          try { localStorage.setItem(persistKey, name); } catch (_) {}
-        }
-        applyLayout(initial);
-        document.querySelectorAll('.steppy-layout-switch button').forEach(function (b) {
-          b.addEventListener('click', function () { applyLayout(b.getAttribute('data-layout')); });
-        });
-      })();
-    </script>
-{% endif %}
     <script type="module" src="../assets/steppy-player.js"></script>
 </body>
 </html>

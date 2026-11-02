@@ -20,7 +20,7 @@ import time
 import pytest
 from playwright.sync_api import Page, expect
 
-from .conftest import _assert_stays_hidden, _wait_until, _when, call_helper, take_screenshot_with_bbox, take_fillform_frames, take_fillform_progressive_frames, _safe_bbox, _safe_bbox_scrolled, _safe_bbox_locator, fill_login_credentials, capture, capture_dom, synthetic_click, _resolve_date, _pick_date, _pick_time, _interp, _interp_val, SKIP_ASSERTS, _step_runs, _steppy_mark_step, _steppy_end_step
+from .conftest import _assert_stays_hidden, _wait_until, _when, call_helper, take_screenshot_with_bbox, take_fillform_frames, take_fillform_progressive_frames, _safe_bbox, _safe_bbox_scrolled, _safe_bbox_locator, _wait_dropdown_closed, fill_login_credentials, capture, capture_dom, synthetic_click, _resolve_date, _pick_date, _pick_time, _interp, _interp_val, SKIP_ASSERTS, _step_runs, _steppy_mark_step, _steppy_end_step
 {% if tour_replay %}
 from ._steppy_tours import TourProbe, _tour_start, _tour_expect_step, _tour_ensure_advanced, _tour_expect_complete{% if tour_replay.spec.steps | selectattr("hold") | list %}, _tour_hold{% endif %}
 {% endif %}
@@ -64,7 +64,7 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
 #}
 {% macro assert_body(role, assertion, loc, timeout, toast_timeout, unknown_comment) -%}
 {% if assertion.type == "toast" %}
-        expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.message ~ '"') | pystr }}, _vars)){% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ toast_timeout }})
+        expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.message ~ '"') | pystr }}, _vars)).first{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ toast_timeout }})
 {% elif assertion.type == "visible" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ timeout }})
 {% elif assertion.type == "hidden" %}
@@ -74,13 +74,13 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
 {% elif assertion.type == "contains" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_contain_text(_interp({{ assertion.text | pystr }}, _vars), timeout={{ timeout }})
 {% elif assertion.type == "url-contains" %}
-        expect({{ role }}_page{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_url(re.compile(r".*" + {{ assertion.path | pystr }} + r".*"), timeout={{ timeout }})
+        expect({{ role }}_page{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_url(re.compile(r".*" + re.escape(_interp({{ assertion.path | pystr }}, _vars)) + r".*"), timeout={{ timeout }})
 {% elif assertion.type == "count" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_count({{ assertion.count }}, timeout={{ timeout }})
 {% elif assertion.type == "count-cmp" %}
         _wait_until({{ loc }}, {{ ("count:" ~ assertion.comparator ~ assertion.count) | pystr }}, {{ timeout }}, message={% if assertion.fail_message %}_interp({{ assertion.fail_message | pystr }}, _vars){% else %}{{ ("expected count " ~ assertion.comparator ~ " " ~ assertion.count) | pystr }}{% endif %})
 {% elif assertion.type == "row-contains" %}
-        expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.text ~ '"') | pystr }}, _vars)){% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ timeout }})
+        expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.text ~ '"') | pystr }}, _vars)).first{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ timeout }})
 {% elif assertion.type == "value" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_value(_interp({{ assertion.text | pystr }}, _vars), timeout={{ timeout }})
 {% elif assertion.type == "attribute" %}
@@ -304,6 +304,7 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
     {{ step.role }}_page.locator({{ config.dropdown.overlay | pystr }}).locator({{ config.dropdown.option | pystr }}).filter(has_text=_interp({{ opt.text | pystr }}, _vars)).first.click(force=True)
 {% endif %}
 {% endif %}
+    _wait_dropdown_closed({{ step.role }}_page, {{ config.dropdown.overlay | pystr }}, {{ step | resolve_timeout(scenario, config) }})
 {% if step.wait_after %}
     time.sleep({{ step.wait_after / 1000 }})
 {% endif %}

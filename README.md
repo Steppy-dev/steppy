@@ -96,9 +96,10 @@ If you modify the player TypeScript (`packages/player/src/`), rebuild and re-ven
 ```bash
 npm --prefix packages/player install   # once
 npm --prefix packages/player run build
-for f in steppy-player steppy-cursor-legacy steppy-video; do
+for f in steppy-player steppy-cursor-legacy steppy-video steppy-detect; do
   cp packages/player/dist/$f.js packages/player/dist/$f.js.map src/steppy/_player_bundle/
 done
+cp packages/player/src/detect/core.ts src/steppy/_player_bundle/steppy-detect.ts
 git add src/steppy/_player_bundle/*.js src/steppy/_player_bundle/*.js.map
 ```
 
@@ -154,7 +155,8 @@ CI then:
 steppy init            # add --ci to also drop in a GitHub Actions workflow
 
 # 2. Edit config.yaml (app URLs, roles, credentials) and write your scenarios
-#    in scenarios/*.md (see STEPPY-REFERENCE.md)
+#    in scenarios/*.md (the steppy-scenario-author skill that `steppy init`
+#    installs in .claude/skills/ is the format reference)
 
 # 2b. (optional) Bootstrap a scenario draft from a live click-through
 steppy record https://app.example.com --role admin --slug my-flow
@@ -314,10 +316,75 @@ configurable in one place — `output.screenshots_dir` / `output.guides_dir` in
 `config.yaml` — and the capture side and every reader (`guide`, `build`,
 `bundle`, the parallel failure harvest) resolve the same value, so they cannot
 drift apart. `--screenshots-dir` / `--output-dir` still override for one
-invocation. See [Artifact output paths](STEPPY-REFERENCE.md#8-artifact-output-paths)
-for what happens if you point them outside `output/`.
+invocation. See [Artifact output paths](#artifact-output-paths) for what happens
+if you point them outside `output/`.
 
 See [PDF export](#pdf-export-opt-in) and [Video guide mode](#video-guide-mode-opt-in) below.
+
+### Artifact output paths
+
+Where a run writes its artifacts, and where `guide`, `build` and `bundle` look for
+them, comes from one `config.yaml` block:
+
+```yaml
+output:
+  screenshots_dir: "./output/screenshots"   # default
+  guides_dir: "./output/guides"             # default
+  tours_dir: "./output/tours"               # default (in-app tours)
+```
+
+A relative value is resolved against the project root; an absolute one is used as
+is. Omitting the block keeps the defaults.
+
+`screenshots_dir` is read by both sides. The capture side is the generated conftest,
+which reads it at run time, so a change needs no `steppy generate`. The readers:
+
+| Consumer | How it uses it |
+|---|---|
+| `steppy run` | writes captures and `_failures/` there |
+| `steppy guide` | default for `--screenshots-dir` (an explicit flag wins) |
+| `steppy build` | used when the TypeScript config omits `screenshotsDir` |
+| `steppy run --workers N` | where the coordinator collects failure screenshots |
+| `steppy bundle create` | the screenshots root it archives |
+
+`tours_dir` is where `steppy generate` / `steppy tours` write the in-app tour tree
+(`<tours_dir>/<build-id>/`) and where `steppy build` reads it for the `guide`
+target. A tour's `app-assets` targets live in your app, outside `output/`, so the
+results bundle, the CI artifact upload and `.gitignore` do not cover them: commit
+them or build them with the app.
+
+`guides_dir` is the default for `steppy guide --output-dir` and the bundle's guides
+root. It does not feed `steppy build`'s `outputDir`, which names a published site
+and stays required in the TypeScript config.
+
+**Pointing outside `output/`** is allowed and honoured everywhere above, but four
+things only look at `output/`, so each one warns:
+
+- `steppy bundle create` archives the `output/` tree only, so relocated artifacts
+  are not in the archive.
+- `steppy run --workers N` mounts only `output/` back from the worker container
+  (the project is mounted read-only), so captures written elsewhere never leave it.
+- The scaffolded `.gitignore` ignores `output/`: add the new directory yourself.
+- The shipped CI workflow uploads `output/` as its artifact.
+
+**Paths with no setting**: Playwright traces and videos (`output/traces`,
+`output/videos`), parallel-run failure summaries (`output/failures`), and the
+`--bundle` sinks (`output/events`, `output/junit`). `report.junit_xml` and
+`report.html` take explicit paths of their own.
+
+`steppy report` writes to `output/report/` and takes `-o/--output` instead of a
+config key. That directory has one writer and no automated reader, and an
+`output.report_dir` one letter from the deprecated `output.reports_dir` would be a
+trap. `steppy bundle create` skips `output/report/` by name: the report holds
+copies of screenshots the bundle already carries. Point `-o` elsewhere under
+`output/` and the report says so.
+
+`output.reports_dir` is deprecated and ignored; nothing ever wrote
+`output/reports`. It still parses so existing configs load, but `steppy validate`
+warns and `steppy update --check` reports it. Remove it.
+
+Coverage records have their own setting, `coverage.records_dir` (default
+`./output/coverage`), which follows the same rules.
 
 ### Build
 
@@ -428,6 +495,7 @@ export default defineGuideConfig({
   defaultLocale: 'fr',
   layouts: ['desktop', 'mobile'],
   defaultLayout: 'desktop',
+  autoDetect: { locale: true },   // land readers on their language (layout detection is on by default)
   site: { title: 'Demo Guides' },
   guides: [
     { slug: 'onboarding',    title: 'Onboarding',    scenario: 'editor/onboarding.md',    modes: ['stepbystep'] },
@@ -485,6 +553,43 @@ Steppy never touches `app.routes.ts` or your navbar — integration is purely vi
 Set `target: 'static'` in the config. Emits a self-contained site with HTML pages at `<slug>/<locale>.html`, an `index.html` per locale, a `manifest.json`, a shared `assets/guides.css`, `.nojekyll` and `_headers`. Screenshots co-located under `outputDir/assets/<slug>/`. Deploy anywhere static.
 
 A guide gets one sibling page per extra mode — `<slug>/interactive.html` for the tour, `<slug>/video.html` for the narrated MP4 — and each guide page links whichever of them it has.
+
+### Reader language and layout (`autoDetect` block)
+
+A reader should land on their own language and on the screenshots that fit their screen without touching a picker, and a pick they make should stick. `autoDetect` does that:
+
+```ts
+export default defineGuideConfig({
+  // …
+  autoDetect: {
+    locale: true,                                  // default: false
+    layout: true,                                  // default: true
+    storageKeys: { locale: 'steppy:locale', layout: 'steppy:layout' }, // the defaults
+    layoutBreakpoints: { mobile: 0, desktop: 768 }, // optional: minimum viewport width per layout
+  },
+});
+```
+
+| | Language | Layout |
+|---|---|---|
+| 1. Explicit choice | `?lang=` parameter, then the pick stored by a language switch | `?layout=` parameter, then the pick stored by a layout switch |
+| 2. The browser | `navigator.languages`, exact tag first, then the primary subtag (`nl-BE` → `nl`) | the viewport width against the layouts' capture widths |
+| 3. Default | `defaultLocale` | `defaultLayout` |
+
+- **Language.** A per-locale page whose reader prefers another locale redirects to that locale's page with `location.replace`, so the redirect stays out of the history, and keeps the query and hash. A reader whose browser matches no configured locale stays on the page they opened. On `interactive.html`, which serves every locale at one URL, the player starts in the reader's language instead. Off by default, because it changes where an existing site's readers land; the examples here turn it on.
+- **Layout.** By default the breakpoints come from `config.yaml`'s `screenshot.layouts` widths: the nearest capture width wins, so with `mobile: 390` and `desktop: 1280` the switch sits at 835px. Without those widths the build warns and readers get the default layout, unless you set `layoutBreakpoints` (every layout, a minimum width each). The layout is applied before the first paint and opens the player on the same layout. Until the reader picks one, it follows the viewport (a rotated tablet, a resized window).
+- **Picks.** A click in a language or layout switch, the static page's or the player's own, is stored under `storageKeys`. A URL parameter applies to that visit only, so a shared link does not pin whoever opens it. Point `storageKeys.locale` at a key your readers already have to keep their choice. Every storage access is wrapped, so private mode and blocked storage degrade to detection without errors. When storage is blocked, a language pick travels as `?lang=` instead.
+- **Search engines.** Crawlers, link unfurlers and automation (`navigator.webdriver`) are never redirected. The HTML without JavaScript is unchanged: every page is complete, the default layout is marked active, and the `hreflang` alternates are untouched.
+
+The logic is one script, `assets/steppy-detect.js`, pulled in by one line in `<head>` right after the SEO include. The default templates carry it. A project template override gets the feature by adding the same line:
+
+```jinja
+{% include "static/_steppy_detect.html.j2" %}
+```
+
+An override without that line keeps its own behaviour.
+
+The Angular target applies the layout half (`?layout=`, the stored pick, the viewport) through a generated `steppy-detect.ts`. The language belongs to the host app's ngx-translate setup; call `translate.use(translate.getBrowserLang())` there if you want the same behaviour.
 
 ### SEO / indexing (`seo` block)
 
@@ -1274,13 +1379,14 @@ npm --prefix packages/player run size:tour # in-app tour overlay size budget
 # In-app tours in Chromium (needs the player build above and `playwright install chromium`)
 STEPPY_TOUR_E2E=1 python -m pytest tests/integration/test_tour_replay_it.py tests/integration/test_tour_player_it.py -q
 
-# After editing player TS, re-vendor the three wheel bundles (not the tour overlay)
-for f in steppy-player steppy-cursor-legacy steppy-video; do
+# After editing player TS, re-vendor the four wheel bundles (not the tour overlay)
+for f in steppy-player steppy-cursor-legacy steppy-video steppy-detect; do
   cp packages/player/dist/$f.js packages/player/dist/$f.js.map src/steppy/_player_bundle/
 done
+cp packages/player/src/detect/core.ts src/steppy/_player_bundle/steppy-detect.ts
 ```
 
-See [STEPPY-REFERENCE.md](STEPPY-REFERENCE.md) for the complete scenario file format reference and [CLAUDE.md](CLAUDE.md) for architectural notes.
+The scenario file format is documented in the [`steppy-scenario-author` skill](skills/steppy-scenario-author/SKILL.md); see [CLAUDE.md](CLAUDE.md) for architectural notes.
 
 ---
 

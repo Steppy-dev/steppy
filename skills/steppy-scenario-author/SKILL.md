@@ -79,7 +79,9 @@ guide:                        # optional; cursor animation timings for the HTML 
 **Hard rules:**
 - Steps are `### N. Title` headings. The number is cosmetic; order is what counts.
 - Every step field is a hyphen-prefixed `- key: value` line. Nested blocks (`guide-text`, `tour-text`, `fields`, `guide-cursor`, `layouts`) are indented one level. Dict children use plain `key: value` lines (no hyphens); list children use `- item` lines.
-- `extra: forbid` is enforced — unknown keys **fail validation**. If something doesn't parse, you typed a key the parser doesn't know.
+- `extra: forbid` is enforced — unknown keys **fail validation**. If something doesn't parse, you typed a key the parser doesn't know. Keys take the hyphenated form shown here (`screenshot-when`, `guide-text`) or the underscore form (`screenshot_when`, `guide_text`).
+- Quotes around a simple `- key: value` are stripped, so `- value: "Notebook"` and `- value: Notebook` are the same. Quotes and apostrophes *inside* a value are kept and escaped in the generated code: `- value: L'adresse` and `- expect: toast("L'élément a été créé")` are valid as written.
+- A YAML block scalar (`|`, `|-`, `>`) holds a multi-line value: `custom` `code:`, a multi-line `value:`.
 - Nested blocks are **one level deep only**, except for `guide-text` which supports two levels (locale → structured dict with title/subtitle/text) when using the structured format. The same holds for `tour-text`, which takes exactly the shapes `guide-text` does.
 - `steppy: <int>` declares the **scenario-format version**. Omit it and the file is version 1 — which every scenario written against this document is. It exists so a file using a future grammar fails loudly on an old Steppy (`scenario declares steppy: 2 but this Steppy supports up to version 1`) instead of dying on a confusing `extra="forbid"` error. Don't bump it by hand; add it only when a Steppy release tells you to.
 
@@ -110,7 +112,8 @@ guide:                        # optional; cursor animation timings for the HTML 
 | `assert` | `expect` | See Assertions below; cursor hidden. `contains(...)` and comparator `count(...)` supported |
 | `capture` | `store`, `from` | Fetch value from redis/http/shell/**dom** into a variable. See Capture below |
 | `upload` | `selector`, `value` | File upload via Playwright `set_input_files`. `selector` targets the `<input type="file">`; `value` is the file path (resolved from project root). For hidden inputs behind a styled trigger, add `guide-cursor` so the screenshot/cursor lands on the visible button — see Uploads below. |
-| `custom` | `code` | Arbitrary Playwright Python; cursor hidden unless `guide-cursor` override. **Last resort** — prefer the first-class actions above (see Component dropdowns, Dialogs, Dates, Toggles, etc.) |
+| `call` | `fn` (`module.function`) | Runs a project helper as a step: `args:`, `kwargs:`, `store:` (keep the return value as `{{var}}`), `page: false` for a helper that takes no page. Cursor hidden unless `guide-cursor`. See `call` below |
+| `custom` | `code` | Arbitrary Playwright Python; cursor hidden unless `guide-cursor` override. **Last resort** — prefer the first-class actions above (see Component dropdowns, Dialogs, Dates, Toggles, etc.), and `call` when the code already lives in a helper |
 | `login` | (nothing) | Runs the login-form flow for `role`; cursor hidden (`auth0-login` is a kept-forever alias) |
 
 Every step except `wait` needs `role` (matching an app in `config.yaml`).
@@ -375,7 +378,7 @@ For more control over guide presentation, use the structured format:
 
 | Form | Example |
 |---|---|
-| Toast/snackbar visible | `toast("Projet créé")` |
+| Toast/snackbar visible (passes with duplicates on screen) | `toast("Projet créé")` |
 | Row contains text | `row-contains("Website redesign")` |
 | Element visible | `visible([data-testid="foo"])` |
 | Element hidden | `hidden([data-testid="foo"])` |
@@ -384,11 +387,32 @@ For more control over guide presentation, use the structured format:
 | Element count (exact) | `count(.row, 3)` |
 | Element count (**comparator**) | `count([data-testid^="site-list-row-"], >=1)` |
 | Element count == 0 (removed from DOM) | `count([data-testid="temp-picker"], 0)` |
-| URL contains path | `url-contains(/orders)` |
+| URL contains path (literal, `{{var}}` works) | `url-contains(/orders/{{order_id}})` |
 | Not empty | `not-empty([data-testid="list"])` |
 | Disabled / enabled | `disabled(button#submit)` / `enabled(...)` |
+| Input value (exact) | `value([data-testid="amount"], "120.00")` |
+| Attribute value | `attribute([data-testid="row-1"], "aria-selected", "true")` |
+| Does **not** contain text | `not-contains([data-testid="status"], "Draft")` |
+| Not visible (waits for it to go) | `not-visible([data-testid="spinner"])` |
+| Contains text, ignoring case | `icontains([data-testid="banner"], "saved")` |
+| Checkbox / switch state | `checked([data-testid="notify"])` / `unchecked(...)` |
+| **Stays** hidden for a while | `stays-hidden([data-testid="wizard"], "3s")` |
 
-`expect` can be attached to any action (not just `assert`). A standalone verification step uses `action: assert` and only `expect`.
+`expect` can be attached to any action (not just `assert`). A standalone verification step uses `action: assert` and only `expect`. Selector arguments take the step's `within:` / `match:` like any element action.
+
+An unrecognised form fails `steppy validate`; it never compiles to a test that checks nothing.
+
+**`hidden(...)` vs `stays-hidden(...)`**: `hidden` waits for the element to *become* hidden, so it passes at once when the element is not there yet. To prove something never appears (a wizard that must not open), use `stays-hidden(selector, "3s")`, which fails if the element shows up at any point in that window.
+
+**Several checks, with failure messages**: `expect:` also takes a list. Each entry is a `check:` plus an optional `message:`, printed when it fails (`{{var}}` works in it):
+
+```markdown
+- action: assert
+- expect:
+  - check: count([data-testid^="order-row-"], >=1)
+    message: no order row for {{order_id}}
+  - check: contains([data-testid="total"], "120.00")
+```
 
 **`contains(...)` vs `text(...)`**: `text(...)` is exact full-text and `contains(...)` is a
 substring match (Playwright `to_contain_text`, auto-waiting). Use `contains` for tags/badges
@@ -522,6 +546,51 @@ The optional **`guide-cursor`** block tells the HTML guide renderer to show a cu
 
 ---
 
+## `call` — run a project helper
+
+When the logic already lives in a Python helper of the project, call it instead of pasting it into `custom`. `fn` is a dotted path, `module.function`, imported from the **project root** (where `steppy run` starts pytest — no `sys.path` setup needed). The helper receives the step's role page as its first argument, then `args` and `kwargs`.
+
+```markdown
+### 6. Make sure the invoice has a line
+- role: editor
+- action: call
+- fn: ui_helpers.ensure_invoice_line
+- args:
+    - "{{invoice_id}}"
+    - 2
+- kwargs:
+    product: "Consulting"
+- store: line_id
+```
+
+- `fn` (required) — `module.function`; a bare name is rejected by `steppy validate`.
+- `args:` / `kwargs:` — an indented YAML list / mapping (inline `[a, b]` and `{k: v}` work too). String values go through `{{var}}` interpolation; other values keep their type (`2` stays an int).
+- `store:` — keeps the helper's return value in `_vars`, so later steps can use `{{line_id}}`.
+- `page: false` — for a helper that takes no page (a backend call, a fixture builder). The step still needs `role`.
+- `timeout:` and `screenshot:` work as on any action.
+
+Like `custom`, a `call` step shows **no guide cursor** unless it carries a `guide-cursor:` block, and with one it is guided in an in-app tour too:
+
+```markdown
+### 7. Open the advanced options
+- role: editor
+- action: call
+- fn: ui_helpers.ensure_open
+- args:
+    - '[data-testid="invoice-advanced"]'
+- screenshot: editor
+- guide-cursor:
+    behavior: click
+    target: '[data-testid="invoice-advanced"]'
+- guide-text:
+    fr: "Ouvrez les options avancées."
+    en: "Open the advanced options."
+```
+
+Prefer a first-class action when one fits (`expand` for the example above); `call` is for the helpers a project already has, and it beats `custom` because the dependency is visible to `steppy validate` and to a reader.
+
+---
+
 ## `upload` — file uploads
 
 `action: upload` codegens to Playwright's `locator(selector).set_input_files(value)` and wires up bbox capture, screenshots, and cursor animation the same way `click` / `fill` do.
@@ -643,6 +712,8 @@ PrimeNG-style component dropdowns (`p-select`, `p-autocomplete`, `p-multiselect`
 ```
 
 `option` and `multiple` are mutually exclusive. Framework selectors come from the `dropdown:` config preset (PrimeNG defaults, so it works with no config — see Config presets below). The guide cursor auto-targets the trigger.
+
+Every `select-option` step ends with its list **closed**: it waits for the overlay to disappear, and presses `Escape` on one that stays open (a multiselect driven with `option:`). Two `select-option` steps can follow each other with no `wait` in between.
 
 ---
 
@@ -864,6 +935,16 @@ fieldset:                    # expand
   content: ".p-toggleable-content, .p-fieldset-content-container"
 ```
 
+**Another UI kit**: each of these five blocks takes a `preset:` that swaps in a whole kit's selectors. The built-ins are `primeng` (the default), `material`, `primevue`, `mui`, `vuetify` and `shadcn`. A selector you set yourself wins over the preset:
+
+```yaml
+dropdown:
+  preset: mui               # Material UI (React) selectors...
+  filter: ".my-search-box"  # ...except this one
+```
+
+Only `primeng` is checked against a real app. The other presets are starting points: markup varies by version and add-ons, so check each selector against the app and expect to override a few.
+
 To convert existing `action: custom` blocks into these declarative steps mechanically, run `steppy migrate custom --diff` (a dry run by default; `--write` applies, `--skipped` lists what was left alone and why). A block is rewritten only when every statement in it maps to a declarative step and the rewrite verifies.
 
 ---
@@ -890,7 +971,7 @@ A scenario can appear in multiple role guides: add both `user-guide-editor` and 
 6. **Using relative URLs without a leading slash** — `target: orders` is ambiguous. Always write `target: /tasks`.
 7. **Missing `auth: false` on a login-flow scenario** — the runner will try to pre-auth before the test runs, short-circuiting the flow. Login scenarios must opt out.
 8. **Raw `page.*` calls outside `custom`** — every non-custom action generates the right Playwright call for you. Don't embed Python in regular steps.
-9. **Multi-line string in simple `guide-text` format without quotes** — wrap in double quotes: `fr: "First sentence. Second sentence."`. Or switch to structured format with explicit `title` and `text` fields.
+9. **Multi-line string in simple `guide-text` format without quotes** — wrap in double quotes: `fr: "First sentence. Second sentence."`. Or switch to structured format with explicit `title` and `text` fields. A French colon on its own (`title: Segment : factures`, in the frontmatter or a nested block) does **not** need quotes: Steppy quotes such a value for you when the YAML would otherwise be invalid.
 10. **Missing `title` in structured `guide-text`** — when using the structured format (`fr: { title: ..., subtitle: ..., text: ... }`), the `title` field is mandatory. `subtitle` and `text` are optional.
 11. **Selectors with single quotes inside double-quoted `custom` code** — use Python triple quotes or escape, same as any Python string.
 12. **Click step whose screenshot shows the *next* page, not the button you're clicking** — the default is `screenshot-when: after`, so a click that navigates unmounts the target before the screenshot. Add `screenshot-when: before` to that step. Same applies to "Submit" clicks whose post-action state is a toast + redirect.
@@ -928,6 +1009,7 @@ A scenario can appear in multiple role guides: add both `user-guide-editor` and 
 
 Anywhere a value supports `{{var}}` (target, selector, value, fields, custom code), Steppy substitutes from `_vars`. Variables come from:
 - `capture` steps (`store: X` → `{{X}}`)
+- `call` steps (`store: X` keeps the helper's return value)
 - Seed scripts writing to Redis/env/etc.
 - Anything you set in a `custom` step: `_vars['foo'] = 'bar'`
 
@@ -954,6 +1036,12 @@ Anywhere a value supports `{{var}}` (target, selector, value, fields, custom cod
 12. *(Optional)* `steppy run --bundle` then `steppy report` — render the run to a browsable static site (outcomes, grouped failure causes, the failing step named plus its screenshot), and/or `steppy bundle create` to package `output/` into a portable, self-describing archive to attach to a CI job. See **Other commands** below, and the **`steppy-ci-report`** skill for CI wiring, publishing and the coverage badge.
 
 13. *(Optional)* **In-app tours** — when the scenario opts into a tour (`tour:` in its frontmatter, with `tours.enabled: true` in `config.yaml`), run `steppy validate` and fix every tour error it prints (they fail validation with exit 1, and nothing is written until they are gone), then `steppy generate`: it writes the tour files and appends the `test_<slug>__tour` CI replay to the scenario's test file, which `steppy run` then runs with the scenario. See **In-app tours** below.
+
+---
+
+## Where artifacts land — the `output:` block
+
+Screenshots, guides and tours default to `./output/screenshots`, `./output/guides` and `./output/tours`. `config.yaml`'s `output:` block moves them (`screenshots_dir`, `guides_dir`, `tours_dir`), and every command that writes or reads them follows. A directory outside `output/` is allowed, but four things only look at `output/`: `steppy bundle create`, the `--workers N` containers, the scaffolded `.gitignore` and the shipped CI upload. Each warns. The README's "Artifact output paths" section has the details, including the paths that cannot be moved.
 
 ---
 
@@ -1218,7 +1306,7 @@ assetsDir/                          # point this at host's public/assets/<role>/
 #### Generated component behavior
 
 - **Host-owned locale via `@ngx-translate/core`**: components inject `TranslateService` and derive their locale signal from `translate.onLangChange` via `toSignal`. Calling `translate.use('nl')` from anywhere in the host app flips every title, description, and screenshot in one click. The host app loads the per-locale bundles (`i18n/<role>/<locale>.json`) into ngx-translate (typically via `TranslateHttpLoader` or static imports merged into `translate.setTranslation`).
-- **Layout switcher**: when `layouts` has more than one entry, a PrimeNG `SelectButton` drives a component-local `selectedLayout` signal. The trustedHtml `computed()` picks the right (locale, layout) HTML fragment from the `CONTENT` map.
+- **Layout switcher**: when `layouts` has more than one entry, a PrimeNG `SelectButton` drives a component-local `selectedLayout` signal. The trustedHtml `computed()` picks the right (locale, layout) HTML fragment from the `CONTENT` map. The signal starts on the reader's layout: `?layout=`, then the pick stored by the switch (`autoDetect.storageKeys.layout`), then the viewport width (`autoDetect.layout`, on by default), then `defaultLayout`. The rules live in a generated `<outputDir>/steppy-detect.ts`. There is no language detection here: the host app owns the language through ngx-translate (`translate.use(translate.getBrowserLang())` does it on the host side).
 - **Mode switcher**: when a guide has `modes: ['stepbystep', 'interactive']`, a second `SelectButton` switches between the step-by-step HTML and a real interactive component that mounts the Lit `<steppy-guide>` web component against the build-emitted `guide.json` manifest. The interactive component bridges `TranslateService.onLangChange` into the player's `locale` attribute, and lazily injects a one-shot `<script type="module" src="/assets/<role>/steppy-player.js">` on first mount (idempotent across multiple interactive guides).
 - **Signals**: components use Angular signals (`signal()`, `computed()`) for reactive state.
 - **ViewEncapsulation.None**: guide CSS (scoped with `.steppy-guide` prefix) is injected via innerHTML `<style>` blocks.
@@ -1288,6 +1376,26 @@ outputDir/
 - **Index ordering**: the landing page lists onboarding first (when enabled), then top-level entries (groups + ungrouped guides) in `navbar.order`, with declaration-order fallback for anything not listed (mirrors the Angular navbar logic).
 - **Shared CSS**: the inline `<style>` block from `guide.fragment.html.j2` is suppressed in static pages; all styling lives in the single `assets/guides.css` so pages stay small and the browser caches one stylesheet.
 - **Interactive mode is supported** (stage 4 lifted the previous restriction). A guide with `modes: ['interactive']` emits `<slug>/interactive.html` — a self-contained page that loads `../assets/steppy-player.js` (the same Lit `<steppy-guide>` bundle the Angular target uses) and mounts it against `./guide.json`. Stepbystep and interactive coexist in the same directory: `<slug>/fr.html`, `<slug>/nl.html` (stepbystep) sit next to `<slug>/interactive.html` (interactive). The locale switcher inside `<steppy-guide>`'s chrome handles switching mid-guide — no URL navigation needed. The whole build still runs offline: bundle, manifest, and screenshots are all relative paths from `<slug>/interactive.html`.
+
+#### Reader language and layout (the `autoDetect` block)
+
+```ts
+export default defineGuideConfig({
+  // ...
+  autoDetect: {
+    locale: true,     // default false: redirect a per-locale page to the reader's language
+    layout: true,     // default true: pick the layout from the viewport width
+    storageKeys: { locale: 'steppy:locale', layout: 'steppy:layout' }, // defaults; point at an existing key to keep readers' choice
+    layoutBreakpoints: { mobile: 0, desktop: 768 }, // optional; every layout, a minimum width each
+  },
+});
+```
+
+- **Precedence**, for both: `?lang=` / `?layout=`, then the pick stored by a language or layout switch (the page's or the player's), then the browser (`navigator.languages`, exact tag then primary subtag, so `nl-BE` → `nl`; the viewport width), then `defaultLocale` / `defaultLayout`. A URL parameter applies to that visit only; only a pick is stored.
+- **Language** (`locale: true`): a per-locale page redirects with `location.replace`, which keeps the redirect out of the history and carries the query and hash. A reader whose browser matches no configured locale stays where they landed. On `interactive.html` the player starts in the reader's language. Off by default, because it changes where an existing site's readers land. Turn it on in new projects.
+- **Layout**: applied in `<head>`, before the first paint, and on the interactive page too. Breakpoints default to the nearest capture width from `config.yaml`'s `screenshot.layouts` (390/1280 switches at 835px). Without those widths the build warns and readers get the default layout, unless `layoutBreakpoints` is set. Until a pick, it follows resizes.
+- **Crawlers** (bot user agents, `navigator.webdriver`) are never redirected; the no-JS page, its default layout and its `hreflang` alternates are unchanged.
+- **Template overrides** get it with one line in `<head>`, after the SEO include: `{% include "static/_steppy_detect.html.j2" %}`. Without it an override keeps its own behaviour (see the `steppy-template` skill).
 
 #### SEO / indexing (the `seo` block)
 
@@ -1361,7 +1469,7 @@ The `.nojekyll` file ensures GH Pages serves files as-is without Jekyll preproce
 
 #### Customizing the static layout
 
-Override `static/page.html.j2`, `static/index.html.j2`, or `static/guides.css` by copying any of them from `src/steppy/templates/static/` into your project's `templates/static/` directory. See the **Customizing templates per project** section.
+Override `static/page.html.j2`, `static/index.html.j2`, or `static/guides.css` by copying any of them from `src/steppy/templates/static/` into your project's `templates/static/` directory. See the **Customizing templates per project** section. Keep `{% include "static/_steppy_detect.html.j2" %}` in the `<head>` of a page override, next to the SEO include, or the page loses language and layout detection.
 
 ### Interactive mode — Lit `<steppy-guide>` web component
 
@@ -1396,10 +1504,11 @@ The player's source lives in [`packages/player/`](../packages/player/). Build it
 ```bash
 npm --prefix packages/player install
 npm --prefix packages/player run build
-# Then re-copy the three vendored bundles, each .js + .js.map (CI does this on release):
-for b in steppy-player steppy-cursor-legacy steppy-video; do
+# Then re-copy the four vendored bundles, each .js + .js.map, and the detection rules (CI does this on release):
+for b in steppy-player steppy-cursor-legacy steppy-video steppy-detect; do
   cp "packages/player/dist/$b.js" "packages/player/dist/$b.js.map" src/steppy/_player_bundle/
 done
+cp packages/player/src/detect/core.ts src/steppy/_player_bundle/steppy-detect.ts
 ```
 
 The build also writes `steppy-tour.js`, the in-app tour overlay (`@steppy/player/tour`). It is **not** vendored: an app bundles it itself, so do not copy it into `_player_bundle/`.
@@ -2125,8 +2234,9 @@ export default defineGuideConfig({
 
 The build assembles each guide once per (locale, layout) and renders an in-page toggle (mirroring the locale switcher, but client-side instead of separate URLs):
 
-- **Static target**: `<slug>/<locale>.html` bundles both layouts in `<div data-layout="...">` wrappers; a small JS toggle swaps which one is visible. Active layout persists via `localStorage`. Layout-specific screenshot URLs are baked at build time.
-- **Angular target**: emits `CONTENT[locale][layoutKey]` and each per-guide component owns a local `selectedLayout` signal initialized to `defaultLayout`. The component shows a layout `SelectButton` when more than one layout is configured.
+- **Static target**: `<slug>/<locale>.html` bundles both layouts in `<div data-layout="...">` wrappers; `assets/steppy-detect.js` shows the one that suits the reader's viewport (`autoDetect`, on by default) and remembers a pick in the toggle. Layout-specific screenshot URLs are baked at build time.
+- **Angular target**: emits `CONTENT[locale][layoutKey]` and each per-guide component owns a local `selectedLayout` signal that starts on the reader's layout (`?layout=`, stored pick, viewport, then `defaultLayout`). The component shows a layout `SelectButton` when more than one layout is configured.
+- **Viewport detection needs widths**: keep `screenshot.layouts` in `config.yaml` beside the build (the widths set the breakpoints), or set `autoDetect.layoutBreakpoints`.
 
 When `layouts` is empty in build config, the build runs unchanged — no toggle, single-layout output.
 

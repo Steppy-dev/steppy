@@ -47,14 +47,16 @@ interface SteppyCursorApi {
    * each step as it scrolls into view. Returns a disposer. */
   mount(root: ParentNode, steps: LegacyStep[], timings?: LegacyTimings): () => void;
   /** Auto-init entry point used by the static/standalone templates (reads the
-   * ``window.__STEPPY_STEPS__`` globals and mounts over ``document``). */
-  init(): void;
+   * ``window.__STEPPY_STEPS__`` globals and mounts over the visible layout, or
+   * over ``document`` when the page has no layouts). */
+  init(layoutOverride?: string): void;
 }
 
 declare global {
   interface Window {
     __STEPPY_STEPS__?: LegacyStep[];
     __STEPPY_STEPS_BY_LAYOUT__?: Record<string, LegacyStep[]>;
+    __STEPPY_ACTIVE_LAYOUT__?: string;
     __STEPPY_TIMINGS__?: Partial<CursorTimings>;
     __STEPPY_CURSOR__?: SteppyCursorApi;
   }
@@ -123,8 +125,40 @@ function mount(root: ParentNode, steps: LegacyStep[], timings?: LegacyTimings): 
   };
 }
 
-function init(): void {
-  mount(document, window.__STEPPY_STEPS__ ?? [], window.__STEPPY_TIMINGS__);
+/** The layout the static page is showing: ``steppy-detect.js`` sets the
+ * ``<html>`` attribute; a page without it keeps ``__STEPPY_ACTIVE_LAYOUT__``. */
+function activeLayout(): string | null {
+  return document.documentElement.getAttribute('data-steppy-layout') || window.__STEPPY_ACTIVE_LAYOUT__ || null;
+}
+
+let current: { layout: string | null; dispose: () => void } | null = null;
+
+/**
+ * Mount over the visible layout only, with that layout's step data. Every
+ * layout's steps are in the page (hidden ones included), and they share step
+ * indexes, so mounting over ``document`` would drive the mobile screenshots
+ * with the desktop layout's cursor coordinates.
+ */
+function init(layoutOverride?: string): void {
+  if (current) current.dispose();
+  const byLayout = window.__STEPPY_STEPS_BY_LAYOUT__;
+  const layout = byLayout ? layoutOverride || activeLayout() : null;
+  const steps = byLayout && layout ? byLayout[layout] : undefined;
+  if (layout && steps) {
+    const root =
+      Array.from(document.querySelectorAll<HTMLElement>('.steppy-layout')).find(
+        (el) => el.getAttribute('data-layout') === layout,
+      ) ?? document;
+    current = { layout, dispose: mount(root, steps, window.__STEPPY_TIMINGS__) };
+  } else {
+    current = { layout: null, dispose: mount(document, window.__STEPPY_STEPS__ ?? [], window.__STEPPY_TIMINGS__) };
+  }
+}
+
+function onLayoutChange(event: Event): void {
+  const next = (event as CustomEvent<{ layout?: string }>).detail?.layout;
+  if (!current || !next || next === current.layout) return;
+  init(next);
 }
 
 // Expose the programmatic API so SPA hosts (Angular) can (re)drive the cursor
@@ -138,6 +172,7 @@ window.__STEPPY_CURSOR__ = { mount, init };
 function autoInit(): void {
   if (!window.__STEPPY_STEPS__ && !window.__STEPPY_STEPS_BY_LAYOUT__) return;
   init();
+  document.addEventListener('steppy:layout-change', onLayoutChange);
 }
 
 if (document.readyState === 'loading') {

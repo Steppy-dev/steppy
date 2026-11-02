@@ -318,6 +318,67 @@ class SeoConfig(BaseModel):
         return self
 
 
+#: A storage key ends up in a JSON block and in ``localStorage``; whitespace is
+#: almost always a typo, and an empty key would silently share one slot.
+_STORAGE_KEY = re.compile(r"^\S+$")
+
+
+class AutoDetectStorageKeys(BaseModel):
+    """``localStorage`` keys holding the reader's own picks. Overridable so a
+    project can keep a key its readers already have (e.g. a legacy language key)."""
+
+    locale: str = "steppy:locale"
+    layout: str = "steppy:layout"
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("locale", "layout")
+    @classmethod
+    def validate_key(cls, v: str) -> str:
+        if not isinstance(v, str) or not _STORAGE_KEY.match(v):
+            raise ValueError(f"autoDetect.storageKeys values must be non-empty and contain no whitespace, got {v!r}")
+        return v
+
+
+class AutoDetectConfig(BaseModel):
+    """Land each reader on their language and on the layout that suits their screen.
+
+    Precedence, for both: an explicit choice (``?lang=`` / ``?layout=``, or a
+    pick stored by a picker) → what the browser says (``navigator.languages`` /
+    the viewport width) → the default. ``locale`` is off by default because it
+    redirects readers of an existing site; ``layout`` only changes which of the
+    page's embedded screenshots show, so it is on. Static target: both; Angular
+    target: ``layout`` only — the host app owns the language through
+    ngx-translate.
+    """
+
+    locale: bool = False
+    layout: bool = True
+    storage_keys: AutoDetectStorageKeys = Field(default_factory=AutoDetectStorageKeys, alias="storageKeys")
+    # Minimum viewport width (CSS px) per layout. Unset derives them from
+    # config.yaml's screenshot.layouts widths: each switch sits at the midpoint
+    # between two neighbouring capture widths (nearest width wins).
+    layout_breakpoints: Optional[dict[str, int]] = Field(default=None, alias="layoutBreakpoints")
+
+    class Config:
+        extra = "forbid"
+        populate_by_name = True
+
+    @field_validator("layout_breakpoints", mode="before")
+    @classmethod
+    def validate_breakpoints(cls, v: Any) -> Any:
+        # Before pydantic's coercion, which would read `true` as 1 and "768" as 768.
+        if not isinstance(v, dict):
+            return v
+        for name, width in v.items():
+            if isinstance(width, bool) or not isinstance(width, int) or width < 0:
+                raise ValueError(
+                    f"autoDetect.layoutBreakpoints.{name} must be a non-negative integer (px), got {width!r}"
+                )
+        return v
+
+
 #: What a ``textStyles`` value may never contain: it is written verbatim into a
 #: ``<style>`` block, so each of these would end the declaration, the rule or the
 #: element (or open a comment that swallows the rest of the stylesheet); a
@@ -476,6 +537,8 @@ class BuildConfig(BaseModel):
     # Styles for strong / em / code / links in step text. Unset emits nothing,
     # so a build without it is byte-identical to one before the option existed.
     text_styles: Optional[TextStylesConfig] = Field(default=None, alias="textStyles")
+    # Reader language / layout detection (see AutoDetectConfig).
+    auto_detect: AutoDetectConfig = Field(default_factory=AutoDetectConfig, alias="autoDetect")
 
     class Config:
         extra = "forbid"
@@ -644,6 +707,19 @@ class BuildConfig(BaseModel):
                 object.__setattr__(self, "default_layout", self.layouts[0])
             elif self.default_layout not in self.layouts:
                 raise ValueError(f"defaultLayout '{self.default_layout}' is not in layouts {self.layouts}")
+
+        breakpoints = self.auto_detect.layout_breakpoints
+        if breakpoints is not None:
+            unknown = sorted(set(breakpoints) - set(self.layouts))
+            if unknown:
+                raise ValueError(
+                    f"autoDetect.layoutBreakpoints names {unknown}, which are not in layouts {self.layouts}"
+                )
+            missing = [name for name in self.layouts if name not in breakpoints]
+            if missing:
+                raise ValueError(
+                    f"autoDetect.layoutBreakpoints must give every layout a minimum width; missing {missing}"
+                )
 
         # Both targets support interactive mode as of stage 4 of the
         # interactive-player feature: the static target loads the same Lit

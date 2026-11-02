@@ -1,0 +1,10 @@
+/* Steppy reader detection — shared across all static pages that include
+   static/_steppy_detect.html.j2. Lands each reader on their language (when
+   autoDetect.locale is on) and on the layout that suits their screen, and
+   remembers a pick made in a language or layout picker.
+
+   A thin wrapper around the vendored IIFE bundle built from
+   packages/player/src/detect/. To regenerate the bundle:
+     npm --prefix packages/player run build:detect
+   then copy dist/steppy-detect.js into src/steppy/_player_bundle/. */
+{{ detect_iife | safe }}

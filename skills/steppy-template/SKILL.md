@@ -85,6 +85,30 @@ this way — and it works **per file and per subdirectory**: a project containin
 `templates/static/guides.css` overrides that one file and inherits every other bundled
 template, with no top-level `*.j2` required.
 
+### Two lines every static page override keeps in `<head>`
+
+```jinja
+    {% include "static/_seo_head.html.j2" %}
+    {% include "static/_steppy_detect.html.j2" %}
+```
+
+The first carries robots, canonical and `hreflang`. The second loads
+`assets/steppy-detect.js`, which lands each reader on their language and on the layout
+that suits their screen, and remembers a pick made in a switch (the build config's
+`autoDetect` block). Put it in an override of `page`, `index`, `group`, `onboarding` and
+`interactive`, after the SEO include and before the stylesheet, so a redirect or a layout
+switch happens before anything paints. An override without it keeps its own behaviour. An
+override that adds it can keep an older inline layout script: the detection runs after it
+and wins. Delete any hand-rolled language or layout storage the override had, and point
+`autoDetect.storageKeys.locale` at the old key so readers keep their choice.
+
+What the script relies on, in the markup the overrides already have:
+- Language links inside `.steppy-locale-switch`. `data-steppy-locale="<locale>"` on each
+  `<a>` makes them explicit, but a link to the sibling page is recognised without it.
+- Layout buttons inside `.steppy-layout-switch`, with `data-layout="<layout>"`.
+- One `.steppy-layout[data-layout]` wrapper per layout around the step-by-step content.
+- A `<steppy-guide>` element on the interactive page.
+
 ---
 
 ## Step-by-step guide CSS (`.steppy-guide`)
@@ -615,6 +639,7 @@ Every file you can drop into your project's `templates/` to change appearance. *
 | `static/interactive.html.j2` | Static interactive page + inline `.steppy-interactive-*` shell CSS | **styling** (shell) |
 | `static/video.html.j2` | Static video page + inline `.steppy-video-*` shell CSS (player, version switcher, download links). Links `guides.css` | **styling** (shell) |
 | `static/_seo_head.html.j2` | Shared SEO `<head>` fragment (`robots`/canonical/`hreflang`/description/Open Graph) `{% include %}`d by every static page — no visual output | **not styling** |
+| `static/_steppy_detect.html.j2` | Reader language / layout detection: the per-page JSON config plus the `steppy-detect.js` script tag, `{% include %}`d in `<head>` by every static page with more than one locale or layout — no visual output | **not styling** |
 | `static/robots.txt.j2` | Emitted by `seo.mode: 'public'` — no visual output | **not styling** |
 | `static/_headers.j2` | `X-Robots-Tag` rules for artifacts that cannot carry a robots meta (PDFs). Read by Netlify / Cloudflare Pages, ignored by GitHub and GitLab Pages — no visual output | **not styling** |
 | `static/_mode_links.html.j2` | The "Step by Step / Interactive / Video" row, `{% include %}`d by all three renderings of a guide. Styled by `.steppy-mode-links` in `guides.css` | structure (`guides.css` styles it) |
@@ -627,7 +652,7 @@ Every file you can drop into your project's `templates/` to change appearance. *
 | `report/report.css` | **The run report's entire stylesheet** — a separate site, see below | **styling** |
 | `report/{index,scenario,coverage}.html.j2` | Run report pages (`steppy report`) | structure (styling via `report/report.css`) |
 | `report/_head.html.j2` | Shared report `<head>` (always `noindex`) — no visual output | **not styling** |
-| `static/cursor.js.j2`, `angular/{content,routes}.ts.j2`, `angular/gitignore.j2`, `guide.md.j2` | Cursor driver / fragments / routes / nav data | **not styling** |
+| `static/cursor.js.j2`, `static/steppy-detect.js.j2`, `angular/{content,routes}.ts.j2`, `angular/gitignore.j2`, `guide.md.j2` | Cursor driver / reader detection / fragments / routes / nav data | **not styling** |
 
 > **Angular reality check:** the `angular/*.component.ts.j2` files carry **no CSS** — overriding
 > them changes markup, not look. To restyle Angular landing pages / onboarding strip, write

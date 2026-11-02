@@ -70,7 +70,7 @@ jobs:
         run: |
           npm --prefix packages/player run build
           fail=0
-          for f in steppy-player.js steppy-cursor-legacy.js steppy-video.js; do
+          for f in steppy-player.js steppy-cursor-legacy.js steppy-detect.js steppy-video.js; do
             for g in "$f" "$f.map"; do
               if ! cmp -s "packages/player/dist/$g" "src/steppy/_player_bundle/$g"; then
                 echo "::error file=src/steppy/_player_bundle/$g::stale vendored bundle — run the player build and copy dist/ into src/steppy/_player_bundle/"
@@ -78,6 +78,11 @@ jobs:
               fi
             done
           done
+          # The Angular target copies the detection rules into the host app as source.
+          if ! cmp -s packages/player/src/detect/core.ts src/steppy/_player_bundle/steppy-detect.ts; then
+            echo "::error file=src/steppy/_player_bundle/steppy-detect.ts::stale — copy packages/player/src/detect/core.ts here"
+            fail=1
+          fi
           exit $fail
 
       # The in-app tour overlay (dist/steppy-tour.js) ships to apps through

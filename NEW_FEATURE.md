@@ -3,7 +3,8 @@
 > **Historical planning doc.** Both features below have shipped. Path references
 > to `examples/…` predate the repo's current layout — the in-repo scenario corpus
 > now lives in [`scenarios/`](scenarios/) (e.g. `scenarios/admin--create-project.md`),
-> and the authoritative format spec is [`STEPPY-REFERENCE.md`](STEPPY-REFERENCE.md).
+> and the authoritative format spec is the
+> [`steppy-scenario-author` skill](skills/steppy-scenario-author/SKILL.md).
 
 This document specifies two new features for Steppy:
 

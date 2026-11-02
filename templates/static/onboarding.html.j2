@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ pick_locale(onboarding.title, current_locale, default_locale) }} — {{ pick_locale(site_title, current_locale, default_locale) }}</title>
     {% include "static/_seo_head.html.j2" %}
+    {% include "static/_steppy_detect.html.j2" %}
     <link rel="stylesheet" href="../assets/guides.css">
 </head>
 <body>
@@ -23,7 +24,7 @@
                     {% if link.active %}
                     <span aria-current="true">{{ link.label }}</span>
                     {% else %}
-                    <a href="{{ link.href }}">{{ link.label }}</a>
+                    <a href="{{ link.href }}" data-steppy-locale="{{ link.locale }}">{{ link.label }}</a>
                     {% endif %}
                 </li>
                 {% endfor %}

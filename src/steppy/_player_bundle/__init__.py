@@ -1,12 +1,14 @@
 """Vendored ``@steppy/player`` build artifacts.
 
 The cursor IIFE bundle (legacy stepbystep cursor animation), the
-``<steppy-guide>`` ESM bundle (interactive player) and the video
-renderer IIFE live here as pre-built artifacts, **committed to git** so
-``pip install git+…`` needs no Node toolchain. After changing
-``packages/player/src/``, run ``npm --prefix packages/player run build``
-and copy those three bundles (with their maps) back here; CI compares them
-byte for byte, and the release pipeline rebuilds them for the wheel.
+``<steppy-guide>`` ESM bundle (interactive player), the reader-detection
+IIFE and the video renderer IIFE live here as pre-built artifacts,
+**committed to git** so ``pip install git+…`` needs no Node toolchain. After
+changing ``packages/player/src/``, run ``npm --prefix packages/player run build``
+and copy those four bundles (with their maps) back here, plus
+``src/detect/core.ts`` as ``steppy-detect.ts`` (the Angular target's copy of the
+detection rules); CI compares them byte for byte, and the release pipeline
+rebuilds them for the wheel.
 
 The fourth bundle the player build produces, the in-app tour overlay
 (``steppy-tour.js``), is deliberately not vendored: it ships to apps
@@ -69,6 +71,34 @@ def get_cursor_bundle_path() -> Path:
     if not path.is_file():
         raise CursorBundleMissingError(f"Vendored cursor bundle missing at {path}. " + _BUILD_HINT)
     return path
+
+
+@lru_cache(maxsize=1)
+def get_detect_iife() -> str:
+    """Return the reader-detection IIFE (``steppy-detect.js``) as a string.
+
+    The static target renders it through ``templates/static/steppy-detect.js.j2``
+    (the ``detect_iife`` context variable) into ``assets/steppy-detect.js``.
+    """
+    path = bundle_dir() / "steppy-detect.js"
+    try:
+        return path.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError) as exc:
+        raise CursorBundleMissingError(f"Vendored detection bundle missing at {path}. " + _BUILD_HINT) from exc
+
+
+@lru_cache(maxsize=1)
+def get_detect_source() -> str:
+    """Return the detection rules as TypeScript source (``steppy-detect.ts``).
+
+    The Angular target writes it into the host app beside the generated
+    components, which import ``resolveLayout`` from it.
+    """
+    path = bundle_dir() / "steppy-detect.ts"
+    try:
+        return path.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError) as exc:
+        raise CursorBundleMissingError(f"Vendored detection source missing at {path}. " + _BUILD_HINT) from exc
 
 
 @lru_cache(maxsize=1)

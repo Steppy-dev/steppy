@@ -345,7 +345,11 @@ class TestFixtureLayoutsAngular:
         # No service import — layout is a local signal
         assert "GuidesLayoutService" not in component
         assert "selectedLayout" in component
-        assert "signal<string>('desktop')" in component
+        # Starts on the reader's layout: ?layout=, stored pick, viewport, then 'desktop'
+        assert "signal<string>(initialLayout())" in component
+        assert "defaultLayout: 'desktop'" in component
+        assert "from '../steppy-detect'" in component
+        assert (tmp_path / "generated" / "steppy-detect.ts").is_file()
         assert "layoutOptions" in component
         # The trustedHtml must select by both locale and layout
         assert "byLayout[layoutKey]" in component

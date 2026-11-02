@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ pick_locale(entry.title, locale, default_locale) }} — {{ pick_locale(site_title, locale, default_locale) }}</title>
     {% include "static/_seo_head.html.j2" %}
+    {% include "static/_steppy_detect.html.j2" %}
     <link rel="stylesheet" href="../assets/guides.css">
 </head>
 <body{% if layouts %} data-active-layout="{{ default_layout }}"{% endif %}>
@@ -27,7 +28,7 @@
                     {% if link.active %}
                     <span aria-current="true">{{ link.label }}</span>
                     {% else %}
-                    <a href="{{ link.href }}">{{ link.label }}</a>
+                    <a href="{{ link.href }}" data-steppy-locale="{{ link.locale }}">{{ link.label }}</a>
                     {% endif %}
                 </li>
                 {% endfor %}
@@ -91,55 +92,15 @@
     <script>
       {% if layouts %}
       window.__STEPPY_STEPS_BY_LAYOUT__ = {{ steps_by_layout | tojson }};
-      window.__STEPPY_STEPS__ = window.__STEPPY_STEPS_BY_LAYOUT__[{{ default_layout | tojson }}] || [];
-      window.__STEPPY_ACTIVE_LAYOUT__ = {{ default_layout | tojson }};
+      {# steppy-detect.js (in <head>) has already picked the reader's layout; the
+         layout switch itself lives there too. #}
+      window.__STEPPY_ACTIVE_LAYOUT__ = (window.SteppyDetect && window.SteppyDetect.layout) || {{ default_layout | tojson }};
+      window.__STEPPY_STEPS__ = window.__STEPPY_STEPS_BY_LAYOUT__[window.__STEPPY_ACTIVE_LAYOUT__] || [];
       {% else %}
       window.__STEPPY_STEPS__ = {{ steps_by_layout['default'] | tojson }};
       {% endif %}
       window.__STEPPY_TIMINGS__ = {{ cursor_timings | tojson }};
     </script>
-    {% if layouts | length > 1 %}
-    <script>
-      (function () {
-        const persistKey = 'steppy:active-layout';
-        const persisted = (function () {
-          try { return localStorage.getItem(persistKey); } catch (_) { return null; }
-        })();
-        const layouts = {{ layouts | tojson }};
-        const initial = (persisted && layouts.indexOf(persisted) !== -1)
-          ? persisted
-          : {{ default_layout | tojson }};
-        function applyLayout(name) {
-          if (layouts.indexOf(name) === -1) return;
-          document.body.setAttribute('data-active-layout', name);
-          document.querySelectorAll('.steppy-layout').forEach(function (el) {
-            if (el.getAttribute('data-layout') === name) {
-              el.classList.add('steppy-layout-active');
-            } else {
-              el.classList.remove('steppy-layout-active');
-            }
-          });
-          document.querySelectorAll('.steppy-layout-switch button').forEach(function (b) {
-            if (b.getAttribute('data-layout') === name) {
-              b.setAttribute('aria-current', 'true');
-            } else {
-              b.removeAttribute('aria-current');
-            }
-          });
-          if (window.__STEPPY_STEPS_BY_LAYOUT__) {
-            window.__STEPPY_STEPS__ = window.__STEPPY_STEPS_BY_LAYOUT__[name] || [];
-            window.__STEPPY_ACTIVE_LAYOUT__ = name;
-          }
-          try { localStorage.setItem(persistKey, name); } catch (_) {}
-          document.dispatchEvent(new CustomEvent('steppy:layout-change', { detail: { layout: name } }));
-        }
-        applyLayout(initial);
-        document.querySelectorAll('.steppy-layout-switch button').forEach(function (b) {
-          b.addEventListener('click', function () { applyLayout(b.getAttribute('data-layout')); });
-        });
-      })();
-    </script>
-    {% endif %}
     <script src="../assets/cursor.js" defer></script>
 </body>
 </html>

@@ -166,6 +166,36 @@ export interface TextStylesConfig {
   link?: LinkStyle;
 }
 
+/** `localStorage` keys holding the reader's own picks. */
+export interface AutoDetectStorageKeys {
+  /** Default: "steppy:locale". Point it at a key your readers already have to keep their choice. */
+  locale?: string;
+  /** Default: "steppy:layout". */
+  layout?: string;
+}
+
+/**
+ * Land each reader on their language and on the layout that suits their
+ * screen. Precedence, for both: an explicit choice (`?lang=` / `?layout=`, or
+ * a pick stored by a picker) → the browser (`navigator.languages` / the
+ * viewport width) → the default. Crawlers are never redirected. Static target:
+ * both; Angular target: `layout` only (the host app owns the language).
+ */
+export interface AutoDetectConfig {
+  /** Redirect per-locale pages and start the player in the reader's language. Default: false. */
+  locale?: boolean;
+  /** Pick the layout from the viewport width. Default: true. */
+  layout?: boolean;
+  /** Storage keys for the reader's picks. */
+  storageKeys?: AutoDetectStorageKeys;
+  /**
+   * Minimum viewport width (CSS px) per layout, covering every layout, e.g.
+   * `{ mobile: 0, desktop: 768 }`. Omitted ⇒ derived from config.yaml's
+   * `screenshot.layouts` widths (the nearest capture width wins).
+   */
+  layoutBreakpoints?: Record<string, number>;
+}
+
 export interface GuideConfig {
   /** Directory containing scenario .md files. */
   scenariosRoot: string;
@@ -251,6 +281,11 @@ export interface GuideConfig {
    * Omitted ⇒ the browser's defaults, and no CSS is emitted.
    */
   textStyles?: TextStylesConfig;
+  /**
+   * Reader language / layout detection. Omitted ⇒ layout detection on,
+   * language detection off.
+   */
+  autoDetect?: AutoDetectConfig;
 }
 
 /**

@@ -1,5 +1,6 @@
 """Parser for Markdown scenario files."""
 
+import json
 import re
 import yaml
 from pathlib import Path
@@ -34,8 +35,7 @@ def parse_scenario_file(file_path: Path) -> Scenario:
         raise ParseError(f"Scenario file not found: {file_path}")
 
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            post = frontmatter.load(f)
+        post = _load_frontmatter(file_path.read_text(encoding="utf-8"))
     except Exception as e:
         raise ParseError(f"Failed to read scenario file {file_path}: {e}")
 
@@ -64,6 +64,79 @@ def parse_scenario_file(file_path: Path) -> Scenario:
         raise ParseError(error_msg)
 
     return scenario
+
+
+#: ``key: value`` on one line, optionally a list item. The key is a plain
+#: identifier, so prose that merely contains a colon is never taken for one.
+_KEY_VALUE_LINE = re.compile(r"^(?P<lead>[ \t]*(?:-[ \t]+)?)(?P<key>[A-Za-z0-9_][\w.-]*):[ \t]+(?P<value>\S.*?)[ \t]*$")
+
+#: First characters that make a YAML value something other than a plain scalar.
+_NOT_PLAIN = tuple("\"'[{|>&*!%@`#")
+
+#: A frontmatter header: the opening fence, the YAML, the closing fence.
+_FRONTMATTER = re.compile(r"\A(﻿?---[ \t]*\r?\n)(.*?)(\r?\n---[ \t]*(?:\r?\n|\Z))", re.DOTALL)
+
+
+def _quote_colon_scalars(text: str) -> str:
+    """Double-quote the unquoted values YAML rejects for holding ``": "``.
+
+    French typography puts a space before a colon (``title: Segment : choix``),
+    and a plain YAML scalar can neither contain ``": "`` nor end with ``:``, so
+    such a line fails with "mapping values are not allowed here". Only those
+    values are rewritten, as JSON strings (a valid YAML double-quoted scalar, so
+    the text is kept exactly). A value holding `` #`` is left alone, because its
+    comment cannot be told apart from its text. Callers use this only to retry
+    text that already failed to parse, so valid YAML is never touched.
+    """
+    out = []
+    for line in text.split("\n"):
+        cr = "\r" if line.endswith("\r") else ""
+        m = _KEY_VALUE_LINE.match(line.removesuffix("\r"))
+        if m:
+            value = m.group("value")
+            if not value.startswith(_NOT_PLAIN) and " #" not in value and (": " in value or value.endswith(":")):
+                line = f"{m.group('lead')}{m.group('key')}: {json.dumps(value, ensure_ascii=False)}{cr}"
+        out.append(line)
+    return "\n".join(out)
+
+
+def _safe_load_lenient(text: str) -> Any:
+    """``yaml.safe_load``, retried once through :func:`_quote_colon_scalars`.
+
+    When the retry fails as well, the original error is raised: it points at
+    what the author wrote, not at the rewritten text.
+    """
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError as original:
+        repaired = _quote_colon_scalars(text)
+        if repaired == text:
+            raise
+        try:
+            return yaml.safe_load(repaired)
+        except yaml.YAMLError:
+            raise original from None
+
+
+def _load_frontmatter(text: str) -> frontmatter.Post:
+    """Load a scenario's frontmatter, tolerating French ``Segment : …`` values.
+
+    Only the ``---`` header is repaired (see :func:`_quote_colon_scalars`); the
+    body is Markdown and stays as written.
+    """
+    try:
+        return frontmatter.loads(text)
+    except yaml.YAMLError as original:
+        m = _FRONTMATTER.match(text)
+        if not m:
+            raise
+        repaired = _quote_colon_scalars(m.group(2))
+        if repaired == m.group(2):
+            raise
+        try:
+            return frontmatter.loads(m.group(1) + repaired + m.group(3) + text[m.end() :])
+        except yaml.YAMLError:
+            raise original from None
 
 
 def validate_scenario_roles(scenario: Scenario, configured_roles: set[str]) -> list[str]:
@@ -410,7 +483,7 @@ def _parse_step_content(content: str, step_title: str, file_path: Path) -> dict[
             if nested_lines:
                 try:
                     yaml_text = f"{key}: {value}\n" + "\n".join(nested_lines)
-                    parsed = yaml.safe_load(yaml_text)
+                    parsed = _safe_load_lenient(yaml_text)
                     step_data[key] = parsed[key]
                 except (yaml.YAMLError, KeyError, TypeError) as e:
                     raise ParseError(f"Failed to parse block scalar value for '{key}': {e}")
@@ -428,7 +501,7 @@ def _parse_step_content(content: str, step_title: str, file_path: Path) -> dict[
                 # list children (`- item`), and multi-level structures alike.
                 try:
                     yaml_text = f"{key}:\n" + "\n".join(nested_lines)
-                    parsed = yaml.safe_load(yaml_text)
+                    parsed = _safe_load_lenient(yaml_text)
                     step_data[key] = parsed[key]
                 except (yaml.YAMLError, KeyError, TypeError) as e:
                     raise ParseError(f"Failed to parse nested content for '{key}': {e}")

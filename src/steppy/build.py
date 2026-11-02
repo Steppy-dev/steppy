@@ -1,5 +1,6 @@
 """Build assembler for Steppy — generates Angular or static guide artifacts from scenarios."""
 
+import functools
 import json
 import os
 import shutil
@@ -13,6 +14,8 @@ import jinja2
 
 from ._player_bundle import (
     get_cursor_bundle_path,
+    get_detect_iife,
+    get_detect_source,
     get_legacy_cursor_iife,
     get_player_bundle_path,
 )
@@ -410,6 +413,83 @@ class BuildAssembler:
             }
             for loc in self.build_config.locales
         ]
+
+    @functools.cached_property
+    def _layout_breakpoints(self) -> Optional[dict[str, int]]:
+        """Minimum viewport width per build layout, for ``autoDetect.layout``.
+
+        Explicit ``autoDetect.layoutBreakpoints`` win. Otherwise each layout's
+        capture width comes from config.yaml's ``screenshot.layouts`` and the
+        switch between two neighbours sits at their midpoint, so the nearest
+        capture width wins (390/1280 → mobile below 835px). ``None`` turns
+        viewport detection off: there is nothing to measure against.
+        """
+        auto = self.build_config.auto_detect
+        layouts = self.build_config.layouts
+        if not auto.layout or len(layouts) < 2:
+            return None
+        if auto.layout_breakpoints is not None:
+            return {name: auto.layout_breakpoints[name] for name in layouts}
+        configured = self.steppy_config.screenshot.layouts if self.steppy_config is not None else {}
+        missing = [name for name in layouts if name not in configured]
+        if missing:
+            _warn(
+                f"autoDetect.layout is on but config.yaml declares no screenshot.layouts width for {missing}; "
+                "readers get the default layout. Set autoDetect.layoutBreakpoints in the build config, "
+                "or autoDetect.layout: false to silence this."
+            )
+            return None
+        ordered = sorted(layouts, key=lambda name: configured[name].width)
+        breakpoints = {ordered[0]: 0}
+        for narrower, name in zip(ordered, ordered[1:]):
+            breakpoints[name] = (configured[narrower].width + configured[name].width + 1) // 2
+        return breakpoints
+
+    def _guide_breakpoints(self, layouts: list[str]) -> Optional[dict[str, int]]:
+        """``_layout_breakpoints`` narrowed to one guide's layouts. A guide may
+        carry only some of the build's layouts; its narrowest one then covers
+        every width below the next."""
+        site = self._layout_breakpoints if len(layouts) > 1 else None
+        if not site or not all(name in site for name in layouts):
+            return None
+        floor = min(site[name] for name in layouts)
+        return {name: site[name] - floor for name in layouts}
+
+    def _steppy_detect_context(
+        self,
+        *,
+        page_locale: Optional[str],
+        href_for: Optional["callable[[str], str]"],
+        assets_href: str,
+        layouts: Optional[list[str]] = None,
+        default_layout: Optional[str] = None,
+    ) -> Optional[dict]:
+        """What ``static/_steppy_detect.html.j2`` renders for one page.
+
+        ``page_locale`` is ``None`` on a page that serves every locale at one
+        URL (``interactive.html``): there the script sets the player's language
+        instead of redirecting. ``href_for`` is the same callable the page's
+        language switcher uses. ``None`` when the page has nothing to detect.
+        """
+        auto = self.build_config.auto_detect
+        locales = list(self.build_config.locales)
+        layouts = list(layouts) if layouts and len(layouts) > 1 else []
+        if len(locales) < 2 and not layouts:
+            return None
+        breakpoints = self._guide_breakpoints(layouts)
+        config = {
+            "locale": auto.locale,
+            "layout": auto.layout,
+            "pageLocale": page_locale,
+            "locales": locales,
+            "defaultLocale": self.build_config.default_locale,
+            "hrefFor": {loc: href_for(loc) for loc in locales} if href_for else {},
+            "layouts": layouts,
+            "defaultLayout": (default_layout or layouts[0]) if layouts else None,
+            "breakpoints": breakpoints,
+            "storageKeys": {"locale": auto.storage_keys.locale, "layout": auto.storage_keys.layout},
+        }
+        return {"config": config, "script_src": f"{assets_href}steppy-detect.js"}
 
     def _redirect_html(
         self,
@@ -1185,6 +1265,8 @@ class BuildAssembler:
             has_multiple_modes=has_multiple_modes,
             has_multiple_layouts=has_multiple_layouts,
             onboarding_strip=onboarding_strip,
+            layout_storage_key=self.build_config.auto_detect.storage_keys.layout,
+            layout_breakpoints=self._guide_breakpoints(guide_layouts),
         )
         self._write_file(guide_dir / f"{entry.slug}.component.ts", component_ts, results, dry_run)
 
@@ -1305,6 +1387,13 @@ class BuildAssembler:
                 pdf_url=f"./{locale}.pdf" if self._pdf_enabled else None,
                 handbook_url=(f"../{self._handbook_href(locale)}" if self._handbook_enabled else None),
                 mode_links=self._mode_links(entry, "stepbystep", locale),
+                steppy_detect=self._steppy_detect_context(
+                    page_locale=locale,
+                    href_for=lambda loc: f"./{loc}.html",
+                    assets_href="../assets/",
+                    layouts=layout_keys,
+                    default_layout=default_layout,
+                ),
             )
             page_path = guide_dir / f"{locale}.html"
             self._write_file(page_path, page_html, results, dry_run)
@@ -1515,6 +1604,13 @@ class BuildAssembler:
                 cursor_mode=cursor_mode,
                 default_template=template,
                 seo=interactive_seo,
+                steppy_detect=self._steppy_detect_context(
+                    page_locale=None,
+                    href_for=None,
+                    assets_href="../assets/",
+                    layouts=list(guide_layouts or []),
+                    default_layout=default_layout,
+                ),
             )
             self._write_file(
                 guide_dir / "interactive.html",
@@ -1949,9 +2045,25 @@ class BuildAssembler:
         self._write_i18n_json(output_dir, results, dry_run)
         self._write_angular_group_components(output_dir, results, dry_run)
         self._write_angular_onboarding_component(output_dir, results, dry_run)
+        self._write_angular_detect_ts(output_dir, results, dry_run)
         self._copy_cursor_bundle(output_dir, results, dry_run)
         self._copy_player_bundle_if_needed(output_dir, results, dry_run)
         self._write_gitignore(output_dir, results, dry_run)
+
+    def _write_angular_detect_ts(self, output_dir: Path, results: dict[str, str], dry_run: bool) -> None:
+        """Write the layout-detection rules beside the generated components.
+
+        A guide component with more than one layout imports ``resolveLayout``
+        from ``../steppy-detect`` to start on the reader's stored pick, a
+        ``?layout=`` parameter or the viewport. The file is the player's own
+        ``src/detect/core.ts``, vendored verbatim, so the Angular and static
+        targets cannot disagree on the rules. Only the language half goes
+        unused here: the host app owns the language through ngx-translate.
+        """
+        if len(self.build_config.layouts) < 2:
+            return
+        content = "// GENERATED BY STEPPY — DO NOT EDIT. Regenerate with: steppy build\n" + get_detect_source()
+        self._write_file(output_dir / "steppy-detect.ts", content, results, dry_run)
 
     # ── In-app tours: the ``guide`` target ───────────────────────────────
 
@@ -2016,6 +2128,7 @@ class BuildAssembler:
         self._write_static_manifest(output_dir, results, dry_run)
         self._write_static_css(output_dir, results, dry_run)
         self._write_static_cursor_js(output_dir, results, dry_run)
+        self._write_static_detect_js(output_dir, results, dry_run)
         self._copy_player_bundle_if_needed(output_dir, results, dry_run)
         self._warn_root_only_files()
         self._write_static_robots(output_dir, results, dry_run)
@@ -2285,6 +2398,11 @@ class BuildAssembler:
                 handbook_url=(f"./{self._handbook_href(locale)}" if self._handbook_enabled else None),
                 handbook_pdf_url=(f"./{HANDBOOK_SLUG}/{locale}.pdf" if self._handbook_enabled else None),
                 handbook_label="Full handbook",
+                steppy_detect=self._steppy_detect_context(
+                    page_locale=locale,
+                    href_for=lambda loc: f"./{self._index_filename(loc)}",
+                    assets_href="assets/",
+                ),
             )
             self._write_file(
                 output_dir / self._index_filename(locale),
@@ -2346,6 +2464,11 @@ class BuildAssembler:
                     children=children_by_group[group.slug],
                     empty_label="No guides in this group yet.",
                     seo=seo,
+                    steppy_detect=self._steppy_detect_context(
+                        page_locale=locale,
+                        href_for=lambda loc: f"./{loc}.html",
+                        assets_href="../assets/",
+                    ),
                 )
                 self._write_file(
                     output_dir / group.slug / f"{locale}.html",
@@ -2397,6 +2520,11 @@ class BuildAssembler:
                 steps=steps,
                 start_label="Start onboarding →",
                 seo=seo,
+                steppy_detect=self._steppy_detect_context(
+                    page_locale=locale,
+                    href_for=lambda loc: f"./{loc}.html",
+                    assets_href="../assets/",
+                ),
             )
             self._write_file(
                 output_dir / ONBOARDING_SLUG / f"{locale}.html",
@@ -2631,6 +2759,16 @@ class BuildAssembler:
         tpl = self.env.get_template("static/cursor.js.j2")
         content = tpl.render(cursor_iife=get_legacy_cursor_iife())
         self._write_file(output_dir / "assets" / "cursor.js", content, results, dry_run)
+
+    def _write_static_detect_js(self, output_dir: Path, results: dict[str, str], dry_run: bool) -> None:
+        """Render reader language / layout detection to assets/steppy-detect.js.
+
+        Loaded by every page that includes ``static/_steppy_detect.html.j2``.
+        Like ``cursor.js``, the template body is the vendored bundle, so a
+        project can override the file without forking the build."""
+        tpl = self.env.get_template("static/steppy-detect.js.j2")
+        content = tpl.render(detect_iife=get_detect_iife())
+        self._write_file(output_dir / "assets" / "steppy-detect.js", content, results, dry_run)
 
     def _write_nojekyll(self, output_dir: Path, results: dict[str, str], dry_run: bool) -> None:
         """Empty file disabling GitHub Pages' Jekyll preprocessing.

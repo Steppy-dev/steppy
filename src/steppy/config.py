@@ -205,7 +205,7 @@ def load_config(config_path: Optional[Path] = None) -> SteppyConfig:
     if not config_path.exists():
         error_msg = f"Configuration file not found: {config_path}\n"
         error_msg += "\nHint: Create a config.yaml file with your application settings."
-        error_msg += "\n      See STEPPY-REFERENCE.md or the README configuration section."
+        error_msg += "\n      See the README configuration section."
         raise ConfigError(error_msg)
 
     try:
@@ -253,7 +253,7 @@ def load_config(config_path: Optional[Path] = None) -> SteppyConfig:
             error_msg += f"  Field '{field}': {msg}\n"
 
         error_msg += "\nHint: Check that all required fields are present and have correct types."
-        error_msg += "\n      See STEPPY-REFERENCE.md or the README configuration section."
+        error_msg += "\n      See the README configuration section."
         raise ConfigError(error_msg)
 
     return config

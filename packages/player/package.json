@@ -42,9 +42,10 @@
     "access": "public"
   },
   "scripts": {
-    "build": "vite build && vite build -c vite.iife.config.ts && vite build -c vite.video.config.ts && npm run build:tour && npm run build:schema",
+    "build": "vite build && vite build -c vite.iife.config.ts && vite build -c vite.detect.config.ts && vite build -c vite.video.config.ts && npm run build:tour && npm run build:schema",
     "build:esm": "vite build",
     "build:iife": "vite build -c vite.iife.config.ts",
+    "build:detect": "vite build -c vite.detect.config.ts",
     "build:video": "vite build -c vite.video.config.ts",
     "build:tour": "vite build -c vite.tour.config.ts && npm run build:types",
     "build:schema": "tsx scripts/emit-json-schema.ts",

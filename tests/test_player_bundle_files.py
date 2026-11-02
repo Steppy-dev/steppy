@@ -1,8 +1,7 @@
 """What is vendored from ``packages/player/dist`` into the wheel, and nothing more.
 
-``dist/`` holds four bundles once the in-app tour overlay exists; only the
-guide player, the legacy cursor IIFE and the video renderer have a Python
-consumer. A glob copy (``cp dist/*.js``) would quietly ship the overlay in the
+``dist/`` holds five bundles; only the guide player, the legacy cursor IIFE,
+the reader-detection IIFE and the video renderer have a Python consumer. A glob copy (``cp dist/*.js``) would quietly ship the overlay in the
 wheel, so the set is pinned here, alongside the demo-guide fixture's copy of
 the player, which nothing else keeps in step.
 """
@@ -11,10 +10,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = ROOT / "src" / "steppy" / "_player_bundle"
-VENDORED = ("steppy-player", "steppy-cursor-legacy", "steppy-video")
+VENDORED = ("steppy-player", "steppy-cursor-legacy", "steppy-detect", "steppy-video")
 
 
-def test_exactly_the_three_wheel_bundles_are_vendored():
+def test_exactly_the_wheel_bundles_are_vendored():
     js = sorted(p.name for p in BUNDLE.glob("*.js"))
     maps = sorted(p.name for p in BUNDLE.glob("*.js.map"))
     assert js == sorted(f"{name}.js" for name in VENDORED)
@@ -40,3 +39,10 @@ def test_source_maps_carry_no_absolute_paths():
         assert '"sources":["' in text
         sources = text.split('"sources":[', 1)[1].split("]", 1)[0]
         assert ":/" not in sources and ":\\\\" not in sources and '"/' not in sources, name
+
+
+def test_the_angular_detect_source_is_the_player_source():
+    """The Angular target copies the detection rules into the host app as TS
+    source; the vendored copy must be the player's own file, not a fork."""
+    source = ROOT / "packages" / "player" / "src" / "detect" / "core.ts"
+    assert (BUNDLE / "steppy-detect.ts").read_bytes() == source.read_bytes()

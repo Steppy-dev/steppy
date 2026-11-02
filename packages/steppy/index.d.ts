@@ -84,6 +84,18 @@ export interface TextStylesConfig {
   link?: LinkStyle;
 }
 
+export interface AutoDetectStorageKeys {
+  locale?: string;
+  layout?: string;
+}
+
+export interface AutoDetectConfig {
+  locale?: boolean;
+  layout?: boolean;
+  storageKeys?: AutoDetectStorageKeys;
+  layoutBreakpoints?: Record<string, number>;
+}
+
 export interface GuideConfig {
   scenariosRoot: string;
   /** Omitted ⇒ `output.screenshots_dir` from config.yaml, else "./output/screenshots". */
@@ -104,6 +116,7 @@ export interface GuideConfig {
   onboarding?: OnboardingConfig;
   seo?: SeoConfig;
   textStyles?: TextStylesConfig;
+  autoDetect?: AutoDetectConfig;
 }
 
 export declare function defineGuideConfig(config: GuideConfig): GuideConfig;

@@ -520,11 +520,11 @@ class TestInteractiveWithLayouts:
         config, root = _setup_layouts(tmp_path, target="static")
         BuildAssembler(config, root).build_all()
         page = (root / "output" / "generated" / "onboarding" / "interactive.html").read_text(encoding="utf-8")
-        # Page-level layout nav + suppressed in-player switcher + JS that drives
-        # the player's `variant` attribute.
+        # Page-level layout nav + suppressed in-player switcher; steppy-detect.js
+        # (loaded from <head>) drives the player's `variant` attribute.
         assert 'class="steppy-layout-switch"' in page
         assert "hide-layout-switcher" in page
-        assert "setAttribute('variant'" in page
+        assert '<script src="../assets/steppy-detect.js"></script>' in page
         assert 'data-layout="desktop"' in page
         assert 'data-layout="mobile"' in page
 

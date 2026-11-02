@@ -129,7 +129,6 @@ def _github_slugs(markdown: str) -> set[str]:
     [
         (DOC, r"\]\(#([a-z0-9-]+)\)"),
         (ROOT / "README.md", r"\]\(docs/tours\.md#([a-z0-9-]+)\)"),
-        (ROOT / "STEPPY-REFERENCE.md", r"\]\(docs/tours\.md#([a-z0-9-]+)\)"),
         (ROOT / "SECURITY.md", r"\]\(docs/tours\.md#([a-z0-9-]+)\)"),
         (DESIGN, r"\]\(\.\./tours\.md#([a-z0-9-]+)\)"),
     ],

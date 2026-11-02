@@ -69,6 +69,9 @@ jobs:
           cp packages/player/dist/steppy-player.js.map      src/steppy/_player_bundle/
           cp packages/player/dist/steppy-cursor-legacy.js   src/steppy/_player_bundle/
           cp packages/player/dist/steppy-cursor-legacy.js.map src/steppy/_player_bundle/
+          cp packages/player/dist/steppy-detect.js          src/steppy/_player_bundle/
+          cp packages/player/dist/steppy-detect.js.map      src/steppy/_player_bundle/
+          cp packages/player/src/detect/core.ts             src/steppy/_player_bundle/steppy-detect.ts
           cp packages/player/dist/steppy-video.js           src/steppy/_player_bundle/
           cp packages/player/dist/steppy-video.js.map       src/steppy/_player_bundle/
           ls -la src/steppy/_player_bundle/
@@ -89,7 +92,7 @@ jobs:
           WHEEL=$(ls dist/*.whl | head -1)
           echo "Inspecting $WHEEL"
           python -m zipfile -l "$WHEEL" | tee /tmp/wheel-contents.txt
-          for f in steppy-player.js steppy-cursor-legacy.js steppy-video.js THIRD_PARTY_LICENSES.txt; do
+          for f in steppy-player.js steppy-cursor-legacy.js steppy-detect.js steppy-detect.ts steppy-video.js THIRD_PARTY_LICENSES.txt; do
             if ! grep -q "steppy/_player_bundle/$f" /tmp/wheel-contents.txt; then
               echo "::error::$f missing from wheel"
               exit 1

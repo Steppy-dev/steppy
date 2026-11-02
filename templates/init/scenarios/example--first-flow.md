@@ -12,7 +12,8 @@ guide:
 # This is a starter scenario written by `steppy init`. Each `###` heading is a
 # step; each `- key: value` bullet is a field. Replace the selectors, URLs, and
 # text with your app's. Run `steppy validate` to check it, then `steppy generate`
-# to produce the Playwright test. See STEPPY-REFERENCE.md for the full grammar.
+# to produce the Playwright test. The full grammar is in
+# .claude/skills/steppy-scenario-author/SKILL.md.
 
 ### 1. Admin opens the projects list
 - role: admin

@@ -180,7 +180,7 @@ CLAUDE.md's **"Adding a new action"** section is the canonical checklist; the no
 above are the parts a first-time contributor trips over.
 
 See [CLAUDE.md](CLAUDE.md) for the fuller architecture notes and
-[STEPPY-REFERENCE.md](STEPPY-REFERENCE.md) for the scenario format.
+the [`steppy-scenario-author` skill](skills/steppy-scenario-author/SKILL.md) for the scenario format.
 
 ## Releasing
 

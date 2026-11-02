@@ -18,6 +18,26 @@ import { {{ class_name }}InteractiveComponent } from './{{ slug }}-interactive.c
 import { {{ class_name }}VideoComponent } from './{{ slug }}-video.component';
 {% endif %}
 import { CONTENT, STEPS, TIMINGS } from './{{ slug }}.content';
+{% if has_multiple_layouts %}
+import { resolveLayout, safeStorage } from '../steppy-detect';
+
+// The reader's layout: a ?layout= parameter, then their last pick in the
+// layout switch, then the viewport width against the capture widths, then the
+// default. Read once, when the component is created.
+const LAYOUT_STORE = safeStorage({{ layout_storage_key | tojson }}, () => localStorage);
+
+function initialLayout(): string {
+  if (typeof window === 'undefined') return '{{ default_layout }}';
+  return resolveLayout({
+    param: new URLSearchParams(window.location.search).get('layout'),
+    stored: LAYOUT_STORE.get(),
+    width: window.innerWidth,
+    breakpoints: {{ layout_breakpoints | tojson }},
+    layouts: {{ layouts | tojson }},
+    defaultLayout: '{{ default_layout }}',
+  }).value;
+}
+{% endif %}
 
 // Stepbystep cursor animation. The guide HTML is injected via [innerHTML], and
 // the browser never runs <script> tags inserted that way — so the cursor
@@ -115,7 +135,7 @@ function scheduleAfterRender(cb: () => void): void {
       <p-selectButton
         [options]="layoutOptions"
         [ngModel]="selectedLayout()"
-        (ngModelChange)="selectedLayout.set($event)"
+        (ngModelChange)="pickLayout($event)"
         optionLabel="label"
         optionValue="value" />
 {% endif %}
@@ -177,7 +197,16 @@ export class {{ class_name }}Component {
     { initialValue: this.translate.currentLang || this.translate.getDefaultLang() || '{{ default_locale }}' },
   );
 
+{% if has_multiple_layouts %}
+  readonly selectedLayout = signal<string>(initialLayout());
+
+  pickLayout(layout: string): void {
+    this.selectedLayout.set(layout);
+    LAYOUT_STORE.set(layout);
+  }
+{% else %}
   readonly selectedLayout = signal<string>('{{ default_layout }}');
+{% endif %}
 {% if has_multiple_modes %}
   selectedMode = signal('{{ default_mode }}');
 {% else %}

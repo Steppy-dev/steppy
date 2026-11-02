@@ -7,6 +7,39 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Guides open in the reader's language and layout.** A new `autoDetect` block
+  in the build config. The layout half is on by default. A phone reader gets the
+  mobile screenshots, applied before the first paint, and the interactive player
+  opens on the same layout. The breakpoints come from `config.yaml`'s
+  `screenshot.layouts` widths (the nearest capture width wins), or from
+  `autoDetect.layoutBreakpoints`. With `autoDetect: { locale: true }`, a
+  per-locale static page redirects a first-time reader to their language
+  (`navigator.languages`, exact tag first, then the primary subtag, so `nl-BE`
+  lands on `nl`), and `interactive.html` starts the player in it. A pick in a
+  language or layout switch, the page's or the player's, is stored and wins on
+  every later visit. So does a `?lang=` or `?layout=` parameter, for that visit
+  only. Crawlers are never redirected, and the page without JavaScript is
+  unchanged. `autoDetect.storageKeys` lets a project keep a storage key its
+  readers already have. The logic ships as `assets/steppy-detect.js`. A template
+  override pulls it in with `{% include "static/_steppy_detect.html.j2" %}` in
+  `<head>`, and an override without that line keeps its own behaviour. The
+  Angular target applies the layout half; the host app owns the language. See
+  the README's `autoDetect` section.
+- **`user: true` on the player's `steppy:locale` and `steppy:variant` events**
+  when the reader made the change in the player's own picker, so a host can
+  remember a pick without also remembering its own attribute writes.
+
+### Removed
+- **`STEPPY-REFERENCE.md`.** The `steppy-scenario-author` skill, which
+  `steppy init` installs into `.claude/skills/`, is now the one scenario-format
+  reference. The reference file was not in the package, so the starter files
+  `steppy init` writes pointed at a file projects did not have; they now point
+  at the skill. It was also out of date: it lacked the `call` action and listed
+  a `status(...)` assertion that no longer exists. The skill gained what only
+  the reference had: UI-kit `preset:`s, the quoting rules, and the assertion
+  forms `value`, `attribute`, `not-contains`, `not-visible`, `icontains`,
+  `checked`, `unchecked`, `stays-hidden` and the `check:` / `message:` list,
+  which were documented nowhere. Artifact output paths moved to the README.
 - **In-app tours: what a click on an information step's target does.** An
   information step (one that advances on `manual`) often points at a button the
   user should learn about, not use yet. `tour-target-click: next` makes a click
@@ -27,6 +60,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `stepId`, whose `-2`, `-3` suffixes are not part of the contract.
 
 ### Fixed
+- **The step-by-step cursor follows the visible layout.** `cursor.js` mounted
+  once, over every layout's steps, with the default layout's frame data, and
+  never listened for a layout switch. On a page showing the mobile screenshots
+  the cursor was placed with the desktop coordinates. It now mounts on the
+  visible layout and remounts on `steppy:layout-change`.
 - **In-app tours: a layout twin's gate no longer leaks onto the other layout.**
   A step limited by `layouts:` handed its trailing `expect:` (or `wait-for`) to
   the next tour step whatever that step's layouts, so a mobile twin waited for

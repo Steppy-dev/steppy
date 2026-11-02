@@ -186,18 +186,23 @@ export class SteppyGuide extends LitElement {
     if (changed.has('src')) {
       void this._loadManifest();
     }
+    // `user: true` only when the reader picked in the player's own select, so a
+    // host can remember a pick without also remembering its own attribute writes.
     if (changed.has('locale') && this.manifest && this.locale) {
       this._emit('steppy:locale', {
         from: changed.get('locale') as string | null,
         to: this.locale,
+        ...(this._userPicked.has('locale') ? { user: true } : {}),
       });
     }
     if (changed.has('variant') && this.manifest && this.variant) {
       this._emit('steppy:variant', {
         from: changed.get('variant') as string | null,
         to: this.variant,
+        ...(this._userPicked.has('variant') ? { user: true } : {}),
       });
     }
+    this._userPicked.clear();
 
     // Layout (variant) switched after the manifest loaded — e.g. a host toggle
     // or the built-in dropdown. Restart the current step in the new layout
@@ -719,9 +724,13 @@ export class SteppyGuide extends LitElement {
     }
   };
 
+  /** Properties the reader changed through the player's own pickers since the last update. */
+  private _userPicked = new Set<'locale' | 'variant'>();
+
   private _onLocaleChange = (ev: Event): void => {
     const value = (ev.target as HTMLSelectElement).value;
     if (this.manifest && this.manifest.locales.includes(value)) {
+      this._userPicked.add('locale');
       this.locale = value;
       // Stay on the same step — re-trigger the play loop so the new locale's
       // screenshot loads and the cursor re-animates.
@@ -731,6 +740,7 @@ export class SteppyGuide extends LitElement {
 
   private _onVariantChange = (ev: Event): void => {
     // Setting `variant` triggers the layout-switch replay in `willUpdate`.
+    this._userPicked.add('variant');
     this.variant = this._resolveVariant((ev.target as HTMLSelectElement).value);
   };
 

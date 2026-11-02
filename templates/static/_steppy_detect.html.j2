@@ -1,0 +1,12 @@
+{# Reader language / layout detection. Rendered with a `steppy_detect` context
+   built by BuildAssembler._steppy_detect_context(); empty when the page has a
+   single locale and a single layout. Include it in <head>, after the SEO
+   include, so a redirect or a layout switch happens before anything paints:
+
+       {% include "static/_steppy_detect.html.j2" %}
+
+   A template override without this line keeps its own behaviour. #}
+{% if steppy_detect %}
+    <script type="application/json" id="steppy-detect-config">{{ steppy_detect.config | tojson }}</script>
+    <script src="{{ steppy_detect.script_src }}"></script>
+{% endif %}

@@ -7,7 +7,7 @@ Copy and adapt these prompts when you want Claude Code to generate Steppy scenar
 ## 1. Tests only (single app)
 
 ```
-Read STEPPY-REFERENCE.md to understand the Steppy scenario format.
+Read .claude/skills/steppy-scenario-author/SKILL.md (installed by `steppy init`) to understand the Steppy scenario format.
 
 Then explore the app's codebase:
 - Identify all routes/pages and their paths
@@ -43,7 +43,7 @@ Each scenario should:
 ## 2. Tests only (multi-app / multi-tenant)
 
 ```
-Read STEPPY-REFERENCE.md to understand the Steppy scenario format.
+Read .claude/skills/steppy-scenario-author/SKILL.md (installed by `steppy init`) to understand the Steppy scenario format.
 
 Then explore the codebase. There are multiple apps:
 - App A (tenant/admin): runs on http://localhost:3000 — explore its routes, selectors, and flows
@@ -74,7 +74,7 @@ Use role switching between steps (role: app-a / role: app-b). Add `wait` steps w
 ## 3. Tests + step-by-step user guides (single app)
 
 ```
-Read STEPPY-REFERENCE.md to understand the Steppy scenario format, including the guide-text and screenshot features.
+Read .claude/skills/steppy-scenario-author/SKILL.md (installed by `steppy init`) to understand the Steppy scenario format, including the guide-text and screenshot features.
 
 Then explore the app's codebase:
 - Identify all routes/pages and their paths
@@ -135,7 +135,7 @@ Guides are output as Markdown and HTML in output/guides/[role]/[locale]/.
 ## 4. Tests + step-by-step user guides (multi-app)
 
 ```
-Read STEPPY-REFERENCE.md to understand the Steppy scenario format, including the guide-text and screenshot features.
+Read .claude/skills/steppy-scenario-author/SKILL.md (installed by `steppy init`) to understand the Steppy scenario format, including the guide-text and screenshot features.
 
 Then explore the codebase. There are multiple apps:
 - App A (admin): runs on http://localhost:3000 — explore its routes, selectors, and flows
@@ -244,7 +244,7 @@ Each role gets its own guide showing only the steps relevant to them, with their
 Use this when you already have a working app and just want to produce step-by-step guides — no test assertions needed.
 
 ```
-Read STEPPY-REFERENCE.md to understand the Steppy scenario format, focusing on guide-text and screenshot features.
+Read .claude/skills/steppy-scenario-author/SKILL.md (installed by `steppy init`) to understand the Steppy scenario format, focusing on guide-text and screenshot features.
 
 Then explore the app's codebase:
 - Identify the main user-facing flows
@@ -292,7 +292,7 @@ Use this when the guide is for one role (e.g., editor), but the scenario require
 The key rule: only add `screenshot` and `guide-text` to steps belonging to the role you want in the guide. Steps from the other role run during the test but stay invisible in the generated guide.
 
 ```
-Read STEPPY-REFERENCE.md to understand the Steppy scenario format, focusing on guide-text and screenshot features.
+Read .claude/skills/steppy-scenario-author/SKILL.md (installed by `steppy init`) to understand the Steppy scenario format, focusing on guide-text and screenshot features.
 
 Then explore the codebase. There are multiple apps:
 - Editor app: runs on http://localhost:3000

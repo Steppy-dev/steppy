@@ -320,6 +320,42 @@ describe('locale + variant switching', () => {
     expect(localeEvents[0]!.detail).toMatchObject({ from: 'fr', to: 'nl' });
   });
 
+  it('marks a locale or layout picked in the player as a reader pick', async () => {
+    const m = makeManifest();
+    const { el, events } = await mount(m);
+    layoutPlayer(el);
+    const selects = root(el).querySelectorAll<HTMLSelectElement>('.steppy-chrome select');
+    const [localeSelect, layoutSelect] = [selects[0]!, selects[1]!];
+    localeSelect.value = 'nl';
+    localeSelect.dispatchEvent(new Event('change'));
+    await el.updateComplete;
+    layoutSelect.value = 'mobile';
+    layoutSelect.dispatchEvent(new Event('change'));
+    await el.updateComplete;
+    expect(events.filter((e) => e.name === 'steppy:locale').at(-1)!.detail).toEqual({
+      from: 'fr',
+      to: 'nl',
+      user: true,
+    });
+    expect(events.filter((e) => e.name === 'steppy:variant').at(-1)!.detail).toEqual({
+      from: 'desktop',
+      to: 'mobile',
+      user: true,
+    });
+  });
+
+  it('leaves a host-driven change unmarked', async () => {
+    const { el, events } = await mount(makeManifest());
+    layoutPlayer(el);
+    el.setAttribute('locale', 'nl');
+    el.setAttribute('variant', 'mobile');
+    await el.updateComplete;
+    for (const name of ['steppy:locale', 'steppy:variant']) {
+      const detail = events.filter((e) => e.name === name).at(-1)!.detail as Record<string, unknown>;
+      expect(detail).not.toHaveProperty('user');
+    }
+  });
+
   it('falls back to defaultLayout when variant is unknown', async () => {
     const m = makeManifest();
     const { el } = await mount(m);

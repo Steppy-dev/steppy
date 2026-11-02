@@ -694,16 +694,39 @@ def test_verify_accepts_an_intact_bundle_and_catches_corruption(project: Path, t
     # never another exception and never a clean pass. The gzip header's mtime,
     # flags and OS bytes (4-9) are outside its checksum by design.
     good = path.read_bytes()
+    tar = _decompressed(good, fmt)
     start = 10 if fmt == "gz" else 0
     for pos in range(start, len(good), max(1, len(good) // 80)):
         raw = bytearray(good)
         raw[pos] ^= 0xFF
+        # A flip can land on bits the decoder never reads (a Huffman code for a
+        # symbol the block does not use, say): it then decodes to the same tar,
+        # checksum included, and nothing is damaged. Which offsets do depends on
+        # the archive's bytes — on CI, the commit sha the manifest records.
+        if _decompressed(bytes(raw), fmt) == tar:
+            continue
         path.write_bytes(bytes(raw))
         try:
             _manifest, problems = verify_bundle(path)
         except BundleError:
             continue
         assert problems, f"a flipped byte at offset {pos} of {len(good)} went unnoticed"
+
+
+def _decompressed(data: bytes, fmt: str) -> bytes | None:
+    """The tar a compressed archive decodes to, or ``None`` when it does not decode."""
+    import gzip
+    import io
+
+    try:
+        if fmt == "gz":
+            return gzip.decompress(data)
+        import zstandard
+
+        with zstandard.ZstdDecompressor().stream_reader(io.BytesIO(data)) as stream:
+            return stream.read()
+    except Exception:
+        return None
 
 
 def test_inspect_rejects_a_non_bundle(tmp_path: Path):

@@ -422,7 +422,9 @@ class TestLayoutsWithoutGuide:
     every device — independent of guide/screenshot capture."""
 
     @pytest.fixture
-    def fake_tests_dir(self, tmp_path):
+    def fake_tests_dir(self, tmp_path, monkeypatch):
+        # A run writes its records under ./output/, never into the checkout.
+        monkeypatch.chdir(tmp_path)
         tests_dir = tmp_path / "tests" / "e2e"
         tests_dir.mkdir(parents=True)
         (tests_dir / "conftest.py").write_text("# conftest", encoding="utf-8")

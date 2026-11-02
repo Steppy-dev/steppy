@@ -1,8 +1,9 @@
-"""``steppy run --bundle`` — the plumbing that captures a bundle's inputs.
+"""The plumbing that records a run: what ``steppy report`` and ``steppy bundle
+create`` read afterwards.
 
-Every assertion here has a mirror in ``tests/test_run_byte_identical.py``: the
-point of these three env vars and one argv flag is that they appear *only* when
-asked for, so the default path stays exactly what it was.
+``--bundle`` opted into it until 0.10; every run is recorded now, and the flag
+is accepted and does nothing more. ``tests/test_run_byte_identical.py`` pins the
+same three env vars and one argv flag on the default path.
 """
 
 from __future__ import annotations
@@ -82,11 +83,31 @@ def test_bundle_flag_adds_junitxml_at_a_fixed_path(fake_tests_dir: Path, tmp_pat
     assert Path(junit_args[0].split("=", 1)[1]) == expected
 
 
-def test_without_bundle_nothing_changes(fake_tests_dir: Path, tmp_path: Path):
+def test_a_plain_run_is_recorded_like_a_bundle_run(fake_tests_dir: Path, tmp_path: Path):
+    """0.10: `--bundle` was the only way to get outcomes `steppy report` could
+    read, and a plain run after a `--bundle` one left the older run's sidecar
+    in place, so the report showed stale outcomes beside fresh screenshots."""
     cmd, env = _invoke(fake_tests_dir, [], tmp_path)
-    assert not [k for k in env if k.startswith("STEPPY_")]
-    assert not [a for a in cmd if a.startswith("--junitxml=")]
-    assert not (tmp_path / "output" / ".steppy-run.json").exists()
+    assert env["STEPPY_EVENTS_DIR"].endswith(env["STEPPY_RUN_ID"])
+    assert len([a for a in cmd if a.startswith("--junitxml=")]) == 1
+    assert read_run_sidecar(tmp_path)["run_id"] == env["STEPPY_RUN_ID"]
+
+
+def test_a_passthrough_junitxml_is_not_duplicated(fake_tests_dir: Path, tmp_path: Path):
+    cmd, _env = _invoke(fake_tests_dir, ["--", "--junitxml=mine.xml"], tmp_path)
+    assert [a for a in cmd if a.startswith("--junitxml=")] == ["--junitxml=mine.xml"]
+
+
+def test_only_the_newest_recorded_runs_are_kept(tmp_path: Path):
+    from steppy.runmeta import KEEP_RECORDED_RUNS, prune_recorded_runs
+
+    events = tmp_path / "output" / "events"
+    ids = [f"20260101T0000{i:02d}Z-abcdef" for i in range(KEEP_RECORDED_RUNS + 3)]
+    for run_id in ids:
+        (events / run_id).mkdir(parents=True)
+    (events / "not-a-run").mkdir()
+    prune_recorded_runs(tmp_path)
+    assert sorted(d.name for d in events.iterdir()) == sorted(ids[3:] + ["not-a-run"])
 
 
 def test_bundle_writes_the_run_sidecar(fake_tests_dir: Path, tmp_path: Path):

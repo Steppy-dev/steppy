@@ -40,7 +40,7 @@ from .parser import (
     ParseError,
 )
 from .generator import SteppyGenerator
-from .runmeta import bundle_dirs, new_run_id, write_run_sidecar
+from .runmeta import bundle_dirs, new_run_id, prune_recorded_runs, write_run_sidecar
 
 # NOTE: `.guide` (jinja2 + markdown_it) and `.auth` (httpx + playwright) are
 # deliberately NOT imported here. Between them they cost ~138ms of import time,
@@ -294,6 +294,17 @@ def generate(
         "-t",
         help="Only generate scenarios with these tags (can be repeated, AND logic)",
     ),
+    only: Optional[list[str]] = typer.Option(
+        None,
+        "--scenario",
+        "-s",
+        help="Only generate this scenario, by slug (the file name without .md; can be repeated)",
+    ),
+    keep_orphans: bool = typer.Option(
+        False,
+        "--keep-orphans",
+        help="Keep generated test files whose scenario no longer exists (removed by default on a full generate)",
+    ),
     force: bool = typer.Option(
         False,
         "--force",
@@ -310,6 +321,8 @@ def generate(
     Generate pytest test files from scenario files.
 
     Parses scenario .md files and generates Python test files in tests/e2e/.
+    A full generate (no path, --scenario or --tag) also removes the generated
+    test files whose scenario is gone; --keep-orphans keeps them.
 
     By default, shows a summary and asks for confirmation if files would change.
     Use --force to overwrite without asking, or --dry-run to preview changes.
@@ -320,7 +333,24 @@ def generate(
 
         # Parse scenarios
         scenarios = []
-        if scenario:
+        if scenario and only:
+            _error("Give a scenario path or --scenario, not both")
+            raise typer.Exit(1)
+        if only:
+            console.print(f"\n[bold]Generating scenario(s):[/bold] {', '.join(only)}")
+            for slug in only:
+                path = scenarios_dir / f"{slug}.md"
+                if not path.exists():
+                    _error(f"Scenario not found: {path}")
+                    raise typer.Exit(1)
+                try:
+                    parsed = parse_scenario_file(path)
+                except ParseError as e:
+                    _error(f"Parse error: {e}")
+                    raise typer.Exit(1)
+                if not tag or parsed.has_all_tags(tag):
+                    scenarios.append(parsed)
+        elif scenario:
             # Single scenario
             console.print(f"\n[bold]Generating from:[/bold] {scenario}")
             if not scenario.exists():
@@ -377,12 +407,18 @@ def generate(
                 config,
                 scenarios_dir=scenarios_dir,
                 selected=scenarios,
-                all_scenarios=None if (scenario or tag) else scenarios,
+                all_scenarios=None if (scenario or tag or only) else scenarios,
                 mode="generate",
             )
         else:
             warn_opted_in_but_disabled(config, scenarios)
         tour_plans = tour_pipeline.replay_plans if tour_pipeline is not None else None
+
+        # A filtered generate still rewrites conftest.py, which must keep a
+        # fixture for every role any test uses, not only the selected ones.
+        filtered = bool(scenario or tag or only)
+        conftest_scenarios = _conftest_scenarios(scenarios_dir, scenarios) if filtered else scenarios
+        prune = not filtered and not keep_orphans
 
         # Generate code
         if dry_run:
@@ -399,7 +435,7 @@ def generate(
 
                 # Check conftest.py
                 conftest_path = output_dir / "conftest.py"
-                conftest_code = generator.generate_conftest(scenarios)
+                conftest_code = generator.generate_conftest(conftest_scenarios)
                 if conftest_path.exists():
                     existing_content = conftest_path.read_text(encoding="utf-8")
                     if existing_content == conftest_code:
@@ -437,7 +473,11 @@ def generate(
 
             else:
                 # Normal mode: generate and write files
-                results = generator.generate_all(scenarios, output_dir, force=force, tour_plans=tour_plans)
+                results = generator.generate_all(
+                    scenarios, output_dir, force=force, tour_plans=tour_plans, conftest_scenarios=conftest_scenarios
+                )
+            if prune:
+                results.update(generator.prune_orphans(output_dir, scenarios, dry_run=dry_run))
 
             if tour_pipeline is not None:
                 results.update(tour_pipeline.emit(dry_run=dry_run))
@@ -483,6 +523,23 @@ def generate(
                 f"[green]Summary:[/green] {generated_count} generated, {updated_count} updated, {unchanged_count} unchanged{removed_note}"
             )
             console.print("\n[green]OK[/green] Generation complete")
+
+
+def _conftest_scenarios(scenarios_dir: Path, selected: list) -> list:
+    """Every scenario whose roles the conftest must serve: the directory's plus
+    the selected ones (a path argument may live elsewhere). A directory that
+    does not parse falls back to the selection, with a warning, rather than
+    failing a generate that never asked for those files."""
+    try:
+        everything = parse_scenarios_from_directory(scenarios_dir) if scenarios_dir.exists() else []
+    except ParseError as e:
+        console.print(
+            f"[yellow]WARNING[/yellow] conftest.py built from the selected scenarios only "
+            f"(another scenario does not parse: {escape(str(e).splitlines()[0])})"
+        )
+        return selected
+    slugs = {s.slug for s in everything}
+    return everything + [s for s in selected if s.slug not in slugs]
 
 
 def _resolve_locale_layout_lists(
@@ -587,8 +644,8 @@ def _build_run_env(
     STEPPY_NO_ASSERTS) is built identically by both. Every optional kwarg is
     defaulted so existing call sites (and the byte-identical env guard for
     plain runs) are untouched: each var appears only when its feature was asked
-    for — STEPPY_COVERAGE with --coverage, STEPPY_EVENTS_DIR with --bundle, and
-    so on.
+    for — STEPPY_COVERAGE with --coverage, STEPPY_EVENTS_DIR for a recorded
+    run, and so on.
 
     ``run_id`` supersedes ``coverage_run_id``: one run has one identity, shared
     by the coverage records and the results bundle. ``coverage_run_id`` is kept
@@ -662,16 +719,17 @@ def _build_run_env(
     return env
 
 
-def _apply_bundle_junit_arg(pytest_cmd: list, junit_dir: Path, console: Console) -> None:
+def _apply_bundle_junit_arg(pytest_cmd: list, junit_dir: Path, console: Console, extra_args=()) -> None:
     """Append ``--junitxml`` at the fixed path a results bundle reads.
 
-    Skipped when ``--junitxml`` is already on the argv — ``report.junit_xml``
-    got there first (``_apply_report_args``), and pytest honours only the LAST
-    one, so appending a second would silently discard the user's configured
-    report. The bundler falls back to that path in the same situation.
+    Skipped when ``--junitxml`` is already on the argv or in the ``--``
+    passthrough (``extra_args``) — ``report.junit_xml`` or the user got there
+    first, and pytest honours only the LAST one, so appending a second would
+    silently discard the user's report. The run's outcomes still reach the
+    bundle and the report through the event records.
     """
-    if any(str(arg).startswith("--junitxml") for arg in pytest_cmd):
-        console.print("[dim]JUnit report: reusing report.junit_xml for the bundle[/dim]")
+    if any(str(arg).startswith("--junitxml") for arg in [*pytest_cmd, *extra_args]):
+        console.print("[dim]JUnit report: the configured one (outcomes come from the event records)[/dim]")
         return
     try:
         junit_dir.mkdir(parents=True, exist_ok=True)
@@ -963,23 +1021,22 @@ def run(
     bundle: bool = typer.Option(
         False,
         "--bundle",
-        help="Capture the extra artifacts a results bundle needs: per-test event "
-        "records under output/events/<run-id>/ and JUnit XML under "
-        "output/junit/<run-id>/, plus an output/.steppy-run.json describing the "
-        "run. Does NOT create the bundle — run `steppy bundle create` afterwards. "
-        "Off by default because it changes the pytest invocation.",
+        help="No longer needed: every run records what `steppy report` and "
+        "`steppy bundle create` read (per-test event records under "
+        "output/events/<run-id>/, JUnit XML under output/junit/<run-id>/, and "
+        "output/.steppy-run.json). Accepted so existing CI keeps working.",
     ),
     trace: bool = typer.Option(
         False,
         "--trace",
-        help="Record a Playwright trace and save output/traces/<test>.zip for each "
+        help="Record a Playwright trace and save output/traces/<test>__<role>_page.zip for each "
         "FAILED test (equivalent to report.trace: on-failure for this run). "
         "Open with: playwright show-trace <zip>.",
     ),
     video: bool = typer.Option(
         False,
         "--video",
-        help="Record a Playwright video and save output/videos/<test>.webm for each "
+        help="Record a Playwright video and save output/videos/<test>__<role>_page.webm for each "
         "FAILED test (equivalent to report.video: on-failure for this run).",
     ),
     retries: Optional[int] = typer.Option(
@@ -1069,7 +1126,7 @@ def run(
                     retry_pass=retry_pass,
                     strict_flaky=strict_flaky,
                     fail_fast=fail_fast,
-                    bundle=bundle,
+                    bundle=True,
                 )
             )
 
@@ -1153,13 +1210,15 @@ def run(
             pytest_cmd, trace=trace, video=video, retries=retries, console=console
         )
 
-        # --bundle: one identity for the whole run, plus the two artifact sinks
-        # `steppy bundle create` needs and a plain run does not produce.
-        run_id = new_run_id() if (bundle or coverage) else None
-        events_dir = junit_dir = None
+        # Every run is recorded: one identity, plus the two artifact sinks
+        # `steppy report` and `steppy bundle create` read. Opt-in (`--bundle`)
+        # until 0.10, which left `steppy report` with no outcomes, or with an
+        # older recorded run's, after a plain run.
         if bundle:
-            events_dir, junit_dir = bundle_dirs(Path.cwd(), run_id)
-            _apply_bundle_junit_arg(pytest_cmd, junit_dir, console)
+            console.print("[dim]--bundle: every run is recorded now; the flag is no longer needed[/dim]")
+        run_id = new_run_id()
+        events_dir, junit_dir = bundle_dirs(Path.cwd(), run_id)
+        _apply_bundle_junit_arg(pytest_cmd, junit_dir, console, extra_args=ctx.args)
 
         # Add passthrough arguments from context
         if ctx.args:
@@ -1182,24 +1241,24 @@ def run(
             events_dir=events_dir,
         )
 
-        if bundle:
-            write_run_sidecar(
-                Path.cwd(),
-                run_id=run_id,
-                spec={
-                    "guide": guide,
-                    "no_guide": no_guide,
-                    "no_asserts": no_asserts,
-                    "screenshots": screenshots,
-                    "coverage": coverage,
-                    "locales": list(locale_list),
-                    "layouts": list(layout_list),
-                    "workers": 1,
-                    "tag": list(tag) if tag else None,
-                    "scenario": scenario,
-                },
-            )
-            console.print(f"[dim]Bundle capture: enabled (run {run_id}) — create it with: steppy bundle create[/dim]")
+        write_run_sidecar(
+            Path.cwd(),
+            run_id=run_id,
+            spec={
+                "guide": guide,
+                "no_guide": no_guide,
+                "no_asserts": no_asserts,
+                "screenshots": screenshots,
+                "coverage": coverage,
+                "locales": list(locale_list),
+                "layouts": list(layout_list),
+                "workers": 1,
+                "tag": list(tag) if tag else None,
+                "scenario": scenario,
+            },
+        )
+        prune_recorded_runs(Path.cwd())
+        console.print(f"[dim]Run {run_id} recorded — steppy report / steppy bundle create read it[/dim]")
 
         console.print(f"\n[dim]Command: {' '.join(pytest_cmd)}[/dim]\n")
 
@@ -1279,13 +1338,13 @@ def rerun(
     trace: bool = typer.Option(
         False,
         "--trace",
-        help="Record a Playwright trace and save output/traces/<test>.zip for each "
+        help="Record a Playwright trace and save output/traces/<test>__<role>_page.zip for each "
         "FAILED test. Open with: playwright show-trace <zip>.",
     ),
     video: bool = typer.Option(
         False,
         "--video",
-        help="Record a Playwright video and save output/videos/<test>.webm for each FAILED test.",
+        help="Record a Playwright video and save output/videos/<test>__<role>_page.webm for each FAILED test.",
     ),
     retries: Optional[int] = typer.Option(
         None,

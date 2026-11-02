@@ -27,8 +27,11 @@ from ._steppy_tours import TourProbe, _tour_start, _tour_expect_step, _tour_ensu
 
 SCENARIO = "{{ scenario.slug }}"
 SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% else %}None{% endif %}
+{% macro scoped_locator(role, selector, within, match) -%}
+{{ role }}_page{% if within %}.locator(_interp({{ within | pystr }}, _vars)){% endif %}.locator(_interp({{ selector | pystr }}, _vars)){{ match | format_match_suffix }}
+{%- endmacro %}
 {% macro disambig_locator(role, selector, step) -%}
-{{ role }}_page{% if step.within %}.locator(_interp({{ step.within | pystr }}, _vars)){% endif %}.locator(_interp({{ selector | pystr }}, _vars)){{ step.match | format_match_suffix }}
+{{ scoped_locator(role, selector, step.within, step.match) }}
 {%- endmacro %}
 {#
   One screenshot capture, guarded.
@@ -54,10 +57,11 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
   action (click, fill, …). Both emit the same 13 assertion types; only the
   locator differs, so each call site passes its own `loc` in.
 
-  IMPORTANT: the trailing-expect site must pass the plain locator, NOT
-  disambig_locator's output. `within:`/`match:` disambiguate the *action's*
-  target; routing the assertion through them would silently retarget the
-  assertion of any step carrying both `within:` and `expect:`.
+  IMPORTANT: the trailing-expect site must NOT pass the step's `within:`/
+  `match:`. They disambiguate the *action's* target; routing the assertion
+  through them would silently retarget the assertion of any step carrying both
+  `within:` and `expect:`. An entry's own `within:`/`match:` (the dict form)
+  scope that one check at both sites, and on an assert step override the step's.
 
   `unknown_comment` reproduces the standalone site's extra comment line on the
   fallback branch.
@@ -75,6 +79,8 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_contain_text(_interp({{ assertion.text | pystr }}, _vars), timeout={{ timeout }})
 {% elif assertion.type == "url-contains" %}
         expect({{ role }}_page{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_url(re.compile(r".*" + re.escape(_interp({{ assertion.path | pystr }}, _vars)) + r".*"), timeout={{ timeout }})
+{% elif assertion.type == "not-url-contains" %}
+        expect({{ role }}_page{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).not_to_have_url(re.compile(r".*" + re.escape(_interp({{ assertion.path | pystr }}, _vars)) + r".*"), timeout={{ timeout }})
 {% elif assertion.type == "count" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_count({{ assertion.count }}, timeout={{ timeout }})
 {% elif assertion.type == "count-cmp" %}
@@ -83,6 +89,8 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
         expect({{ role }}_page.locator(_interp({{ ('text="' ~ assertion.text ~ '"') | pystr }}, _vars)).first{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_be_visible(timeout={{ timeout }})
 {% elif assertion.type == "value" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_value(_interp({{ assertion.text | pystr }}, _vars), timeout={{ timeout }})
+{% elif assertion.type == "value-contains" %}
+        expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_value(re.compile(re.escape(_interp({{ assertion.text | pystr }}, _vars))), timeout={{ timeout }})
 {% elif assertion.type == "attribute" %}
         expect({{ loc }}{% if assertion.fail_message %}, message=_interp({{ assertion.fail_message | pystr }}, _vars){% endif %}).to_have_attribute({{ assertion.attribute | pystr }}, _interp({{ assertion.text | pystr }}, _vars), timeout={{ timeout }})
 {% elif assertion.type == "not-contains" %}
@@ -579,7 +587,7 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
 {%- elif step.action == "assert" %}
     if not SKIP_ASSERTS:
 {% for assertion in step.expect | format_assertions %}
-{% set _aloc %}{{ disambig_locator(step.role, assertion.selector, step) }}{% endset %}
+{% set _aloc %}{{ scoped_locator(step.role, assertion.selector, (assertion.within if assertion.within is not none else step.within), (assertion.match if assertion.match is not none else step.match)) }}{% endset %}
 {{ assert_body(step.role, assertion, _aloc, step | resolve_timeout(scenario, config), step | resolve_timeout(scenario, config, 5000), assertion.raw) -}}
 {% endfor %}
 {% if step.wait_after %}
@@ -681,7 +689,7 @@ SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% el
 {% endfor %}
     if not SKIP_ASSERTS:
 {% for assertion in step.expect | format_assertions %}
-{% set _eloc %}{{ step.role }}_page.locator(_interp({{ assertion.selector | pystr }}, _vars)){% endset %}
+{% set _eloc %}{{ scoped_locator(step.role, assertion.selector, assertion.within, assertion.match) }}{% endset %}
 {{ assert_body(step.role, assertion, _eloc, step | resolve_timeout(scenario, config), step | resolve_timeout(scenario, config, 5000), None) -}}
 {% endfor %}
 {% endif %}

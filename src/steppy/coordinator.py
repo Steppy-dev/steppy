@@ -33,7 +33,7 @@ from . import exclusive, selection
 from .captures import DEFAULT_SCREENSHOTS_DIR, resolve_output_dir
 from .config import ConfigError, load_config
 from .models import SteppyConfig
-from .runmeta import EVENTS_SUBDIR, JUNIT_SUBDIR, new_run_id, write_run_sidecar
+from .runmeta import EVENTS_SUBDIR, JUNIT_SUBDIR, new_run_id, prune_recorded_runs, write_run_sidecar
 from .parser import ParseError, parse_scenarios_from_directory
 from ._parallel.compose import (
     ComposeError,
@@ -257,8 +257,8 @@ def run_parallel(
     otherwise the CLI flag wins. ``strict_flaky`` makes a pass-on-retry fail the
     build (the default is lenient — see the exit-code block below).
 
-    ``bundle`` turns on the two extra artifact sinks ``steppy bundle create``
-    reads. Both land under the shared ``output/`` mount and are keyed by
+    ``bundle`` turns on the two extra artifact sinks ``steppy report`` and
+    ``steppy bundle create`` read (``cli.run`` always passes it now). Both land under the shared ``output/`` mount and are keyed by
     scenario, which is safe precisely because the queue guarantees a scenario is
     claimed by exactly one worker.
     """
@@ -567,7 +567,8 @@ def run_parallel(
             },
             slugs=ordered_slugs,
         )
-        console.print(f"[dim]bundle capture: enabled — create it with: steppy bundle create --run-id {run_id}[/dim]")
+        prune_recorded_runs(project_root)
+        console.print(f"[dim]Run {run_id} recorded — steppy report / steppy bundle create read it[/dim]")
 
     exit_code = 0
     project_names: list[str] = []

@@ -94,8 +94,11 @@ def build_project(tmp_path: Path) -> Path:
     _write(out / "guides" / "editor" / "fr" / "mobile" / "order-lifecycle.html", "<html/>")
     _write(out / "guides" / "editor" / "fr" / "mobile" / "order-lifecycle.md", "# guide")
 
+    # Pre-0.10 names (no suffix) and per-role names attribute the same way.
     _write(out / "traces" / f"{SANITISED}.zip", "trace")
     _write(out / "videos" / f"{SANITISED}.webm", "video")
+    _write(out / "traces" / f"{SANITISED}__reviewer_page.zip", "trace")
+    _write(out / "videos" / f"{SANITISED}__reviewer_page.webm", "video")
 
     _write(
         out / "events" / RUN_ID / "order-lifecycle__fr-mobile.jsonl",
@@ -270,6 +273,8 @@ def test_nodeid_named_artifacts_are_attributed_by_forward_map(project: Path):
         (f"output/screenshots/_failures/{SANITISED}__editor_page.png", "failure_screenshot"),
         (f"output/traces/{SANITISED}.zip", "trace"),
         (f"output/videos/{SANITISED}.webm", "video"),
+        (f"output/traces/{SANITISED}__reviewer_page.zip", "trace"),
+        (f"output/videos/{SANITISED}__reviewer_page.webm", "video"),
     ):
         entry = files[path]
         assert entry.kind == kind
@@ -525,7 +530,7 @@ def test_spec_comes_from_the_run_not_from_the_bundler(project: Path):
 
 
 def test_missing_output_directory_is_an_actionable_error(tmp_path: Path):
-    with pytest.raises(BundleError, match="steppy run --bundle"):
+    with pytest.raises(BundleError, match="run your scenarios first"):
         create_bundle(project_root=tmp_path, fmt="gz")
 
 

@@ -182,13 +182,46 @@ class ExpectEntry(BaseModel):
     express neither, so the whole verification step stayed in Python.
 
     ``message`` maps to Playwright's own ``expect(locator, message=...)``.
+
+    ``within`` / ``match`` scope this one check. A step's own ``within:`` /
+    ``match:`` disambiguate the *action's* target, so a trailing ``expect:``
+    never inherits them (that would silently retarget every check on a step
+    carrying both); on an ``assert`` step an entry's value overrides the step's.
     """
 
     check: str
     message: Optional[str] = None
+    within: Optional[str] = None
+    match: Optional[str | int] = None
 
     class Config:
         extra = "forbid"
+
+    @model_validator(mode="after")
+    def validate_scope(self) -> "ExpectEntry":
+        if self.within is None and self.match is None:
+            return self
+        if self.match is not None:
+            m = str(self.match).strip().lower()
+            if m not in ("first", "last") and not m.isdigit():
+                raise ValueError(f"'match' must be first|last|<index>, got: {self.match!r}")
+        try:
+            parsed = parse_assertion(self.check)
+        except AssertionSyntaxError:
+            # Step.validate_expect_grammar reports the grammar error itself.
+            return self
+        if "selector" not in parsed:
+            raise ValueError(f"'within'/'match' need a check with a selector; {parsed['type']}(...) has none")
+        return self
+
+
+def expect_entries(expect) -> list[ExpectEntry]:
+    """Every entry of an ``expect:`` as an :class:`ExpectEntry`, scalars included."""
+    if expect is None:
+        return []
+    if isinstance(expect, str):
+        return [ExpectEntry(check=expect)]
+    return [ExpectEntry(check=e) if isinstance(e, str) else e for e in expect]
 
 
 # ── Step Model ──────────────────────────────────────────────────────────────
@@ -1652,16 +1685,25 @@ class OutputConfig(BaseModel):
 
 class DropdownConfig(_PresetModel):
     """Selectors for the component dropdown driven by the ``select-option``
-    action. Defaults target PrimeNG ``p-select``; set ``preset:`` (e.g.
+    action. Defaults target PrimeNG ``p-select`` and ``p-multiselect`` (17 and
+    18+ class names); set ``preset:`` (e.g.
     ``material``) or override individual selectors in ``config.yaml`` for other
     UI kits. ``select-option`` works out-of-the-box for PrimeNG apps with no
     config."""
 
     _preset_key: ClassVar[str] = "dropdown"
-    trigger: str = "p-select"
-    overlay: str = ".p-select-overlay"
-    option: str = ".p-select-option, .p-select-list-container li"
-    filter: str = ".p-select-filter-container input, .p-select-filter"
+    # `p-select` (PrimeNG 18+) first, then `p-multiselect`, then the PrimeNG 17
+    # names (`p-dropdown`, and `p-multiselect`'s `-panel` / `-item`). Only one
+    # list is open at a time, so the union finds the one that is.
+    trigger: str = "p-select, p-multiselect, p-dropdown"
+    overlay: str = ".p-select-overlay, .p-multiselect-overlay, .p-dropdown-panel, .p-multiselect-panel"
+    option: str = (
+        ".p-select-option, .p-select-list-container li, .p-multiselect-option, .p-dropdown-item, li.p-multiselect-item"
+    )
+    filter: str = (
+        ".p-select-filter-container input, .p-select-filter, .p-multiselect-filter-container input, "
+        ".p-multiselect-filter, .p-dropdown-filter"
+    )
     # How to wait after typing into the filter box before picking an option.
     # 'api'  -> wait_for_load_state('networkidle') (option list fetched remotely)
     # 'none' -> no extra wait (purely client-side filtering)

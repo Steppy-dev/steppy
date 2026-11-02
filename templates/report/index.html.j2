@@ -60,19 +60,18 @@
         {% if not report.capabilities.step_timeline and report.totals.tests %}
         <div class="steppy-notice">
             No per-step timeline was recorded for this run, so the pages below show outcomes
-            without step detail. Either the run did not pass <code>--bundle</code> (which sets
-            <code>STEPPY_STEP_EVENTS=1</code>), it set <code>STEPPY_STEP_EVENTS=0</code>, or the
-            tests were generated before per-step markers existed — re-run
-            <code>steppy generate</code> in that case.
+            without step detail. Either the run set <code>STEPPY_STEP_EVENTS=0</code>, it was made
+            by a Steppy older than 0.10 without <code>--bundle</code>, or the tests were generated
+            before per-step markers existed — re-run <code>steppy generate</code> in that case.
         </div>
         {% endif %}
 
         {% if not report.totals.tests %}
         <div class="steppy-notice">
             This run recorded <strong>no test outcomes</strong>. The scenarios below were
-            reconstructed from the captures on disk. Add <code>--bundle</code> to the run
-            (<code>steppy run --bundle</code>) so outcomes, failure tails and step boundaries are
-            written down.
+            reconstructed from the captures on disk. Run them with <code>steppy run</code>, which
+            writes down outcomes, failure tails and step boundaries (a Steppy older than 0.10
+            needed <code>steppy run --bundle</code>).
         </div>
         {% endif %}
 

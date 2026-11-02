@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 from textwrap import dedent
 from unittest.mock import MagicMock, patch
@@ -24,7 +25,11 @@ _RUN_ID_RE = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{6}$")
 
 
 @pytest.fixture
-def fake_tests_dir(tmp_path: Path) -> Path:
+def fake_tests_dir(tmp_path: Path, monkeypatch) -> Path:
+    # A run writes its records under ./output/, never into the checkout; the
+    # repo's config.yaml comes along, which the coverage merge reads.
+    shutil.copy(Path(__file__).resolve().parents[1] / "config.yaml", tmp_path / "config.yaml")
+    monkeypatch.chdir(tmp_path)
     tests_dir = tmp_path / "tests" / "e2e"
     tests_dir.mkdir(parents=True)
     (tests_dir / "conftest.py").write_text("# conftest", encoding="utf-8")
@@ -52,7 +57,8 @@ def test_run_without_coverage_sets_no_coverage_env(fake_tests_dir):
     env, result = _capture_run_env(fake_tests_dir, [])
     assert result.exit_code == 0, result.output
     assert "STEPPY_COVERAGE" not in env
-    assert "STEPPY_RUN_ID" not in env
+    # Every run has an identity since 0.10; coverage only reuses it.
+    assert _RUN_ID_RE.match(env.get("STEPPY_RUN_ID", ""))
 
 
 def test_run_coverage_sets_env_and_run_id(fake_tests_dir):

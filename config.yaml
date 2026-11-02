@@ -204,12 +204,12 @@ output:
 # wins over the preset). Non-primeng presets are best-effort starters — verify
 # them against your app.
 #
-# dropdown:            # select-option
+# dropdown:            # select-option — the defaults cover p-select and p-multiselect (PrimeNG 17 and 18+)
 #   preset: material   # or omit for PrimeNG defaults
-#   trigger: "p-select"
-#   overlay: ".p-select-overlay"
-#   option: ".p-select-option, .p-select-list-container li"
-#   filter: ".p-select-filter-container input, .p-select-filter"
+#   trigger: "p-select, p-multiselect, p-dropdown"
+#   overlay: ".p-select-overlay, .p-multiselect-overlay, .p-dropdown-panel, .p-multiselect-panel"
+#   option: ".p-select-option, .p-select-list-container li, .p-multiselect-option, .p-dropdown-item, li.p-multiselect-item"
+#   filter: ".p-select-filter-container input, .p-select-filter, .p-multiselect-filter-container input, .p-multiselect-filter, .p-dropdown-filter"
 #   settle: api        # api = wait for networkidle after typing; none = no wait
 #
 # dialog:              # confirm

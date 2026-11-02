@@ -107,6 +107,18 @@ def test_every_action_is_in_the_author_skill_table():
     assert not missing, f"actions missing from the table: {missing}"
 
 
+def test_every_assertion_form_is_in_the_author_skill_table():
+    # `value`, `attribute`, `not-contains`, ... were documented nowhere for a while.
+    from steppy.assertions import ASSERTION_FORMS
+
+    text = _skill("steppy-scenario-author")
+    table = text[text.index("## Assertions") :]
+    table = table[: table.index("\n\n", table.index("| Form |"))]
+    heads = {h for form in ASSERTION_FORMS for h in re.findall(r"([a-z-]+)\(", form)}
+    missing = sorted(h for h in heads if not re.search(rf"`{re.escape(h)}\(", table))
+    assert not missing, f"assertion forms missing from the table: {missing}"
+
+
 def test_every_tour_diagnostic_is_in_the_author_skill():
     text = _skill("steppy-scenario-author")
     assert not [code for code in CODES if f"`{code}`" not in text]

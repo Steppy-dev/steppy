@@ -1058,8 +1058,12 @@ def _maybe_start_trace(context: BrowserContext) -> None:
 
 def _maybe_stop_trace(context: BrowserContext, request) -> None:
     """Stop tracing and, for ``on`` (always) or ``on-failure`` (only failures),
-    save ``output/traces/<nodeid>.zip``. ``_steppy_call_failed`` is stamped by
-    ``pytest_runtest_makereport`` before fixture teardown."""
+    save ``output/traces/<nodeid>__<fixture>.zip``. ``_steppy_call_failed`` is
+    stamped by ``pytest_runtest_makereport`` before fixture teardown.
+
+    One file per role page: a test drives one browser context per role, and a
+    name keyed on the test alone let the last role torn down overwrite the
+    others' traces. The suffix is the one failure screenshots carry."""
     if not TRACE_MODE:
         return
     failed = getattr(request.node, "_steppy_call_failed", False)
@@ -1067,7 +1071,7 @@ def _maybe_stop_trace(context: BrowserContext, request) -> None:
     try:
         if keep:
             TRACES_DIR.mkdir(parents=True, exist_ok=True)
-            path = TRACES_DIR / f"{_sanitise_nodeid(request.node.nodeid)}.zip"
+            path = TRACES_DIR / f"{_sanitise_nodeid(request.node.nodeid)}__{request.fixturename}.zip"
             context.tracing.stop(path=str(path))
             print(f"\n[steppy] trace: {path}", flush=True)
         else:
@@ -1094,14 +1098,15 @@ def _maybe_save_video(video, request) -> None:
     """Keep (``on`` / failed ``on-failure``) or drop the recorded video.
 
     ``video`` is the ``page.video`` handle captured before the page/context were
-    closed; Playwright finalizes the file on context close, so this runs after."""
+    closed; Playwright finalizes the file on context close, so this runs after.
+    Saved as ``<nodeid>__<fixture>.webm``, one per role page, like the trace."""
     if not video:
         return
     failed = getattr(request.node, "_steppy_call_failed", False)
     keep = VIDEO_MODE == "on" or (VIDEO_MODE == "on-failure" and failed)
     try:
         if keep:
-            path = VIDEOS_DIR / f"{_sanitise_nodeid(request.node.nodeid)}.webm"
+            path = VIDEOS_DIR / f"{_sanitise_nodeid(request.node.nodeid)}__{request.fixturename}.webm"
             video.save_as(str(path))
             print(f"\n[steppy] video: {path}", flush=True)
         video.delete()

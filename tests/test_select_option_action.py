@@ -173,7 +173,7 @@ def test_select_option_cursor_targets_trigger():
 @pytest.mark.parametrize("body", ["    - option: first", "    - multiple:\n      - Role A\n      - Role B"])
 def test_codegen_waits_for_the_overlay_to_close(temp_scenario_file, body):
     src = _gen(temp_scenario_file, body)
-    assert "_wait_dropdown_closed(editor_page, '.p-select-overlay', " in src
+    assert "_wait_dropdown_closed(editor_page, '.p-select-overlay, .p-multiselect-overlay, " in src
     assert src.index("click(force=True)") < src.index("_wait_dropdown_closed(editor_page")
     # Imported from the conftest along with the other helpers.
     assert "_wait_dropdown_closed, " in src

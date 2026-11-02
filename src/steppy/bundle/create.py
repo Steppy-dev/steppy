@@ -240,8 +240,7 @@ def plan_bundle(
 
     if not output_dir.is_dir():
         raise BundleError(
-            f"no output directory at {output_dir} — run your scenarios first "
-            "(`steppy run --bundle`), then create the bundle"
+            f"no output directory at {output_dir} — run your scenarios first (`steppy run`), then create the bundle"
         )
 
     roots, warnings = resolve_roots(project_root, output_dir)
@@ -258,7 +257,7 @@ def plan_bundle(
     if not tests:
         warnings.append(
             "no test outcomes recorded — manifest.tests[] is empty. "
-            "Re-run with `steppy run --bundle` so per-test event records are captured"
+            "Re-run with `steppy run` (0.10 or later, or `--bundle` before) so per-test event records are captured"
         )
 
     junit_xml = _results.merge_junit(junit_dir)

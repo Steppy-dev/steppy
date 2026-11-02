@@ -1,4 +1,4 @@
-"""Run identity and the ``--bundle`` artifact layout.
+"""Run identity and the per-run artifact layout.
 
 A **leaf**: stdlib plus ``steppy.__version__`` only. Three modules need to agree
 on what is written here and where — ``cli`` (single-worker runs),
@@ -20,12 +20,14 @@ is why that resolution was only ever correct on the single-worker path.
 or a CI step after the run itself, and cannot otherwise know what the run was
 asked to do. Re-deriving the spec from flags the user retypes is guaranteed to
 drift, and drift here means a results bundle that misreports its own
-dimensions. So a ``--bundle`` run records them.
+dimensions. So every run records them (``--bundle`` only did before 0.10).
 """
 
 from __future__ import annotations
 
 import json
+import re
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -65,9 +67,34 @@ def new_run_id() -> str:
 
 
 def bundle_dirs(project_root: Path, run_id: str) -> tuple[Path, Path]:
-    """``(events_dir, junit_dir)`` for a ``--bundle`` run."""
+    """``(events_dir, junit_dir)`` for one run."""
     output = Path(project_root) / "output"
     return output / EVENTS_SUBDIR / run_id, output / JUNIT_SUBDIR / run_id
+
+
+#: How many runs' event and JUnit directories a run leaves behind. Every run
+#: records now, so without a cap ``output/events/`` grows by one directory per
+#: run forever; ten is enough to report or bundle a recent run after the fact.
+KEEP_RECORDED_RUNS = 10
+
+_RUN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]+$")
+
+
+def prune_recorded_runs(project_root: Path, keep: int = KEEP_RECORDED_RUNS) -> list[Path]:
+    """Delete all but the ``keep`` newest ``output/events/<id>`` and
+    ``output/junit/<id>`` directories. Only directories named like a run id
+    are touched; best-effort, never raises. Returns what was removed."""
+    removed = []
+    output = Path(project_root) / "output"
+    for sub in (EVENTS_SUBDIR, JUNIT_SUBDIR):
+        try:
+            runs = sorted(d for d in (output / sub).iterdir() if d.is_dir() and _RUN_ID.match(d.name))
+        except OSError:
+            continue
+        for old in runs[: max(len(runs) - keep, 0)]:
+            shutil.rmtree(old, ignore_errors=True)
+            removed.append(old)
+    return removed
 
 
 def sidecar_path(project_root: Path) -> Path:

@@ -9,6 +9,7 @@ from typing import Any, Optional
 import frontmatter
 from pydantic import ValidationError
 
+from .assertions import ASSERTION_FORMS, split_top_level
 from .models import Scenario, Step
 
 
@@ -98,6 +99,53 @@ def _quote_colon_scalars(text: str) -> str:
                 line = f"{m.group('lead')}{m.group('key')}: {json.dumps(value, ensure_ascii=False)}{cr}"
         out.append(line)
     return "\n".join(out)
+
+
+#: The assertion heads (``toast``, ``not-url-contains``, …), longest first so a
+#: head never matches as the prefix of a longer one.
+_ASSERTION_HEADS = sorted(
+    {m for form in ASSERTION_FORMS for m in re.findall(r"([a-z-]+)\(", form)}, key=len, reverse=True
+)
+
+#: An ``expect:`` entry written bare: ``- toast("…")`` as a list item, or
+#: ``check: toast("…")`` inside the dict form. A trailing comment does not match.
+_ASSERTION_ITEM = re.compile(
+    r"^(?P<lead>[ \t]*(?:-[ \t]+)?)(?P<key>check:[ \t]+)?(?P<value>(?:"
+    + "|".join(re.escape(h) for h in _ASSERTION_HEADS)
+    + r")\(.*\))[ \t]*$"
+)
+
+
+def _quote_assertion_items(text: str) -> str:
+    """Double-quote the bare assertions of a nested ``expect:`` block.
+
+    ``- toast("Segment : créé")`` is valid YAML, and wrong: the ``" : "`` makes
+    it a one-key mapping, so the colon retry of :func:`_safe_load_lenient` never
+    runs and the step fails later as "Input should be a valid string". This runs
+    before the YAML load instead. An assertion is one line and its own grammar
+    has no YAML escapes, so as a JSON string it reads back exactly as written,
+    colon or not.
+    """
+    out = []
+    for line in text.split("\n"):
+        cr = "\r" if line.endswith("\r") else ""
+        m = _ASSERTION_ITEM.match(line.removesuffix("\r"))
+        if m and (m.group("key") or m.group("lead").strip() == "-"):
+            line = f"{m.group('lead')}{m.group('key') or ''}{json.dumps(m.group('value'), ensure_ascii=False)}{cr}"
+        out.append(line)
+    return "\n".join(out)
+
+
+def _quote_assertion_flow(value: str) -> str:
+    """:func:`_quote_assertion_items` for the inline ``- expect: [a, b]`` form."""
+    items = split_top_level(value[1:-1])
+    quoted = []
+    for item in items:
+        bare = item.strip()
+        if _ASSERTION_ITEM.match(bare) and not bare.startswith("-"):
+            bare = json.dumps(bare, ensure_ascii=False)
+        quoted.append(bare)
+    return "[" + ", ".join(quoted) + "]"
 
 
 def _safe_load_lenient(text: str) -> Any:
@@ -500,7 +548,10 @@ def _parse_step_content(content: str, step_title: str, file_path: Path) -> dict[
                 # Use PyYAML for any nested block — handles dict children,
                 # list children (`- item`), and multi-level structures alike.
                 try:
-                    yaml_text = f"{key}:\n" + "\n".join(nested_lines)
+                    nested = "\n".join(nested_lines)
+                    if key == "expect":
+                        nested = _quote_assertion_items(nested)
+                    yaml_text = f"{key}:\n" + nested
                     parsed = _safe_load_lenient(yaml_text)
                     step_data[key] = parsed[key]
                 except (yaml.YAMLError, KeyError, TypeError) as e:
@@ -518,6 +569,8 @@ def _parse_step_content(content: str, step_title: str, file_path: Path) -> dict[
             (value.startswith("[") and value.endswith("]")) or (value.startswith("{") and value.endswith("}"))
         ):
             try:
+                if key == "expect" and value.startswith("["):
+                    value = _quote_assertion_flow(value)
                 step_data[key] = yaml.safe_load(value)
             except yaml.YAMLError as e:
                 raise ParseError(f"Failed to parse inline value for '{key}': {e}")

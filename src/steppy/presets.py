@@ -34,10 +34,16 @@ PRESETS: dict[str, dict[str, dict[str, str]]] = {
     # changes, so `preset: primeng` stays equivalent to omitting `preset`.
     "primeng": {
         "dropdown": {
-            "trigger": "p-select",
-            "overlay": ".p-select-overlay",
-            "option": ".p-select-option, .p-select-list-container li",
-            "filter": ".p-select-filter-container input, .p-select-filter",
+            "trigger": "p-select, p-multiselect, p-dropdown",
+            "overlay": ".p-select-overlay, .p-multiselect-overlay, .p-dropdown-panel, .p-multiselect-panel",
+            "option": (
+                ".p-select-option, .p-select-list-container li, .p-multiselect-option, .p-dropdown-item, "
+                "li.p-multiselect-item"
+            ),
+            "filter": (
+                ".p-select-filter-container input, .p-select-filter, .p-multiselect-filter-container input, "
+                ".p-multiselect-filter, .p-dropdown-filter"
+            ),
         },
         "dialog": {
             "overlay": ".p-confirmdialog, p-confirmdialog",
@@ -104,10 +110,16 @@ PRESETS: dict[str, dict[str, dict[str, str]]] = {
     # is discovered on real apps.
     "primevue": {
         "dropdown": {
-            "trigger": ".p-select, .p-dropdown",
-            "overlay": ".p-select-overlay, .p-dropdown-panel",
-            "option": ".p-select-option, .p-dropdown-item, .p-select-list-container li",
-            "filter": ".p-select-filter, .p-dropdown-filter, .p-select-filter-container input",
+            "trigger": ".p-select, .p-multiselect, .p-dropdown",
+            "overlay": ".p-select-overlay, .p-multiselect-overlay, .p-dropdown-panel, .p-multiselect-panel",
+            "option": (
+                ".p-select-option, .p-multiselect-option, .p-dropdown-item, li.p-multiselect-item, "
+                ".p-select-list-container li"
+            ),
+            "filter": (
+                ".p-select-filter, .p-multiselect-filter, .p-dropdown-filter, .p-select-filter-container input, "
+                ".p-multiselect-filter-container input"
+            ),
         },
         "dialog": {
             "overlay": ".p-confirmdialog, .p-confirm-dialog",

@@ -133,3 +133,90 @@ def test_broken_yaml_still_reports_the_original_error(tmp_path):
 )
 def test_only_the_offending_values_are_quoted(line, expected):
     assert _quote_colon_scalars(line) == expected
+
+
+# ── expect: lists ───────────────────────────────────────────────────────────
+#
+# `- toast("Segment : créé")` is valid YAML: a one-key mapping whose key is
+# `toast("Segment`. Nothing failed to parse, so the retry above never ran and
+# the step was rejected later as "Input should be a valid string".
+
+
+def _expect_step(tmp_path: Path, expect_block: str, newline: str = "\n") -> list:
+    header = dedent(
+        """
+        ---
+        title: Factures
+        ---
+
+        ### 1. Enregistrer
+        - role: editor
+        - action: click
+        - selector: '[data-testid="save"]'
+        - expect:
+        """
+    )
+    block = "".join("    " + ln for ln in dedent(expect_block).splitlines(keepends=True))
+    path = _write(tmp_path, header + block, newline)
+    return parse_scenario_file(path).steps[0].expect
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_list_items_with_a_french_colon(tmp_path, newline):
+    expect = _expect_step(
+        tmp_path,
+        """\
+            - toast("Segment : créé")
+            - toast("Étape : a : b")
+            - contains([data-testid="total"], "Total : 12")
+            - visible([data-testid="saved"])
+        """,
+        newline,
+    )
+    assert expect == [
+        'toast("Segment : créé")',
+        'toast("Étape : a : b")',
+        'contains([data-testid="total"], "Total : 12")',
+        'visible([data-testid="saved"])',
+    ]
+
+
+def test_dict_entries_with_a_french_colon(tmp_path):
+    (entry,) = _expect_step(
+        tmp_path,
+        """\
+            - message: Total : faux
+              check: contains(#t, "Total : 12")
+        """,
+    )
+    assert entry.check == 'contains(#t, "Total : 12")'
+    assert entry.message == "Total : faux"
+
+
+def test_quoted_items_are_read_as_written(tmp_path):
+    expect = _expect_step(
+        tmp_path,
+        """\
+            - 'toast("Segment : créé")'
+            - "visible(#a)"
+        """,
+    )
+    assert expect == ['toast("Segment : créé")', "visible(#a)"]
+
+
+def test_inline_expect_list_with_a_french_colon(tmp_path):
+    path = _write(
+        tmp_path,
+        """
+        ---
+        title: Factures
+        ---
+
+        ### 1. Enregistrer
+        - role: editor
+        - action: click
+        - selector: '[data-testid="save"]'
+        - expect: [toast("Segment : créé"), visible([data-testid="a,b"])]
+        """,
+    )
+    assert parse_scenario_file(path).steps[0].expect == ['toast("Segment : créé")', 'visible([data-testid="a,b"])']

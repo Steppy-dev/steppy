@@ -8,7 +8,10 @@ behavior.
 
 Why this matters:
 - v0.1 sacred invariant: ``steppy run`` (no flags) and ``steppy run
-  --workers 1`` produce identical behavior to today's main branch.
+  --workers 1`` produce identical behavior to today's main branch. Changed
+  once on purpose, in 0.10: every run is now recorded (``--junitxml`` at the
+  run's fixed path, ``STEPPY_EVENTS_DIR`` / ``STEPPY_RUN_ID`` /
+  ``STEPPY_STEP_EVENTS``), which ``--bundle`` used to opt into.
 - This test catches accidental drift in how cli.run constructs pytest_cmd
   or env (env-var ordering, flag changes, etc.) between the two
   invocations.
@@ -30,8 +33,12 @@ from typer.testing import CliRunner
 
 
 @pytest.fixture
-def fake_tests_dir(tmp_path: Path) -> Path:
-    """Minimal tests/e2e tree that satisfies cli.run's pre-flight checks."""
+def fake_tests_dir(tmp_path: Path, monkeypatch) -> Path:
+    """Minimal tests/e2e tree that satisfies cli.run's pre-flight checks.
+
+    The working directory moves there too: every run writes its records under
+    ``./output/``, which must not land in the checkout."""
+    monkeypatch.chdir(tmp_path)
     tests_dir = tmp_path / "tests" / "e2e"
     tests_dir.mkdir(parents=True)
     (tests_dir / "conftest.py").write_text("# conftest", encoding="utf-8")
@@ -54,7 +61,12 @@ def _capture_subprocess_call(fake_tests_dir: Path, extra_args: list[str]) -> tup
     from steppy.cli import app
 
     runner = CliRunner()
-    with patch("steppy.cli.subprocess.run", side_effect=fake_run):
+    # A fixed run id: the id is part of the argv (the --junitxml path) and the
+    # env, and two invocations must still compare equal.
+    with (
+        patch("steppy.cli.subprocess.run", side_effect=fake_run),
+        patch("steppy.cli.new_run_id", return_value="20260101T000000Z-abcdef"),
+    ):
         runner.invoke(app, ["run", "--tests-dir", str(fake_tests_dir), *extra_args])
 
     return captured.get("cmd", []), captured.get("env", {})
@@ -99,18 +111,23 @@ def test_workers_1_produces_expected_pytest_cmd(fake_tests_dir):
     assert cmd[0] == sys.executable
     assert cmd[1:3] == ["-m", "pytest"]
     # Last positional arg is the tests dir (no scenario/tag filter).
-    assert cmd[-3] == str(fake_tests_dir)
-    assert cmd[-2:] == ["--browser", "chromium"]
+    assert cmd[-4] == str(fake_tests_dir)
+    assert cmd[-3:-1] == ["--browser", "chromium"]
+    # Every run is recorded (0.10): the run's JUnit file, at its fixed path.
+    expected = Path("output") / "junit" / "20260101T000000Z-abcdef" / "run.xml"
+    assert cmd[-1] == f"--junitxml={Path.cwd() / expected}"
 
 
-def test_workers_1_no_steppy_env_vars_set(fake_tests_dir):
-    """With no flags, the existing path sets ZERO STEPPY_ env vars (only
-    HEADED, and only when --headed)."""
+def test_workers_1_sets_only_the_recording_env_vars(fake_tests_dir):
+    """With no flags, the existing path sets exactly the env vars that record
+    the run (0.10; before, none) — plus HEADED, and only when --headed."""
     _cmd, env = _capture_subprocess_call(fake_tests_dir, ["--workers", "1"])
     steppy_keys = _steppy_env_keys(env)
-    # No STEPPY_* env vars should leak in for a default invocation.
-    leaked = [k for k in steppy_keys if k.startswith("STEPPY_")]
-    assert not leaked, f"unexpected STEPPY_ env vars set on default run: {leaked}"
+    assert steppy_keys == {
+        "STEPPY_RUN_ID": "20260101T000000Z-abcdef",
+        "STEPPY_EVENTS_DIR": str(Path.cwd() / "output" / "events" / "20260101T000000Z-abcdef"),
+        "STEPPY_STEP_EVENTS": "1",
+    }, f"unexpected STEPPY_ env vars set on default run: {steppy_keys}"
 
 
 def test_workers_1_with_screenshots_sets_env(fake_tests_dir):

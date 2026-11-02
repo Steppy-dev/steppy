@@ -136,6 +136,54 @@ def test_conftest_template_has_video_helpers():
     assert "VIDEO_MODE = os.environ.get" in src
 
 
+def _conftest_function(name: str) -> str:
+    import re
+
+    src = (Path(__file__).resolve().parents[1] / "templates" / "conftest.py.j2").read_text(encoding="utf-8")
+    start = src.index(f"def {name}(")
+    end = re.compile(r"^\S", re.M).search(src, start + 1).start()
+    return src[start:end]
+
+
+def test_each_role_page_keeps_its_own_trace_and_video(tmp_path):
+    """A two-role test drives two contexts. Both used to save to
+    ``<nodeid>.zip`` and the last one torn down won."""
+    from types import SimpleNamespace
+
+    saved = []
+
+    class Tracing:
+        def stop(self, path=None):
+            saved.append(path)
+
+    class Video:
+        def save_as(self, path):
+            saved.append(path)
+
+        def delete(self):
+            pass
+
+    ns = {
+        "TRACE_MODE": "on",
+        "VIDEO_MODE": "on",
+        "TRACES_DIR": tmp_path / "traces",
+        "VIDEOS_DIR": tmp_path / "videos",
+        "_sanitise_nodeid": lambda n: n.replace("/", "_").replace("::", "__"),
+        "BrowserContext": object,
+    }
+    exec(_conftest_function("_maybe_stop_trace") + _conftest_function("_maybe_save_video"), ns)
+    for fixture in ("editor_page", "reviewer_page"):
+        request = SimpleNamespace(node=SimpleNamespace(nodeid="t.py::test_x"), fixturename=fixture)
+        ns["_maybe_stop_trace"](SimpleNamespace(tracing=Tracing()), request)
+        ns["_maybe_save_video"](Video(), request)
+    assert [Path(p).name for p in saved] == [
+        "t.py__test_x__editor_page.zip",
+        "t.py__test_x__editor_page.webm",
+        "t.py__test_x__reviewer_page.zip",
+        "t.py__test_x__reviewer_page.webm",
+    ]
+
+
 def test_every_browser_context_goes_through_the_shared_builder():
     """Every context must get the video kwargs — and viewport, DSF, locale,
     timezone and the insecure-origin polyfill with them.

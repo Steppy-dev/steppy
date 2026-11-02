@@ -75,6 +75,8 @@ _ROUND_2 = [
     ("checked(#a)", {"type": "checked", "selector": "#a"}),
     ("unchecked(#a)", {"type": "unchecked", "selector": "#a"}),
     ('stays-hidden(#a, "3s")', {"type": "stays-hidden", "selector": "#a", "duration": "3s"}),
+    ('value-contains(#a, "1 250")', {"type": "value-contains", "selector": "#a", "text": "1 250"}),
+    ('not-url-contains("/login")', {"type": "not-url-contains", "path": "/login"}),
 ]
 
 

@@ -340,6 +340,22 @@ def test_traces_and_videos_are_named_but_not_copied():
     assert variant.video_path == "output/videos/x.webm"
 
 
+def test_a_multi_role_test_lists_one_trace_per_role():
+    """Each role page records its own context, so a two-role test leaves two
+    traces. The report used to keep the first and drop the rest."""
+    test = _test(outcome="failed")
+    kw = {"scenario": "order-lifecycle", "locale": "fr", "layout": "mobile"}
+    files = [
+        _file("output/traces/x__reviewer_page.zip", "trace", **kw),
+        _file("output/traces/x__editor_page.zip", "trace", **kw),
+        _file("output/videos/x__editor_page.webm", "video", **kw),
+    ]
+    variant = _build(_manifest([test], files)).scenarios[0].variants[0]
+    assert variant.trace_paths == ["output/traces/x__editor_page.zip", "output/traces/x__reviewer_page.zip"]
+    assert variant.trace_path == "output/traces/x__editor_page.zip"
+    assert variant.video_paths == ["output/videos/x__editor_page.webm"]
+
+
 def test_the_failure_log_is_scenario_level_because_that_is_all_the_bundle_knows():
     test = _test(outcome="failed")
     files = [_file("output/failures/order-lifecycle/pytest.log", "failure_log", scenario="order-lifecycle")]

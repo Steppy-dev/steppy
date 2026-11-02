@@ -160,6 +160,11 @@ class ReportVariant(_Wire):
     #: ``playwright show-trace`` to open, so a link would be a dead end.
     trace_path: Optional[str] = None
     video_path: Optional[str] = None
+    #: Every trace / video of the variant, one per role page the test drove
+    #: (``<nodeid>__<role>_page.zip``). ``trace_path`` / ``video_path`` keep the
+    #: first, for readers that predate the lists.
+    trace_paths: list[str] = Field(default_factory=list)
+    video_paths: list[str] = Field(default_factory=list)
 
 
 class ReportScenario(_Wire):

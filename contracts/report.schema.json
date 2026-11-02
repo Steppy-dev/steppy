@@ -757,6 +757,13 @@
           "default": null,
           "title": "Trace Path"
         },
+        "trace_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Trace Paths",
+          "type": "array"
+        },
         "video_path": {
           "anyOf": [
             {
@@ -768,6 +775,13 @@
           ],
           "default": null,
           "title": "Video Path"
+        },
+        "video_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Video Paths",
+          "type": "array"
         }
       },
       "required": [

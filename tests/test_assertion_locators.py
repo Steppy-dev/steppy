@@ -81,6 +81,24 @@ def test_url_contains_plain_path_still_matches(temp_scenario_file):
     assert _url_pattern(src, {}).match("http://app.test/orders/7")
 
 
+def test_not_url_contains_negates_the_same_literal_pattern(temp_scenario_file):
+    src = _gen(temp_scenario_file, 'not-url-contains("/invoices/{{id}}?tab=a.b")')
+    line = next(ln for ln in src.splitlines() if "to_have_url(" in ln)
+    assert ".not_to_have_url(" in line
+    pattern = _url_pattern(src, {"id": "7"})
+    assert pattern.match("http://app.test/invoices/7?tab=a.b")
+    assert not pattern.match("http://app.test/invoices/7?tab=axb")
+
+
+def test_value_contains_is_a_literal_substring_of_the_value(temp_scenario_file):
+    src = _gen(temp_scenario_file, 'value-contains([data-testid="total"], "1.250,00 {{cur}}")')
+    line = next(ln for ln in src.splitlines() if "to_have_value(" in ln)
+    expr = line[line.index("re.compile(") : line.rindex(", timeout=")]
+    pattern = eval(expr, {"re": re, "_interp": _interp, "_vars": {"cur": "EUR"}})
+    assert pattern.search("Total: 1.250,00 EUR")
+    assert not pattern.search("1x250,00 EUR")
+
+
 @pytest.mark.parametrize(
     "expect",
     ['toast("Facture enregistrée")', 'row-contains("Website redesign")'],

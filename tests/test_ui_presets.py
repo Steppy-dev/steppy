@@ -95,3 +95,16 @@ def test_unknown_preset_raises():
     assert "Unknown preset" in str(exc.value)
     for kit in available_presets():
         assert kit in str(exc.value)
+
+
+def test_primeng_defaults_drive_a_multiselect():
+    """`select-option` on a `p-multiselect` needed a hand-written `dropdown:`
+    block: the defaults only named `p-select`. Both PrimeNG 18+ and 17 names
+    are now in the defaults."""
+    d = DropdownConfig()
+    for name in (".p-multiselect-overlay", ".p-multiselect-panel", ".p-dropdown-panel"):
+        assert name in d.overlay
+    for name in (".p-multiselect-option", "li.p-multiselect-item", ".p-dropdown-item"):
+        assert name in d.option
+    for name in (".p-multiselect-filter", ".p-dropdown-filter"):
+        assert name in d.filter

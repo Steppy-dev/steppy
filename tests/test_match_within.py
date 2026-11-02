@@ -327,3 +327,82 @@ def test_a_disambiguated_widget_gets_a_real_locator_bbox(temp_scenario_file):
     - screenshot: editor""",
     )
     assert "_bbox = _safe_bbox_locator(editor_page, editor_page.locator(_interp('.sw', _vars)).nth(3))" in src
+
+
+# ── Scope per expect: entry ─────────────────────────────────────────────────
+#
+# A step's within:/match: scope the action's target, so a trailing expect: never
+# inherits them. An entry's own within:/match: scope that one check.
+
+
+def test_trailing_expect_ignores_the_step_scope(temp_scenario_file):
+    src = _gen(
+        temp_scenario_file,
+        """\
+    - role: editor
+    - action: click
+    - selector: button.save
+    - within: "[data-testid=row-2]"
+    - match: first
+    - expect: contains(.status, "Saved")
+    - screenshot: false""",
+    )
+    assert "expect(editor_page.locator(_interp('.status', _vars))).to_contain_text(" in src
+
+
+def test_trailing_expect_entry_takes_its_own_scope(temp_scenario_file):
+    src = _gen(
+        temp_scenario_file,
+        """\
+    - role: editor
+    - action: click
+    - selector: button.save
+    - expect:
+        - check: contains(.status, "Saved")
+          within: "[data-testid=row-2]"
+          match: last
+        - visible(.toolbar)
+    - screenshot: false""",
+    )
+    assert (
+        "expect(editor_page.locator(_interp('[data-testid=row-2]', _vars))"
+        ".locator(_interp('.status', _vars)).last).to_contain_text("
+    ) in src
+    assert "expect(editor_page.locator(_interp('.toolbar', _vars))).to_be_visible(" in src
+
+
+def test_assert_step_entry_scope_overrides_the_step(temp_scenario_file):
+    src = _gen(
+        temp_scenario_file,
+        """\
+    - role: editor
+    - action: assert
+    - within: "[data-testid=list]"
+    - match: first
+    - expect:
+        - check: visible(.row)
+          match: 2
+        - check: visible(.title)
+          within: "[data-testid=header]"
+        - visible(.cell)
+    - screenshot: false""",
+    )
+    assert "editor_page.locator(_interp('[data-testid=list]', _vars)).locator(_interp('.row', _vars)).nth(2)" in src
+    assert "editor_page.locator(_interp('[data-testid=header]', _vars)).locator(_interp('.title', _vars)).first" in src
+    assert "editor_page.locator(_interp('[data-testid=list]', _vars)).locator(_interp('.cell', _vars)).first" in src
+
+
+def test_entry_match_is_validated():
+    from steppy.models import ExpectEntry
+
+    with pytest.raises(ValueError, match="'match' must be"):
+        ExpectEntry(check="visible(.row)", match="middle")
+
+
+def test_entry_scope_needs_a_selector():
+    from steppy.models import ExpectEntry
+
+    with pytest.raises(ValueError, match="need a check with a selector"):
+        ExpectEntry(check='toast("Saved")', within=".panel")
+    with pytest.raises(ValueError, match="need a check with a selector"):
+        ExpectEntry(check='url-contains("/invoices")', match="first")

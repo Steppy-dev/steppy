@@ -11,7 +11,7 @@ description: |
   `.github/workflows/steppy.yml`, `.gitlab-ci.yml`, or the `coverage:` / `report:`
   blocks in `config.yaml`.
 
-  Covers: `steppy report` (the static run-report site), `steppy run --bundle` +
+  Covers: `steppy report` (the static run-report site), what `steppy run` records +
   `steppy bundle`, the coverage map end to end (record → merge → refresh → gaps), the
   e2e-surface badge and the `coverage.non_ui` declaration it depends on, the in-app tour
   replays (`test_<slug>__tour`) and their pipeline order, and the two shipped CI templates.
@@ -90,7 +90,7 @@ The order that matters:
 ```bash
 docker compose up -d --wait      # 0. the app the scenarios talk to
 steppy generate                  # 1. rebuild the tests from scenarios
-steppy run --trace --bundle      # 2. run them, recording what a report needs
+steppy run --trace               # 2. run them; every run records what a report needs
 steppy report                    # 3. render output/report/
 ```
 
@@ -129,12 +129,13 @@ stack per worker** from `parallel.compose_file` and tears them down itself, so t
 explicit compose steps come out. N copies of an app on one hosted runner is a lot — that
 mode earns its keep on a large suite or a self-hosted runner, not on a thirty-scenario one.
 
-**`--bundle` is the load-bearing flag.** It is opt-in because it changes the pytest
-invocation, and without it the report can still tell you a test failed but *not which
-step* — there are no per-step event records to read. It sets three things:
-`STEPPY_EVENTS_DIR` (per-test and per-step JSONL), a fixed-path `--junitxml`, and
-`STEPPY_RUN_ID`. Export `STEPPY_STEP_EVENTS=0` to keep the rest and drop step
-granularity.
+**Every run is recorded** (since 0.10; before, only `steppy run --bundle` was, and the
+flag is still accepted, so a pipeline that passes it keeps working). A run sets three
+things: `STEPPY_EVENTS_DIR` (per-test and per-step JSONL under `output/events/<run-id>/`),
+a fixed-path `--junitxml` under `output/junit/<run-id>/` (unless `report.junit_xml` or a
+passthrough `--junitxml` already names one), and `STEPPY_RUN_ID`, recorded in
+`output/.steppy-run.json`. The ten newest runs' directories are kept. Export
+`STEPPY_STEP_EVENTS=0` to keep the rest and drop step granularity.
 
 **`steppy report` exits 0 even when the run failed.** It describes rendering, not the
 run. Gate the build on `steppy run` itself, or read `totals.exit_code` out of
@@ -169,7 +170,7 @@ so they have to be in the app image before the app starts:
 steppy tours                       # 1. write the tour files into the app's app-assets folder
 docker compose up -d --build --wait   # 2. build the app image WITH them, then start it
 steppy generate                    # 3. tests + replays
-steppy run --trace --bundle        # 4. the replays run with their scenarios
+steppy run --trace                 # 4. the replays run with their scenarios
 ```
 
 (In a one-repository setup the app's own build usually runs `steppy tours`, and the
@@ -290,8 +291,8 @@ same information for a machine:
 
 | What you see | What it means |
 |---|---|
-| "No per-step timeline was recorded" | The run did not pass `--bundle`, or set `STEPPY_STEP_EVENTS=0`, or the tests were generated before per-step markers existed (`steppy generate` again). |
-| "This run recorded no test outcomes" + verdict `unknown` | No `--bundle`, so there are no event records. The scenarios listed were reconstructed from captures on disk. **Not** `passed` — that would be a claim with no evidence. |
+| "No per-step timeline was recorded" | The run set `STEPPY_STEP_EVENTS=0`, was made by a Steppy older than 0.10 without `--bundle`, or the tests were generated before per-step markers existed (`steppy generate` again). |
+| "This run recorded no test outcomes" + verdict `unknown` | No run was recorded (an `output/` tree from a Steppy older than 0.10 run without `--bundle`), so there are no event records. The scenarios listed were reconstructed from captures on disk. **Not** `passed` — that would be a claim with no evidence. |
 | "Assert strength is not shown" | Coverage was rebuilt from a detached bundle's raw records, which carry no scenario markdown to count assert steps in. Every endpoint would otherwise read as weakly covered. |
 | "Truncated" | A `--max-size` budget dropped artifacts that belonged in the bundle. Screenshots and sidecars are never dropped. |
 
@@ -489,7 +490,7 @@ hand-made triage — which also means it is never inside a bundle. So:
 | `none` | no coverage section at all | nothing recorded |
 
 `gaps.json` is written automatically after the post-run merge, so
-`steppy run --coverage --bundle` is self-sufficient — tier 1 with no extra CI step. Two
+`steppy run --coverage` is self-sufficient — tier 1 with no extra CI step. Two
 guardrails are deliberate and worth knowing, because the wrong answer would look
 entirely plausible:
 
@@ -503,13 +504,13 @@ entirely plausible:
 ## Results bundles
 
 ```bash
-steppy run --bundle           # capture per-test AND per-step events + JUnit XML
+steppy run                    # records per-test AND per-step events + JUnit XML
 steppy bundle create          # → output/bundles/steppy-bundle-<run-id>.tar.zst
 steppy bundle inspect <file>  # the manifest, without extracting
 steppy bundle verify <file>   # re-hash every member against it
 ```
 
-`--bundle` does not create the bundle; it captures what a bundle needs. `create` then
+A run does not create the bundle; it records what a bundle needs. `create` then
 packages `output/` **exactly as Steppy wrote it** — no path rewriting — plus a generated
 `manifest.json`, a merged `junit.xml`, the event JSONL, and `coverage/gaps.json` when the
 run has one. Unpacking yields a tree that `steppy report`, `steppy guide` and
@@ -529,7 +530,7 @@ scope here — everything above works with no plane at all.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Report says "no test outcomes", verdict `unknown` | The run had no `--bundle`, so no event records exist | `steppy run --bundle` |
+| Report says "no test outcomes", verdict `unknown` | No recorded run in `output/` (a Steppy older than 0.10 needed `--bundle`) | `steppy run` |
 | Report shows outcomes but no step detail | `STEPPY_STEP_EVENTS=0`, or tests generated before per-step markers | Unset the env var; re-run `steppy generate` |
 | Badge says `n/a` | Nothing declared — no `coverage.apis`, or `refresh` never ran | Configure `coverage.apis[].openapi`, then `steppy coverage refresh` |
 | Coverage percentage far lower in CI than locally | Triage flags live in the gitignored `.steppy/coverage.db`; CI starts empty | Declare `coverage.non_ui` in `config.yaml` |

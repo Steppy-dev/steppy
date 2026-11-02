@@ -151,9 +151,9 @@ def create(
     unchanged. Alongside it sit a manifest.json describing every file, a merged
     junit.xml, and the run's per-test event records.
 
-    Run your scenarios with `steppy run --bundle` first: that captures the event
-    records and JUnit XML a plain run does not produce. Without them the bundle
-    is still valid, but manifest.tests[] will be empty.
+    Run your scenarios with `steppy run` first: it records the event records
+    and JUnit XML the bundle reads (before 0.10 only `steppy run --bundle` did).
+    Without them the bundle is still valid, but manifest.tests[] will be empty.
     """
     with _cli_errors():
         from .bundle import BundleError, create_bundle
@@ -265,7 +265,7 @@ def upload(
     changed two screenshots uploads two screenshots. Interrupted? Run it again —
     it attaches to the same run and sends only what is missing.
 
-    Run your scenarios with `steppy run --bundle` first. Two things depend on
+    Run your scenarios with `steppy run` first. Two things depend on
     it: the per-test event records, without which the plane gets an empty
     tests[] and no failure detail; and the run identity in
     output/.steppy-run.json, which is the idempotency key that makes a retried

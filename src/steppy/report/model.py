@@ -238,8 +238,10 @@ def build_model(
                     fail_tail=_decode_tail(test),
                     steps=steps,
                     failure_screenshot=failure_shots.get(test.nodeid),
-                    trace_path=traces.get(test.nodeid),
-                    video_path=videos.get(test.nodeid),
+                    trace_path=next(iter(traces.get(test.nodeid, [])), None),
+                    video_path=next(iter(videos.get(test.nodeid, [])), None),
+                    trace_paths=traces.get(test.nodeid, []),
+                    video_paths=videos.get(test.nodeid, []),
                 )
             )
             outcomes[test.outcome] = outcomes.get(test.outcome, 0) + 1
@@ -387,16 +389,19 @@ def _index_by_scenario(manifest: BundleManifest, kind: str) -> dict[str, str]:
     return out
 
 
-def _index_paths(manifest: BundleManifest, kind: str) -> dict[str, str]:
-    """``{nodeid: in-bundle path}`` for artifacts that are named, not copied."""
-    by_key: dict[tuple, str] = {}
+def _index_paths(manifest: BundleManifest, kind: str) -> dict[str, list[str]]:
+    """``{nodeid: [in-bundle path, ...]}`` for artifacts that are named, not copied.
+
+    A list, sorted: a multi-role test leaves one trace (and one video) per role.
+    """
+    by_key: dict[tuple, list[str]] = {}
     for entry in manifest.files:
         if entry.kind == kind:
-            by_key.setdefault((entry.scenario, entry.locale, entry.layout), entry.path)
+            by_key.setdefault((entry.scenario, entry.locale, entry.layout), []).append(entry.path)
     return {
-        test.nodeid: path
+        test.nodeid: sorted(paths)
         for test in manifest.tests
-        if (path := by_key.get((test.scenario, test.locale, test.layout))) is not None
+        if (paths := by_key.get((test.scenario, test.locale, test.layout)))
     }
 
 

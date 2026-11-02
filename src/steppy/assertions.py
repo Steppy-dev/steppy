@@ -60,6 +60,8 @@ ASSERTION_FORMS: tuple[str, ...] = (
     "checked(selector)",
     "unchecked(selector)",
     'stays-hidden(selector, "3s")',
+    'value-contains(selector, "text")',
+    'not-url-contains("/path")',
 )
 
 _COMPARATOR = re.compile(r"^(>=|<=|==|!=|>|<)\s*(\d+)$")
@@ -195,6 +197,14 @@ def parse_assertion(expect: str) -> dict[str, str]:
             raise AssertionSyntaxError('value(...) needs two arguments: value(selector, "expected")')
         return {"type": "value", "selector": parts[0].strip(), "text": _unquote(parts[1].strip())}
 
+    # `value(` compares the whole value; a formatted amount or a date with a time
+    # part needs the substring form.
+    if expect.startswith("value-contains("):
+        parts = split_top_level(_inner(expect, "value-contains"), maxsplit=1)
+        if len(parts) != 2:
+            raise AssertionSyntaxError('value-contains(...) needs two arguments: value-contains(selector, "text")')
+        return {"type": "value-contains", "selector": parts[0].strip(), "text": _unquote(parts[1].strip())}
+
     if expect.startswith("attribute("):
         parts = split_top_level(_inner(expect, "attribute"), maxsplit=2)
         if len(parts) != 3:
@@ -217,6 +227,9 @@ def parse_assertion(expect: str) -> dict[str, str]:
 
     if expect.startswith("not-visible("):
         return {"type": "not-visible", "selector": _inner(expect, "not-visible").strip()}
+
+    if expect.startswith("not-url-contains("):
+        return {"type": "not-url-contains", "path": _unquote(_inner(expect, "not-url-contains").strip())}
 
     if expect.startswith("icontains("):
         parts = split_top_level(_inner(expect, "icontains"), maxsplit=1)

@@ -388,9 +388,11 @@ For more control over guide presentation, use the structured format:
 | Element count (**comparator**) | `count([data-testid^="site-list-row-"], >=1)` |
 | Element count == 0 (removed from DOM) | `count([data-testid="temp-picker"], 0)` |
 | URL contains path (literal, `{{var}}` works) | `url-contains(/orders/{{order_id}})` |
+| URL does **not** contain path (literal, `{{var}}` works) | `not-url-contains(/login)` |
 | Not empty | `not-empty([data-testid="list"])` |
 | Disabled / enabled | `disabled(button#submit)` / `enabled(...)` |
 | Input value (exact) | `value([data-testid="amount"], "120.00")` |
+| Input value **contains** text (substring) | `value-contains([data-testid="due-date"], "15/03/2026")` |
 | Attribute value | `attribute([data-testid="row-1"], "aria-selected", "true")` |
 | Does **not** contain text | `not-contains([data-testid="status"], "Draft")` |
 | Not visible (waits for it to go) | `not-visible([data-testid="spinner"])` |
@@ -398,7 +400,7 @@ For more control over guide presentation, use the structured format:
 | Checkbox / switch state | `checked([data-testid="notify"])` / `unchecked(...)` |
 | **Stays** hidden for a while | `stays-hidden([data-testid="wizard"], "3s")` |
 
-`expect` can be attached to any action (not just `assert`). A standalone verification step uses `action: assert` and only `expect`. Selector arguments take the step's `within:` / `match:` like any element action.
+`expect` can be attached to any action (not just `assert`). A standalone verification step uses `action: assert` and only `expect`. On an `assert` step, selector arguments take the step's `within:` / `match:`. On any other action they do **not**: there, the step's `within:` / `match:` scope the action's own target, so a check never inherits them. Scope one check with the list form's `within:` / `match:` (below).
 
 An unrecognised form fails `steppy validate`; it never compiles to a test that checks nothing.
 
@@ -413,6 +415,21 @@ An unrecognised form fails `steppy validate`; it never compiles to a test that c
     message: no order row for {{order_id}}
   - check: contains([data-testid="total"], "120.00")
 ```
+
+An entry may also carry its own `within:` / `match:`, for that check only. On an `assert` step it overrides the step's; on any other action it is the only way to scope a check:
+
+```markdown
+- action: click
+- selector: '[data-testid="save"]'
+- within: '[data-testid="invoice-row-2"]'     # scopes the click, not the checks
+- expect:
+  - check: contains([data-testid="status"], "Paid")
+    within: '[data-testid="invoice-row-2"]'
+  - check: visible([data-testid="row-menu"])
+    match: last
+```
+
+A check with no selector (`toast`, `row-contains`, `url-contains`, `not-url-contains`) takes neither.
 
 **`contains(...)` vs `text(...)`**: `text(...)` is exact full-text and `contains(...)` is a
 substring match (Playwright `to_contain_text`, auto-waiting). Use `contains` for tags/badges
@@ -869,6 +886,8 @@ When a selector matches more than one element (any list or table row), Playwrigh
 
 `within` scopes to a parent before resolving; `match` picks among the matches. Absent ⇒ today's behavior (byte-identical). Guide-mode bbox resolves the same disambiguated locator.
 
+They scope the **action**. An `expect:` riding on a `click` (or any action other than `assert`) does not inherit them; give the check its own `within:` / `match:` in the list form (see **Assertions**).
+
 ---
 
 ## `fill` flags — framework inputs
@@ -900,15 +919,15 @@ For elements that ignore Playwright's native click, `synthetic: true` dispatches
 
 ## Config presets — framework selectors
 
-The `select-option`, `confirm`, `toggle`, `pick-date`/`pick-time`, and `expand` actions read their framework-specific selectors from preset blocks in `config.yaml`. **Defaults target PrimeNG**, so a PrimeNG app needs no config at all. Override only what differs:
+The `select-option`, `confirm`, `toggle`, `pick-date`/`pick-time`, and `expand` actions read their framework-specific selectors from preset blocks in `config.yaml`. **Defaults target PrimeNG**, so a PrimeNG app needs no config at all. The `dropdown:` defaults cover `p-select` and `p-multiselect`, with both the PrimeNG 18+ and the PrimeNG 17 (`p-dropdown`, `-panel`, `-item`) class names. Override only what differs:
 
 ```yaml
 # config.yaml — every block is optional; shown values are the PrimeNG defaults
 dropdown:                    # select-option
-  trigger: "p-select"
-  overlay: ".p-select-overlay"
-  option:  ".p-select-option, .p-select-list-container li"
-  filter:  ".p-select-filter-container input, .p-select-filter"
+  trigger: "p-select, p-multiselect, p-dropdown"
+  overlay: ".p-select-overlay, .p-multiselect-overlay, .p-dropdown-panel, .p-multiselect-panel"
+  option:  ".p-select-option, .p-select-list-container li, .p-multiselect-option, .p-dropdown-item, li.p-multiselect-item"
+  filter:  ".p-select-filter-container input, .p-select-filter, .p-multiselect-filter-container input, .p-multiselect-filter, .p-dropdown-filter"
   settle:  "api"             # api = wait networkidle after typing | none
 
 dialog:                      # confirm
@@ -971,7 +990,7 @@ A scenario can appear in multiple role guides: add both `user-guide-editor` and 
 6. **Using relative URLs without a leading slash** — `target: orders` is ambiguous. Always write `target: /tasks`.
 7. **Missing `auth: false` on a login-flow scenario** — the runner will try to pre-auth before the test runs, short-circuiting the flow. Login scenarios must opt out.
 8. **Raw `page.*` calls outside `custom`** — every non-custom action generates the right Playwright call for you. Don't embed Python in regular steps.
-9. **Multi-line string in simple `guide-text` format without quotes** — wrap in double quotes: `fr: "First sentence. Second sentence."`. Or switch to structured format with explicit `title` and `text` fields. A French colon on its own (`title: Segment : factures`, in the frontmatter or a nested block) does **not** need quotes: Steppy quotes such a value for you when the YAML would otherwise be invalid.
+9. **Multi-line string in simple `guide-text` format without quotes** — wrap in double quotes: `fr: "First sentence. Second sentence."`. Or switch to structured format with explicit `title` and `text` fields. A French colon on its own (`title: Segment : factures`, in the frontmatter or a nested block) does **not** need quotes: Steppy quotes such a value for you when the YAML would otherwise be invalid. The same goes for the entries of an `expect:` list, `- toast("Segment : créé")` and `check: contains(#total, "Total : 12")` alike.
 10. **Missing `title` in structured `guide-text`** — when using the structured format (`fr: { title: ..., subtitle: ..., text: ... }`), the `title` field is mandatory. `subtitle` and `text` are optional.
 11. **Selectors with single quotes inside double-quoted `custom` code** — use Python triple quotes or escape, same as any Python string.
 12. **Click step whose screenshot shows the *next* page, not the button you're clicking** — the default is `screenshot-when: after`, so a click that navigates unmounts the target before the screenshot. Add `screenshot-when: before` to that step. Same applies to "Submit" clicks whose post-action state is a toast + redirect.
@@ -1033,7 +1052,7 @@ Anywhere a value supports `{{var}}` (target, selector, value, fields, custom cod
 
 11. *(Optional)* `steppy run --coverage` — records per-scenario coverage signals (route trail, API requests, JS coverage) and merges them into a persistent map at `.steppy/coverage.db`. Then `steppy coverage refresh` + `steppy coverage report` prints the gap analysis: the `declared-unreached` bucket is your work queue for step 1. See **Other commands** below.
 
-12. *(Optional)* `steppy run --bundle` then `steppy report` — render the run to a browsable static site (outcomes, grouped failure causes, the failing step named plus its screenshot), and/or `steppy bundle create` to package `output/` into a portable, self-describing archive to attach to a CI job. See **Other commands** below, and the **`steppy-ci-report`** skill for CI wiring, publishing and the coverage badge.
+12. *(Optional)* `steppy report` after `steppy run` — render the run to a browsable static site (outcomes, grouped failure causes, the failing step named plus its screenshot), and/or `steppy bundle create` to package `output/` into a portable, self-describing archive to attach to a CI job. See **Other commands** below, and the **`steppy-ci-report`** skill for CI wiring, publishing and the coverage badge.
 
 13. *(Optional)* **In-app tours** — when the scenario opts into a tour (`tour:` in its frontmatter, with `tours.enabled: true` in `config.yaml`), run `steppy validate` and fix every tour error it prints (they fail validation with exit 1, and nothing is written until they are gone), then `steppy generate`: it writes the tour files and appends the `test_<slug>__tour` CI replay to the scenario's test file, which `steppy run` then runs with the scenario. See **In-app tours** below.
 
@@ -1052,7 +1071,7 @@ At a few hundred scenarios the run's *output* matters as much as its result. Fou
 - **Exclusion groups.** A scenario carrying `exclusive: <group>` is serialised against every other scenario naming that group — they become one queue task that a single worker runs member by member. The run header prints the census (`exclusion groups: billing[3], mail[2] — …`); two near-identical names on that line are a typo, and a group of one serialises nothing. A group is also the run's floor: no amount of workers finishes faster than the heaviest group's total duration.
 - **Retry pass.** After the queue drains, failed scenarios re-run at reduced concurrency (default: 1 worker). One that then passes is reported as **FLAKY** in its own section and does **not** fail the build — it failed because of contention, not because it is broken. One that fails twice is a real failure. Tune with `parallel.retry` or `--retry-pass N` (`0` disables); `--strict-flaky` makes flakes fail the build. Flaky scenarios are excluded from the last-failed cache, so a follow-up `steppy rerun` only re-runs genuine failures. A worker that dies mid-scenario is retried too, rather than being counted as a hard loss.
 - **Failure causes.** The summary leads with failures grouped by cause, so one broken selector across forty scenarios prints as one line instead of forty tracebacks. `--verbose` restores the full per-scenario dump.
-- **`--trace` / `--video`.** These work in parallel mode: `steppy run --workers N --trace` writes a Playwright trace zip per failed test to `output/traces/`. Open one with `playwright show-trace <zip>` — a DOM snapshot per action, plus network and console. It is by far the fastest way to understand a failure you cannot reproduce locally.
+- **`--trace` / `--video`.** These work in parallel mode: `steppy run --workers N --trace` writes a Playwright trace zip per failed test and role to `output/traces/` (`<test>__<role>_page.zip`). Open one with `playwright show-trace <zip>` — a DOM snapshot per action, plus network and console. It is by far the fastest way to understand a failure you cannot reproduce locally.
 - **Circuit breaker.** If ≥10 scenarios have completed and ≥90% of them failed, the run aborts with a pointer to `output/failures/_worker-logs/`. That pattern means the app, auth, or a seed step is down — not that your scenarios are wrong. Disable for one run with `--no-fail-fast`.
 
 As an author, the part of this you control is the **FLAKY** list. Everything else is reporting; that list is a work queue. See **Timing and flakiness**.
@@ -1103,26 +1122,26 @@ Two things it depends on, both worth checking before trusting a number: `coverag
 ### `steppy report` — read a run without scrolling a log
 
 ```bash
-steppy run --bundle    # records per-test AND per-step events
-steppy report          # → output/report/index.html
+steppy run             # records per-test AND per-step events, every run
+steppy report          # → output/report/index.html, for the last run
 ```
 
 A self-contained static site for **one** run: outcomes, failure causes grouped so one broken selector across forty scenarios is one row instead of forty tracebacks, **the failing step named** with its timeline and the screenshot at that moment, and the coverage buckets. It also reads a `.tar.zst` bundle or an unpacked bundle directory, so a failure from CI is one download away from being readable.
 
-The part that matters for authoring: `--bundle` is what makes the report able to say *step 7 of `order-lifecycle` in nl/mobile*, rather than only *the test failed*. Without it you get outcomes and no step detail, and the report says so rather than rendering an empty timeline.
+The part that matters for authoring: the per-step records every run writes are what make the report able to say *step 7 of `order-lifecycle` in nl/mobile*, rather than only *the test failed*. A run made with `STEPPY_STEP_EVENTS=0` (or by a Steppy older than 0.10 without `--bundle`) gives outcomes and no step detail, and the report says so rather than rendering an empty timeline.
 
 > Publishing it, the Pages warnings, the badge and the CI wiring: **`steppy-ci-report`**.
 
 ### Results bundles — one run, one portable archive
 
 ```bash
-steppy run --bundle           # capture the extra artifacts: per-test AND per-step events + JUnit XML
+steppy run                    # records per-test AND per-step events + JUnit XML
 steppy bundle create          # → output/bundles/steppy-bundle-<run-id>.tar.zst
 steppy bundle inspect <file>  # print the manifest without extracting
 steppy bundle verify <file>   # re-hash every member against the manifest
 ```
 
-`--bundle` is off by default because it changes the pytest invocation; it does **not** create the bundle, it captures what a bundle needs. `steppy bundle create` then packages `output/` **exactly as Steppy wrote it** — no path rewriting — plus a generated `manifest.json`, a merged `junit.xml`, and the event JSONL. Unpacking it yields a tree `steppy guide` and `steppy build` consume unchanged.
+Every `steppy run` records what a bundle needs (since 0.10; before, only `steppy run --bundle` did, and the flag is still accepted). `steppy bundle create` then packages `output/` **exactly as Steppy wrote it** — no path rewriting — plus a generated `manifest.json`, a merged `junit.xml`, and the event JSONL. Unpacking it yields a tree `steppy guide` and `steppy build` consume unchanged.
 
 Useful with no server involved at all: a self-describing archive to attach to a CI job, so a failed run is one download rather than a scavenger hunt through artifacts. Per-step events are what let the manifest name the *step* a test died on, not just the test. `--no-videos` / `--no-traces` / `--no-guides` trim it; `--max-size 2GiB` drops the cheapest-to-lose artifacts first and marks the manifest `truncated`.
 
@@ -1133,11 +1152,11 @@ Useful with no server involved at all: a self-describing archive to attach to a 
 `steppy bundle upload` pushes a run's results to a **Steppy control plane** — the hosted side that remembers runs, diffs them against a baseline, and tracks flake rate over time. Everything above works with no plane at all; this section only matters if the project has one. Nothing in Steppy assumes it exists.
 
 ```bash
-steppy run --bundle              # 1. capture the artifacts a bundle needs
+steppy run                       # 1. records the artifacts a bundle needs
 steppy bundle upload             # 2. push straight from output/ — no archive written
 ```
 
-**Run `steppy run --bundle` first.** Two things depend on it, and both fail quietly otherwise:
+**Run `steppy run` first** (a Steppy older than 0.10 needs `steppy run --bundle`). Two things depend on what it records, and both fail quietly otherwise:
 
 - **Per-test event records.** Without them the plane receives an empty `tests[]` — the upload succeeds and the run shows no failure detail at all.
 - **The run identity** in `output/.steppy-run.json`, which doubles as the **idempotency key**. With it, a retried upload *attaches* to the same run; without it a fresh run id is minted per invocation, so a flaky network turns one run into three. Pin it with `--run-id` if the identity was never recorded, or `--attach <run-id>` to upload into a run the plane already created.
@@ -1191,7 +1210,7 @@ steppy bundle upload --concurrency 8           # parallel blob PUTs (ignored whe
 #### CI shape
 
 ```yaml
-- run: steppy run --bundle --workers 4
+- run: steppy run --workers 4
 - run: steppy bundle upload
   if: always()                    # a failed run is exactly the one worth uploading
   env:

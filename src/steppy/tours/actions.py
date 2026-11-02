@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Optional
 
 from ..assertions import AssertionSyntaxError, parse_assertion
-from ..models import Step, expect_checks
+from ..models import Step, expect_entries
 from ..testids import TargetExtraction, extract_test_id
 
 ACTION_TOUR_KIND: dict[str, str] = {
@@ -161,11 +161,16 @@ def _extract(step: Step, selector: Optional[str], attr: str, *, scoped: bool = T
 
 
 def _checks(step: Step, attr: str, *, scoped: bool) -> list[tuple[Optional[str], Optional[str], bool]]:
-    """``(test-id, selector, positive)`` per assertion of the step."""
+    """``(test-id, selector, positive)`` per assertion of the step.
+
+    An entry's own ``within``/``match`` always apply; the step's only when
+    ``scoped`` (an ``assert`` step), and there the entry's value wins — the
+    same rule the generated test follows.
+    """
     out = []
-    for check in expect_checks(step.expect):
+    for entry in expect_entries(step.expect):
         try:
-            parsed = parse_assertion(check)
+            parsed = parse_assertion(entry.check)
         except AssertionSyntaxError:
             continue
         selector = parsed.get("selector")
@@ -178,7 +183,11 @@ def _checks(step: Step, attr: str, *, scoped: bool) -> list[tuple[Optional[str],
         elif kind == "count-cmp":
             n, cmp = _int(parsed.get("count")), parsed.get("comparator")
             positive = (cmp in (">=", "==") and n >= 1) or (cmp == ">" and n >= 0)
-        ext = _extract(step, selector, attr, scoped=scoped)
+        within, match = entry.within, entry.match
+        if scoped:
+            within = within if within is not None else step.within
+            match = match if match is not None else step.match
+        ext = extract_test_id(selector, attr, within=within, match=match)
         out.append((ext.test_id, selector, positive))
     return out
 
@@ -193,8 +202,8 @@ def _int(value) -> int:
 def trailing_gates(step: Step, attr: str) -> list[str]:
     """Positive, extractable ``expect:`` checks riding on a non-assert action.
 
-    Extracted **without** ``within``/``match``: the trailing expect uses a plain
-    locator in the generated test, whatever scopes the action itself.
+    Extracted **without** the step's ``within``/``match``: the trailing expect
+    does not inherit what scopes the action itself, only an entry's own scope.
     """
     if step.action in ("assert", "wait-for"):
         return []

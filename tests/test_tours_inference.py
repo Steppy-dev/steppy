@@ -258,6 +258,30 @@ def test_a_trailing_expect_gates_the_next_step_and_the_last_gate_wins(tmp_path):
     assert _steps(result)[1] == ("send", "send", "click", "detail")
 
 
+def test_a_scoped_trailing_expect_entry_is_not_a_gate(tmp_path):
+    # The test scopes the check inside the row; the tour cannot point at "the
+    # one inside the row", so the check gates nothing rather than the wrong one.
+    result = _compile(
+        tmp_path,
+        OPEN
+        + """
+### 2. Save
+- role: editor
+- action: click
+- selector: '[data-testid="save"]'
+- expect:
+    - check: visible([data-testid="saved"])
+      within: '[data-testid="row-2"]'
+
+### 3. Send
+- role: editor
+- action: click
+- selector: '[data-testid="send"]'
+""",
+    )
+    assert _steps(result)[1] == ("send", "send", "click", None)
+
+
 def test_negative_assertions_and_hidden_waits_are_not_gates(tmp_path):
     result = _compile(
         tmp_path,

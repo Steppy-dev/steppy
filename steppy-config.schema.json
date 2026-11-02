@@ -498,20 +498,20 @@
     },
     "DropdownConfig": {
       "additionalProperties": false,
-      "description": "Selectors for the component dropdown driven by the ``select-option``\naction. Defaults target PrimeNG ``p-select``; set ``preset:`` (e.g.\n``material``) or override individual selectors in ``config.yaml`` for other\nUI kits. ``select-option`` works out-of-the-box for PrimeNG apps with no\nconfig.",
+      "description": "Selectors for the component dropdown driven by the ``select-option``\naction. Defaults target PrimeNG ``p-select`` and ``p-multiselect`` (17 and\n18+ class names); set ``preset:`` (e.g.\n``material``) or override individual selectors in ``config.yaml`` for other\nUI kits. ``select-option`` works out-of-the-box for PrimeNG apps with no\nconfig.",
       "properties": {
         "filter": {
-          "default": ".p-select-filter-container input, .p-select-filter",
+          "default": ".p-select-filter-container input, .p-select-filter, .p-multiselect-filter-container input, .p-multiselect-filter, .p-dropdown-filter",
           "title": "Filter",
           "type": "string"
         },
         "option": {
-          "default": ".p-select-option, .p-select-list-container li",
+          "default": ".p-select-option, .p-select-list-container li, .p-multiselect-option, .p-dropdown-item, li.p-multiselect-item",
           "title": "Option",
           "type": "string"
         },
         "overlay": {
-          "default": ".p-select-overlay",
+          "default": ".p-select-overlay, .p-multiselect-overlay, .p-dropdown-panel, .p-multiselect-panel",
           "title": "Overlay",
           "type": "string"
         },
@@ -537,7 +537,7 @@
           "type": "string"
         },
         "trigger": {
-          "default": "p-select",
+          "default": "p-select, p-multiselect, p-dropdown",
           "title": "Trigger",
           "type": "string"
         }

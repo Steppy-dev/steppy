@@ -132,8 +132,9 @@ def nodeid_index(tests: Iterable) -> dict:
 def _attribute_nodeid(stem: str, ctx: ClassifyContext) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """``(scenario, locale, layout)`` for a nodeid-named artifact.
 
-    Failure screenshots carry a trailing ``__<fixture>`` the traces and videos
-    do not, so try the whole stem first and then progressively shorter prefixes.
+    Failure screenshots, traces and videos carry a trailing ``__<fixture>``
+    (traces and videos from 0.10; older runs have none), so try the whole stem
+    first and then progressively shorter prefixes.
     An exact hit is authoritative; a miss returns all-``None`` rather than a
     guess, because the sanitiser is not invertible.
     """

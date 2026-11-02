@@ -70,8 +70,8 @@ def register_report(app: typer.Typer) -> None:
     ) -> None:
         """Render one run's results to a self-contained static site.
 
-        Reads a results bundle — or the live ``output/`` tree of a run that used
-        ``steppy run --bundle`` — and writes ``index.html``, a page per scenario,
+        Reads a results bundle — or the live ``output/`` tree of the last
+        ``steppy run`` — and writes ``index.html``, a page per scenario,
         the coverage gap report, a machine-readable ``report.json`` and a
         shields.io ``badge.json``. Everything is relative and self-contained, so it
         works from a file:// path, a CI artifact, or GitHub/GitLab Pages.

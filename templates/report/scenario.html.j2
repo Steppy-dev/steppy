@@ -22,8 +22,8 @@
         {% if not scenario.variants %}
         <div class="steppy-notice">
             No test outcome was recorded for this scenario. Its captures are on disk, but the run
-            wrote down nothing about whether it passed — add <code>--bundle</code> to
-            <code>steppy run</code>.
+            wrote down nothing about whether it passed. Run it with <code>steppy run</code>
+            (a Steppy older than 0.10 needed <code>--bundle</code>).
         </div>
         {% endif %}
 
@@ -114,14 +114,18 @@
             </ol>
             {% endif %}
 
-            {% if variant.trace_path or variant.video_path %}
+            {% set _traces = variant.trace_paths or ([variant.trace_path] if variant.trace_path else []) %}
+            {% set _videos = variant.video_paths or ([variant.video_path] if variant.video_path else []) %}
+            {% if _traces or _videos %}
             <p class="steppy-small steppy-muted">
-                {% if variant.trace_path %}
-                Trace in the run at <code>{{ variant.trace_path }}</code>
+                {% if _traces %}
+                {{ "Traces" if _traces | length > 1 else "Trace" }} in the run at
+                {% for path in _traces %}<code>{{ path }}</code>{{ ", " if not loop.last }}{% endfor %}
                 (open with <code>playwright show-trace</code>).
                 {% endif %}
-                {% if variant.video_path %}
-                Video at <code>{{ variant.video_path }}</code>.
+                {% if _videos %}
+                {{ "Videos" if _videos | length > 1 else "Video" }} at
+                {% for path in _videos %}<code>{{ path }}</code>{{ ", " if not loop.last }}{% endfor %}.
                 {% endif %}
             </p>
             {% endif %}

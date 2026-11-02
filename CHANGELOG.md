@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-02
+
 ### Added
 - **Guides open in the reader's language and layout.** A new `autoDetect` block
   in the build config. The layout half is on by default. A phone reader gets the
@@ -40,24 +42,6 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   forms `value`, `attribute`, `not-contains`, `not-visible`, `icontains`,
   `checked`, `unchecked`, `stays-hidden` and the `check:` / `message:` list,
   which were documented nowhere. Artifact output paths moved to the README.
-- **In-app tours: what a click on an information step's target does.** An
-  information step (one that advances on `manual`) often points at a button the
-  user should learn about, not use yet. `tour-target-click: next` makes a click
-  on it advance the tour as Next would, without reaching the element; `block`
-  swallows it; `pass` (the default) keeps today's behaviour. Set it per step,
-  for every information step with `tours.info_target_click` in `config.yaml`,
-  or from the app with the host's `infoTargetClick` property
-  (`provideSteppyTours({ infoTargetClick })` with `@steppy/angular`). The tour
-  file carries it as a new optional `targetClick` field; an older overlay
-  ignores it. The CI replay is unaffected. See "Clicks on an information step's
-  target" in `docs/tours.md`.
-- **New tour diagnostics.** `target-click-on-action-step` (error):
-  `tour-target-click` on a step that advances on a click, an input, a change or
-  a visibility. `target-click-ignored` (warning): on a centred step.
-- **`testId` on tour step events.** `tour-step`, `tour-dismiss`, `tour-offpath`,
-  the host's `current` and `SteppyTours.current()` now carry the step's target
-  test-id (`null` for a centred step). Read it instead of deriving one from
-  `stepId`, whose `-2`, `-3` suffixes are not part of the contract.
 
 ### Fixed
 - **The step-by-step cursor follows the visible layout.** `cursor.js` mounted
@@ -65,15 +49,6 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   never listened for a layout switch. On a page showing the mobile screenshots
   the cursor was placed with the desktop coordinates. It now mounts on the
   visible layout and remounts on `steppy:layout-change`.
-- **In-app tours: a layout twin's gate no longer leaks onto the other layout.**
-  A step limited by `layouts:` handed its trailing `expect:` (or `wait-for`) to
-  the next tour step whatever that step's layouts, so a mobile twin waited for
-  an element only the desktop click shows, and the tour stalled on a phone. The
-  compiler now tracks gates per layout: twins with the same check gate the
-  shared step after them on every layout, and twins with different checks give
-  it none, with the new info `gate-layouts-differ`. A layout-limited step that
-  may change the page (`gate-stale`) and a layout-limited `hover`
-  (`hover-collapse-risk`) likewise only affect their own layouts.
 - **`auth.mode: bypass` now writes `auth.bypass.local_storage` in the generated
   suite.** The generated conftest only added the bypass cookie, so an app
   authenticated through a localStorage token ran every test logged out. The
@@ -101,6 +76,41 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in 0.8 without a row in the skill's action table, so an assistant never
   offered it. A test now fails when an action is missing from that table. Run
   `steppy update` in a project to refresh its installed skills.
+
+## [0.8.1] - 2026-10-29
+
+### Fixed
+- **In-app tours: a layout twin's gate no longer leaks onto the other layout.**
+  A step limited by `layouts:` handed its trailing `expect:` (or `wait-for`) to
+  the next tour step whatever that step's layouts, so a mobile twin waited for
+  an element only the desktop click shows, and the tour stalled on a phone. The
+  compiler now tracks gates per layout: twins with the same check gate the
+  shared step after them on every layout, and twins with different checks give
+  it none, with the new info `gate-layouts-differ`. A layout-limited step that
+  may change the page (`gate-stale`) and a layout-limited `hover`
+  (`hover-collapse-risk`) likewise only affect their own layouts.
+
+## [0.8.0] - 2026-10-27
+
+### Added
+- **In-app tours: what a click on an information step's target does.** An
+  information step (one that advances on `manual`) often points at a button the
+  user should learn about, not use yet. `tour-target-click: next` makes a click
+  on it advance the tour as Next would, without reaching the element; `block`
+  swallows it; `pass` (the default) keeps today's behaviour. Set it per step,
+  for every information step with `tours.info_target_click` in `config.yaml`,
+  or from the app with the host's `infoTargetClick` property
+  (`provideSteppyTours({ infoTargetClick })` with `@steppy/angular`). The tour
+  file carries it as a new optional `targetClick` field; an older overlay
+  ignores it. The CI replay is unaffected. See "Clicks on an information step's
+  target" in `docs/tours.md`.
+- **New tour diagnostics.** `target-click-on-action-step` (error):
+  `tour-target-click` on a step that advances on a click, an input, a change or
+  a visibility. `target-click-ignored` (warning): on a centred step.
+- **`testId` on tour step events.** `tour-step`, `tour-dismiss`, `tour-offpath`,
+  the host's `current` and `SteppyTours.current()` now carry the step's target
+  test-id (`null` for a centred step). Read it instead of deriving one from
+  `stepId`, whose `-2`, `-3` suffixes are not part of the contract.
 
 ### Changed
 - **The tour overlay's size budget is 28,700 B** (min + gzip), up from 27,750 B,
@@ -1122,7 +1132,10 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Steppy-dev/steppy/compare/v0.8.1...v0.9.0
+[0.8.1]: https://github.com/Steppy-dev/steppy/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/Steppy-dev/steppy/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Steppy-dev/steppy/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Steppy-dev/steppy/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Steppy-dev/steppy/compare/v0.4.0...v0.5.0

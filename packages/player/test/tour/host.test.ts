@@ -229,6 +229,53 @@ describe('a tour, followed', () => {
   });
 });
 
+describe('a click before its step shows', () => {
+  /** Reach save-invoice-btn with its target not visible yet: the step waits for it. */
+  async function pendingSave(): Promise<HTMLElement> {
+    await begin('create-invoice', { step: 'customer-select' });
+    const save = app('save-invoice-btn');
+    save.removeAttribute('data-rect');
+    const combo = app('customer-select');
+    combo.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, composed: true }));
+    combo.querySelector('.label')!.textContent = 'Acme Corp';
+    await tick();
+    expect(host.current!.stepId).toBe('save-invoice-btn');
+    expect(bubble()).toBeNull();
+    return save;
+  }
+
+  it('performs the first step while it waits for its waitFor', async () => {
+    app('invoice-list').removeAttribute('data-testid'); // step 1's waitFor: the step never shows
+    await begin();
+    expect(bubble()).toBeNull();
+    app('new-invoice-btn').click();
+    expect(sessionStorage.getItem(TOUR_RESUME_STORAGE_KEY)).toContain('invoice-title');
+    await tick(1);
+    expect(host.current!.stepId).toBe('invoice-title');
+    expect(of('tour-step').map((e) => [e.detail.stepId, e.detail.reason])).toEqual([['invoice-title', 'advance']]);
+  });
+
+  it('performs a later step still waiting for its target', async () => {
+    const save = await pendingSave();
+    save.click();
+    await tick(1);
+    expect(host.current!.stepId).toBe('invoice-detail');
+    expect(of('tour-step').map((e) => e.detail.stepId)).toEqual(['customer-select', 'invoice-detail']);
+  });
+
+  it('still counts when the step shows between the click and its report', async () => {
+    const save = await pendingSave();
+    save.click();
+    save.setAttribute('data-rect', '20,220,100,32');
+    save.classList.add('ready'); // a mutation the resolver watches
+    await settle();
+    dom.scheduler.flushFrames(); // the step resolves and shows first: a new token
+    expect(of('tour-step').at(-1)!.detail.stepId).toBe('save-invoice-btn');
+    await tick(1);
+    expect(host.current!.stepId).toBe('invoice-detail');
+  });
+});
+
 describe('when the app does not cooperate', () => {
   it('a missing target shows the fallback and reports target-timeout; Skip moves on', async () => {
     app('new-invoice-btn').remove();

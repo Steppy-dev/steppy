@@ -4,10 +4,15 @@
  * opt-in exception, below.
  *
  * - A click whose path holds the current step's test-id advances a ``click``
- *   step; a click on a *later* step's target jumps there (performed when that
- *   step is itself a click step). The resume record is written synchronously,
- *   before any navigation the click may cause; the engine is told on the next
- *   task so the app's handlers run first.
+ *   step — also before that step shows (still waiting for its element, the
+ *   fallback, lost or paused); a click on a *later* step's target jumps there
+ *   (performed when that step is itself a click step). The resume record is
+ *   written synchronously, before any navigation the click may cause; the
+ *   engine is told on the next task so the app's handlers run first. That
+ *   report is about the clicked step, not about the moment: it carries the
+ *   token current when it is sent, as long as the tour is still on that step
+ *   and these listeners still belong to the run (a step that showed in
+ *   between bumped the token, and must not void the click).
  * - ``input`` / ``change`` on an ``input`` step's target enable Next / commit.
  * - Any interaction outside the overlay arms a ``change`` step's watcher.
  * - Escape dismisses the tour unless the app is using it (a dialog, an open
@@ -67,11 +72,20 @@ function appPath(e: Event, host: HTMLElement): Element[] | null {
 
 export function attachTriggers(ctx: TriggerContext): () => void {
   const { host, attr } = ctx;
+  // Cleared on detach: a report deferred before the run ended must not reach the next one.
+  let attached = true;
   const current = (): { s: EngineState; step: TourStep } | null => {
     const s = ctx.state();
     if (!s.loaded || s.phase === 'idle' || s.phase === 'loading' || s.phase === 'entering') return null;
     return { s, step: s.loaded.tour.steps[s.index]! };
   };
+
+  /** Tell the engine on the next task, if it is still on step ``index``; the reducer judges the phase. */
+  const report = (index: number, event: (token: number) => EngineEvent) =>
+    ctx.defer(() => {
+      const s = ctx.state();
+      if (attached && s.loaded && s.index === index) ctx.dispatch(event(s.token));
+    });
 
   const onClick = (e: Event) => {
     const path = appPath(e, host);
@@ -82,10 +96,9 @@ export function attachTriggers(ctx: TriggerContext): () => void {
     if (!cur) return;
     const { s, step } = cur;
     const ids = new Set(path.map((el) => el.getAttribute(attr)).filter((v): v is string => v !== null));
-    const token = s.token;
-    if (s.phase === 'showing' && step.advance === 'click' && step.target !== null && ids.has(step.target)) {
+    if (step.advance === 'click' && step.target !== null && ids.has(step.target)) {
       ctx.persistAhead(s.index);
-      ctx.defer(() => ctx.dispatch({ type: 'TRIGGER', token, kind: 'click' }));
+      report(s.index, (token) => ({ type: 'TRIGGER', token, kind: 'click' }));
       return;
     }
     const steps = s.loaded!.tour.steps;
@@ -93,7 +106,7 @@ export function attachTriggers(ctx: TriggerContext): () => void {
     if (to === -1) return;
     const performed = steps[to]!.advance === 'click';
     if (performed) ctx.persistAhead(to);
-    ctx.defer(() => ctx.dispatch({ type: 'JUMP', token, to, performed }));
+    report(s.index, (token) => ({ type: 'JUMP', token, to, performed }));
   };
 
   const inTarget = (e: Event): boolean => {
@@ -178,6 +191,7 @@ export function attachTriggers(ctx: TriggerContext): () => void {
   document.addEventListener('keydown', onPress, opts);
   window.addEventListener('keydown', onEscape);
   return () => {
+    attached = false;
     document.removeEventListener('click', onClick, opts);
     document.removeEventListener('input', onInput, opts);
     document.removeEventListener('change', onChange, opts);

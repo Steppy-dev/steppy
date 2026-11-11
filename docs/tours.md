@@ -293,7 +293,11 @@ waits for the control's value or state to change; `visible` shows the step
 (centred until its element exists) and advances as soon as the step's own
 target is visible — for something that appears as a result of the previous
 step (if it is already on screen when the step is reached, the step passes at
-once without showing); `manual` waits for Next. Which ones a step accepts depends on its action,
+once without showing); `manual` waits for Next. A click on a `click` step's
+target counts as soon as the tour reaches the step, even before its popover
+appears (while the overlay still waits for the element, or for the `waitFor`
+gate a `wait-for` or an assertion before it set), so a user who knows the way
+is never asked to click twice. Which ones a step accepts depends on its action,
 because the CI replay must be able to perform it:
 
 | The step's action | Accepted `tour-advance` |

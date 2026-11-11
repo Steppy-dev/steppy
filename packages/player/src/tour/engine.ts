@@ -14,6 +14,10 @@
  * ``fallback`` (the "can't find this element" popover, with Skip / End); a
  * target that disappears while shown goes ``lost``, then ``paused`` (the pill)
  * when it stays away.
+ *
+ * A click on a step's target counts in every phase where that step is the
+ * tour's current one (``ON_STEP``), not only once its bubble shows: a user who
+ * clicks before the step appears has done what it asks.
  */
 
 import type { AdvanceKind, TourErrorReason } from './contract.js';
@@ -102,6 +106,9 @@ export function initialState(): EngineState {
 }
 
 export const isActive = (s: EngineState): boolean => s.phase !== 'idle' && s.phase !== 'loading';
+
+/** The phases in which a click on a step's target performs it: the step is current, shown or not. */
+const ON_STEP: ReadonlySet<Phase> = new Set<Phase>(['resolving', 'showing', 'lost', 'fallback', 'paused']);
 
 /** Position among applicable steps (0-based) and their count — what progress shows. */
 export function position(s: EngineState, index = s.index): { index: number; total: number } {
@@ -228,7 +235,10 @@ export function reduce(s: EngineState, e: EngineEvent): Transition {
     }
 
     case 'TRIGGER':
-      if (s.phase !== 'showing' || step(s).advance !== TRIGGER_FOR[e.kind]) return none;
+      // Only a click can come before the step shows: the other triggers come
+      // from watchers that run while it is shown.
+      if (!(e.kind === 'click' ? ON_STEP.has(s.phase) : s.phase === 'showing')) return none;
+      if (step(s).advance !== TRIGGER_FOR[e.kind]) return none;
       return advanceFrom(s, s.index, 'advance');
 
     case 'NEXT': {
@@ -246,8 +256,7 @@ export function reduce(s: EngineState, e: EngineEvent): Transition {
       return s.phase === 'showing' && s.fieldNonEmpty !== e.nonEmpty ? { state: { ...s, fieldNonEmpty: e.nonEmpty }, effects: [] } : none;
 
     case 'JUMP': {
-      const active = s.phase === 'showing' || s.phase === 'lost' || s.phase === 'paused' || s.phase === 'fallback';
-      if (!active || e.to <= s.index || !s.loaded!.applicable[e.to]) return none;
+      if (!ON_STEP.has(s.phase) || e.to <= s.index || !s.loaded!.applicable[e.to]) return none;
       return e.performed ? advanceFrom(s, e.to, 'jump') : resolveStep(s, e.to, 'jump');
     }
 

@@ -6,6 +6,21 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-11
+
+### Fixed
+- **A one-character bold in step text ran on to the next one.** `**…** then
+  **Delete**` rendered everything from `…` to `Delete` in bold, in the tour
+  bubble and in the interactive guide player. Each bold now closes at its own
+  delimiter, as the static guide (markdown-it) already did.
+- **A click on a tour step's target before its popover appeared was ignored.**
+  While the overlay still waited for the step's element (or the gate before
+  it), the click reached the app but not the tour, which then asked for the
+  same click again, or lost its target and paused. The click now performs the
+  step. That includes the first step, which had no listener at all until its
+  bubble showed, and a click whose report the step's own appearance used to
+  void.
+
 ## [0.9.1] - 2026-11-02
 
 ### Added
@@ -1189,7 +1204,8 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/Steppy-dev/steppy/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Steppy-dev/steppy/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Steppy-dev/steppy/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Steppy-dev/steppy/compare/v0.8.0...v0.8.1

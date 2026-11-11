@@ -168,6 +168,36 @@ describe('fallback, lost and paused', () => {
   });
 });
 
+describe('a click before its step shows', () => {
+  const resolving = () => run([{ type: 'REQUEST' }, { type: 'LOADED', loaded: loaded() }]).s;
+  const lost = () => run([{ type: 'TARGET_LOST', token: T }], started().s).s;
+
+  it.each([
+    ['resolving', resolving],
+    ['fallback', () => run([{ type: 'RESOLVE_TIMEOUT', token: T, testId: 'a', kind: 'target' }], resolving()).s],
+    ['lost', lost],
+    ['paused', () => run([{ type: 'LOST_TIMEOUT', token: T }], lost()).s],
+  ] as const)('performs a click step from %s', (phase, at) => {
+    const s = at();
+    expect(s.phase).toBe(phase);
+    const next = run([{ type: 'TRIGGER', token: T, kind: 'click' }], s);
+    expect(next.s).toMatchObject({ phase: 'resolving', index: 1, reason: 'advance' });
+    expect(next.effects).toContainEqual({ type: 'persist', index: 1 });
+  });
+
+  it('only for a click: the other triggers need the step shown', () => {
+    const atInput = run([{ type: 'TRIGGER', token: T, kind: 'click' }], started().s).s;
+    expect(atInput).toMatchObject({ phase: 'resolving', index: 1 });
+    expect(run([{ type: 'TRIGGER', token: T, kind: 'input-commit' }], atInput).s).toBe(atInput);
+    expect(run([{ type: 'TRIGGER', token: T, kind: 'click' }], atInput).s).toBe(atInput); // not a click step
+  });
+
+  it('a click on a later step jumps from a step still resolving', () => {
+    const { s } = run([{ type: 'JUMP', token: T, to: 2, performed: false }], resolving());
+    expect(s).toMatchObject({ phase: 'resolving', index: 2, reason: 'jump' });
+  });
+});
+
 describe('jumps', () => {
   it('a click on a later click-step target counts as performed', () => {
     const { s } = run([{ type: 'JUMP', token: T, to: 2, performed: true }], started().s);

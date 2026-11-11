@@ -1,9 +1,10 @@
 /**
  * The shared renderer with the guide's default policy produces the same DOM
  * as the pre-extraction renderer (``legacy-markdown.ts``), for a set of tricky
- * inputs plus every ``guide-text`` value in the repo's scenarios. The only
- * intended difference: protocol-relative ``//host`` and ``/\host`` links now
- * stay literal.
+ * inputs plus every ``guide-text`` value in the repo's scenarios. Two intended
+ * differences: protocol-relative ``//host`` and ``/\host`` links now stay
+ * literal, and a one-character bold (``**…**``) closes at its own delimiter
+ * instead of running on to the next one.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -61,6 +62,13 @@ const INPUTS = [
 ];
 
 const CHANGED = ['[proto](//evil.example/x)', '[proto](/\\evil.example/x)', 'go [here](//a.b) or [there](/c)'];
+
+/** One-character bold followed by another delimiter: the legacy renderer swallowed the text between them. */
+const FIXED: [string, string[]][] = [
+  ['Open **…** then **Delete**', ['…', 'Delete']],
+  ['__a__ and __b__', ['a', 'b']],
+  ['**x**y**', ['x']],
+];
 
 function dom(nodes: unknown): string {
   const el = document.createElement('div');
@@ -135,5 +143,12 @@ describe('guide markdown parity with the pre-extraction renderer', () => {
     const legacy = document.createElement('div');
     render(legacyRenderInlineMarkdown(input), legacy);
     expect(legacy.querySelectorAll('a').length).toBeGreaterThan(now.querySelectorAll('a').length);
+  });
+
+  it.each(FIXED)('now closes the one-character bold in %j at its own delimiter', (input, bold) => {
+    const now = document.createElement('div');
+    render(renderInlineMarkdown(input), now);
+    expect([...now.querySelectorAll('strong')].map((s) => s.textContent)).toEqual(bold);
+    expect(dom(renderInlineMarkdown(input))).not.toBe(dom(legacyRenderInlineMarkdown(input)));
   });
 });

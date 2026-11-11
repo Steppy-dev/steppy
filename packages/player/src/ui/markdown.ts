@@ -64,9 +64,10 @@ export const GUIDE_LINK_POLICY: LinkPolicy = {
 
 // 1 code | 2 link-label 3 link-url | 4 bold-delim 5 bold | 6 em-delim 7 em | 8 url/www | 9 email
 // The link URL is any run up to ")" without whitespace; the policy decides
-// whether it becomes a link.
+// whether it becomes a link. The bold tail is lazy (``??``): greedy, a
+// one-character bold (``**…**``) ran on to the next ``**`` in the text.
 const INLINE_SRC =
-  '`([^`]+)`|\\[([^\\]]+)\\]\\(([^\\s)]+)\\)|(\\*\\*|__)(\\S(?:.*?\\S)?)\\4|(\\*|_)([^*_\\s](?:[^*_]*?[^*_\\s])?)\\6|(https?:\\/\\/[^\\s<>()]+|www\\.[^\\s<>()]+)|([\\w.+-]+@[\\w-]+\\.[\\w.-]+\\w)';
+  '`([^`]+)`|\\[([^\\]]+)\\]\\(([^\\s)]+)\\)|(\\*\\*|__)(\\S(?:.*?\\S)??)\\4|(\\*|_)([^*_\\s](?:[^*_]*?[^*_\\s])?)\\6|(https?:\\/\\/[^\\s<>()]+|www\\.[^\\s<>()]+)|([\\w.+-]+@[\\w-]+\\.[\\w.-]+\\w)';
 
 export function renderInlineMarkdown(src: string, policy: LinkPolicy = GUIDE_LINK_POLICY): MarkdownNode[] {
   const parts: MarkdownNode[] = [];

@@ -414,6 +414,23 @@ def test_clicking_a_later_step_jumps_ahead(open_demo):
     assert reasons["customer-select"] == "jump"
 
 
+def test_a_click_before_the_step_appears_still_counts(open_demo):
+    page = open_demo()
+    # The first step also waits for the invoice list (its waitFor): without the
+    # list's test-id it stays pending and its bubble never appears.
+    page.evaluate("document.querySelector('[data-testid=\"invoice-list\"]').removeAttribute('data-testid')")
+    start(page)
+    wait_event(page, "tour-start")
+    page.wait_for_timeout(300)  # two resolver polls: the step is still waiting
+    assert page.locator(f"{BUBBLE}[data-placed]").count() == 0
+    page.click('[data-testid="new-invoice-btn"]')
+    at_step(page, "invoice-title")
+    assert [(e["detail"]["stepId"], e["detail"]["reason"]) for e in events(page, "tour-step")] == [
+        ("invoice-title", "advance")
+    ]
+    assert page.errors == []
+
+
 def test_a_lost_target_pauses_then_resumes_by_itself(open_demo):
     page = open_demo(config={"targetTimeout": 1000})
     start(page)

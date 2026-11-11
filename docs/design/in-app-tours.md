@@ -160,7 +160,7 @@ TypeScript config needs Node. Tours are configured in `config.yaml`.
 | DV21 | — | Many `::part`s, `:root`-settable custom properties, inherited font | Theming without piercing shadow DOM |
 | DV22 | Listeners on targets | Document capture listeners with `composedPath` | Targets are re-rendered by frameworks |
 | DV23 | Trusted events only | Untrusted events accepted | The replay and synthetic clicks |
-| DV24 | — | A click on a later click step counts as performed (jump-ahead) | Users skip ahead |
+| DV24 | — | A click on a later click step counts as performed (jump-ahead), and a click on the current one counts before its bubble shows | Users skip ahead, and click before the popover appears |
 | DV25 | Escape dismisses | Unless the app uses it (dialog, open popup, `preventDefault`) | Escape closes app dialogs |
 | DV26 | Focus on each step | Only manual and fallback steps take focus | Focus belongs to the app |
 | DV27 | Accent `#d24f2c` | `#a8410e` | 4.29:1 fails AA on buttons; 6.13:1 passes |

@@ -493,6 +493,9 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
 
   private _afterRender(): void {
     const s = this._s;
+    // Listening starts with the first pending step, not its bubble: a click
+    // on its target before the step shows still performs it.
+    if (isActive(s) && s.phase !== 'entering') this._ensureTriggers();
     const layer = this._layer();
     const shown = s.phase === 'showing' || s.phase === 'fallback' || s.phase === 'paused';
     if (!layer || !shown || !s.loaded) {
@@ -503,7 +506,6 @@ export class SteppyTourHost extends LitElement implements TourHostApi {
       return;
     }
     showLayer(layer, this._dom);
-    this._ensureTriggers();
     const step = s.loaded.tour.steps[s.index]!;
     const key = `${s.loaded.tour.id}/${s.index}/${s.phase}`;
     const fresh = key !== this._shownKey;

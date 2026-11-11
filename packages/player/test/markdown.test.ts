@@ -65,6 +65,19 @@ describe('renderInlineMarkdown', () => {
     expect(el.querySelector('code')?.textContent).toBe('c');
   });
 
+  it('closes a one-character bold at its own delimiter', () => {
+    const el = mount('Open **…** then **Delete**');
+    expect([...el.querySelectorAll('strong')].map((s) => s.textContent)).toEqual(['…', 'Delete']);
+    expect(el.textContent).toBe('Open … then Delete');
+    expect([...mount('__a__ and __b__').querySelectorAll('strong')].map((s) => s.textContent)).toEqual(['a', 'b']);
+  });
+
+  it('leaves a delimiter after a closed bold literal, as markdown-it does', () => {
+    const el = mount('**x**y**');
+    expect([...el.querySelectorAll('strong')].map((s) => s.textContent)).toEqual(['x']);
+    expect(el.textContent).toBe('xy**');
+  });
+
   it('nests emphasis (bold containing italic)', () => {
     const el = mount('**bold _italic_ end**');
     const strong = el.querySelector('strong');

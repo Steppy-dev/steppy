@@ -1,35 +1,31 @@
-"""``steppy bundle upload`` — push one run's results to a control plane.
+"""Upload one run to a Steppy Cloud instance: the protocol of :mod:`steppy.contracts.upload`.
 
-The protocol is content-addressed and has three steps::
+Three calls, all with the project's API key::
 
-    ① POST /v1/runs/{id}/bundle           manifest  → PUT URLs for missing digests
-    ② PUT  <presigned url>                bytes     → the object store, directly
-    ③ POST /v1/runs/{id}/bundle/finalize  verify    → ingestion is queued
+    ① POST /v1/runs                   the manifest, report.json among its files
+                                      → one upload URL per wanted, missing file
+    ② PUT  <upload url>               the bytes, straight to storage
+    ③ POST /v1/runs/{id}/finalize     → the run's URL
 
 Step ① is the whole point. With locales x layouts x device scale factors an
-unchanged screenshot dominates a bundle, so the server answers with URLs *only*
-for digests it does not already hold — megabytes instead of hundreds of them.
+unchanged screenshot dominates a run, and the server only keeps what it wants
+(by default the screenshots of failed variants), so it answers with URLs *only*
+for the files it wants and does not hold yet — megabytes instead of hundreds of
+them.
 
-**No archive is written.** The upload is per-file, so a ``.tar.zst`` would be
+The ``Idempotency-Key`` of ① is the run's own id, which makes the protocol
+resumable without bookkeeping: an interrupted upload run again gets the same
+run back with what is still missing, and an upload URL that expired mid-batch
+is replaced by asking once more.
+
+**No archive is written.** The upload is per file, so a ``.tar.zst`` would be
 created only to be read back and thrown away. Uploading from a live ``output/``
 tree is therefore the default; an existing bundle is accepted too, for a CI job
 that built one in an earlier step.
-
-Around those three calls sits the run lifecycle, and the shape of it is not
-arbitrary: a locally-executed run is **one whole-run task that the uploader
-claims**. That is what gives the plane's watchdog, cancellation, task counts and
-verdict SQL something to operate on, all of which already exist. It is also
-exactly what ``steppy ci run`` will do, minus the running::
-
-    POST /v1/runs                      executor=local → run + one kind='run' task
-    POST /v1/runs/{id}/claim                          → claim token
-    ①②③
-    POST /v1/tasks/{tid}/complete                     → the run reaches a verdict
 """
 
 from __future__ import annotations
 
-import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from io import BytesIO
@@ -40,34 +36,34 @@ from typing import Any, BinaryIO, Callable, Iterator, Optional, Protocol
 from ..bundle import BundlePlan, inspect_bundle
 from ..bundle.archive import open_archive
 from ..bundle.create import MANIFEST_NAME
-from ..contracts.bundle import BundleManifest
+from ..contracts.bundle import BundleFile, BundleManifest
+from ..contracts.upload import (
+    IDEMPOTENCY_HEADER,
+    REPORT_KIND,
+    REPORT_PATH,
+    CreateRunRequest,
+    CreateRunResponse,
+    FinalizeResponse,
+    KeyResponse,
+    UploadTarget,
+)
 from .client import CloudClient, CloudError
 
 Opener = Callable[[], BinaryIO]
 
-#: A presigned URL that has expired. S3 and MinIO both answer 403; a malformed
+#: An upload URL that has expired. S3 and MinIO both answer 403; a malformed
 #: one answers 400. Either way the fix is the same — ask for fresh URLs — so
 #: they are treated together.
 _EXPIRED = frozenset({400, 403})
 
-#: Test outcomes that make a run red. `interrupted` and `worker_died` are
-#: included: a test that never finished is not a pass, and reporting one as
-#: green is the single worst thing this function could do.
-_FAILING_OUTCOMES = frozenset({"failed", "error", "interrupted", "worker_died"})
 
-
-def derive_exit_code(manifest: BundleManifest) -> int:
-    """The run's verdict, read off the manifest.
-
-    Derived rather than observed, because upload happens after the fact and the
-    real exit code is long gone. A caller that *does* know it — ``steppy ci
-    run``, later — passes it explicitly instead.
-
-    An empty ``tests[]`` yields 0. That is honest (the bundle records no
-    failure) but it is also why ``steppy bundle create`` warns when the list is
-    empty: without ``steppy run --bundle`` there are no outcomes to read.
-    """
-    return 1 if any(t.outcome in _FAILING_OUTCOMES for t in manifest.tests) else 0
+def check_key(client: CloudClient) -> KeyResponse:
+    """``GET /v1/key``: the project the key belongs to. Raises on a refused key."""
+    payload = client.get("/key")
+    try:
+        return KeyResponse.model_validate(payload)
+    except ValueError as e:
+        raise CloudError(f"GET /key: the answer is not a project ({e})") from e
 
 
 @dataclass(frozen=True)
@@ -97,8 +93,8 @@ class TreeSource:
     """A live ``output/`` tree, via a :class:`~steppy.bundle.BundlePlan`.
 
     The default, and the fast one: every blob is a file on disk (or, for the
-    two generated members, bytes already in hand), so openers are independent
-    and uploads run concurrently.
+    generated members, bytes already in hand), so openers are independent and
+    uploads run concurrently.
 
     Path resolution goes through :func:`~steppy.bundle.archive_members` rather
     than joining ``output_dir`` with each manifest path — ``junit.xml`` and the
@@ -108,8 +104,9 @@ class TreeSource:
 
     max_concurrency = 0
 
-    def __init__(self, plan: BundlePlan) -> None:
+    def __init__(self, plan: BundlePlan, *, output_dir: Optional[Path] = None) -> None:
         self.plan = plan
+        self.output_dir = output_dir
         self.manifest = plan.manifest
         sha_by_path = {f.path: f.sha256 for f in plan.manifest.files}
         openers: dict[str, Opener] = {}
@@ -136,14 +133,14 @@ class TreeSource:
 
     def blobs(self, wanted: frozenset[str]) -> Iterator[Blob]:
         by_sha = {f.sha256: f for f in self.manifest.files}
-        for sha in wanted:
+        for sha in sorted(wanted):
             opener = self._openers.get(sha)
             entry = by_sha.get(sha)
             if opener is None or entry is None:
-                # The server asked for a digest this bundle does not describe.
+                # The server asked for a digest this run does not describe.
                 # Impossible unless the manifest and the plan disagree, which is
                 # worth failing on rather than uploading something else.
-                raise CloudError(f"the server asked for digest {sha[:12]}…, which is not in this bundle")
+                raise CloudError(f"the server asked for digest {sha[:12]}…, which is not in this run")
             yield Blob(sha256=sha, size=entry.size, open=opener)
 
 
@@ -191,182 +188,142 @@ class ArchiveSource:
             )
 
 
+class ReportedSource:
+    """A source with the run's ``report.json`` added: what is actually uploaded.
+
+    The report is a file like the others (:mod:`steppy.contracts.upload`): an
+    entry in the manifest at :data:`~steppy.contracts.upload.REPORT_PATH`, and
+    bytes the server may ask for. It exists only in memory — neither the
+    ``output/`` tree nor an archive holds it.
+    """
+
+    def __init__(self, inner: BlobSource, report: bytes) -> None:
+        from ..bundle.hashing import sha256_bytes
+
+        self.inner = inner
+        self.report = report
+        self.report_entry = BundleFile(
+            path=REPORT_PATH, kind=REPORT_KIND, sha256=sha256_bytes(report), size=len(report)
+        )
+        files = [f for f in inner.manifest.files if f.path != REPORT_PATH] + [self.report_entry]
+        files.sort(key=lambda f: f.path)
+        self.manifest = inner.manifest.model_copy(update={"files": files})
+        self.max_concurrency = inner.max_concurrency
+
+    def blobs(self, wanted: frozenset[str]) -> Iterator[Blob]:
+        entry = self.report_entry
+        if entry.sha256 in wanted:
+            data = self.report
+            yield Blob(sha256=entry.sha256, size=entry.size, open=lambda: BytesIO(data))
+        rest = wanted - {entry.sha256}
+        if rest:
+            yield from self.inner.blobs(frozenset(rest))
+
+
+def attach_report(source: TreeSource | ArchiveSource, *, project_root: Path):
+    """Build the run's ``report.json`` and add it to *source*.
+
+    Returns ``(ReportedSource, ReportModel)``. Built by the same code as
+    ``steppy report`` (``build_model``), with captures referenced by their
+    manifest path rather than copied into a site.
+    """
+    from ..contracts.report import report_bytes
+    from ..report.build import build_document
+    from ..report.source import from_plan, open_source
+
+    if isinstance(source, TreeSource):
+        report_source = from_plan(source.plan, project_root=project_root, output_dir=source.output_dir)
+    else:
+        report_source = open_source(source.path, project_root=project_root)
+    model = build_document(report_source, project_root=project_root)
+    return ReportedSource(source, report_bytes(model)), model
+
+
 @dataclass
 class UploadOutcome:
-    """What happened, in the shape the CLI prints and `--json` emits."""
+    """What happened, in the shape the CLI prints and ``--json`` emits."""
 
     run_id: str
-    run_number: int
-    run_status: str
-    created_run: bool
-    task_id: Optional[str] = None
-    #: Blobs the server confirmed were present in the object store.
-    verified: int = 0
+    number: Optional[int] = None
+    #: The run's page, from finalize (or create, when finalize gave none).
+    url: Optional[str] = None
+    #: The run's status after finalize, as the server reports it.
+    status: Optional[str] = None
+    #: Manifest entries, ``report.json`` included.
     total_files: int = 0
     #: Distinct digests among those files. Lower than `total_files` whenever a
     #: screenshot is byte-identical across locales or layouts — and **this**, not
-    #: `total_files`, is what `uploaded` and `already_held` are counted against.
-    #: The server's `already_held` is in digests while its `total_files` is in
-    #: files, so reporting one against the other reads as a discrepancy.
+    #: `total_files`, is what `requested` and `uploaded` are counted against.
     total_blobs: int = 0
+    #: Digests the server asked for: wanted, and not held yet.
+    requested: int = 0
     uploaded: int = 0
     uploaded_bytes: int = 0
-    already_held: int = 0
-    #: Bytes the content-addressed protocol saved — the whole argument for it,
-    #: in numbers the user can see.
-    skipped_bytes: int = 0
     payload_bytes: int = 0
-    exit_code: int = 0
     warnings: list[str] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "run_id": self.run_id,
-            "run_number": self.run_number,
-            "run_status": self.run_status,
-            "created_run": self.created_run,
-            "task_id": self.task_id,
-            "verified": self.verified,
+            "number": self.number,
+            "url": self.url,
+            "status": self.status,
             "total_files": self.total_files,
             "total_blobs": self.total_blobs,
+            "requested": self.requested,
             "uploaded": self.uploaded,
             "uploaded_bytes": self.uploaded_bytes,
-            "already_held": self.already_held,
-            "skipped_bytes": self.skipped_bytes,
             "payload_bytes": self.payload_bytes,
-            "exit_code": self.exit_code,
             "warnings": self.warnings,
         }
-
-
-def _run_spec(manifest: BundleManifest) -> dict[str, Any]:
-    """`BundleSpec` → the plane's `RunSpec`.
-
-    Not a passthrough: the bundle records a single ``tag`` (whatever the run was
-    invoked with) while the plane's spec takes a ``tags`` list, and the plane
-    carries reporting fields a bundle never sees. `RunSpec` is `extra="forbid"`,
-    so sending the bundle's shape verbatim would be a 422.
-    """
-    spec = manifest.run.spec
-    raw_tag = spec.tag
-    if raw_tag is None:
-        tags: list[str] = []
-    elif isinstance(raw_tag, (list, tuple)):
-        tags = [str(t) for t in raw_tag]
-    else:
-        tags = [str(raw_tag)]
-
-    return {
-        "scenario": spec.scenario,
-        "tags": tags,
-        "guide": spec.guide,
-        "no_guide": spec.no_guide,
-        "no_asserts": spec.no_asserts,
-        "screenshots": spec.screenshots,
-        "coverage": spec.coverage,
-        "locales": list(spec.locales),
-        "layouts": list(spec.layouts),
-        "workers": spec.workers,
-    }
-
-
-def _scenarios(manifest: BundleManifest) -> list[str]:
-    return sorted({t.scenario for t in manifest.tests if t.scenario})
-
-
-def _create_run(client: CloudClient, manifest: BundleManifest, *, executor: str, trigger: str) -> dict[str, Any]:
-    """Create the plane-side run, idempotently.
-
-    The bundle's own ``run_id`` is the idempotency key. It is stable across
-    retries of the same upload and unique across runs, which is exactly what
-    ``Idempotency-Key`` wants — so a second `steppy bundle upload` after a
-    network failure attaches to the run the first one made instead of burning a
-    second run number for one set of results.
-    """
-    payload = {
-        "trigger": trigger,
-        "executor": executor,
-        "spec": _run_spec(manifest),
-        "git": {
-            "sha": manifest.run.git.sha,
-            "branch": manifest.run.git.branch,
-            "pr_number": manifest.run.git.pr,
-        },
-        "scenarios": _scenarios(manifest),
-    }
-    return client.post("/runs", json=payload, headers={"Idempotency-Key": manifest.run.run_id})
-
-
-def _claim(client: CloudClient, run_id: str, *, steppy_version: str, runner: str, timeout: float) -> dict[str, Any]:
-    """Take ownership of the run's whole-run task.
-
-    Retries while the run is still ``queued``, because dispatch is a background
-    job: the run exists the instant ``POST /runs`` answers, but its task is
-    written a moment later by a worker. Retrying blind would be wrong — a 409 on
-    an already-dispatched run means somebody else owns it — so the run's status
-    is what decides whether to wait.
-    """
-    deadline = time.monotonic() + timeout
-    delay = 0.25
-    while True:
-        try:
-            return client.post(
-                f"/runs/{run_id}/claim",
-                json={"steppy_version": steppy_version, "runner": runner},
-            )
-        except CloudError as e:
-            if e.status != 409:
-                raise
-            status = (client.get(f"/runs/{run_id}") or {}).get("status")
-            if status != "queued":
-                raise CloudError(
-                    f"run {run_id} is {status!r} and cannot be claimed — another executor owns it, "
-                    "or it was cancelled. Upload to a new run, or pass --run-id for a different one",
-                    status=409,
-                ) from None
-            if time.monotonic() >= deadline:
-                raise CloudError(
-                    f"run {run_id} was still queued after {timeout:.0f}s — the control plane's "
-                    "background worker may not be running",
-                    status=409,
-                ) from None
-            time.sleep(delay)
-            delay = min(delay * 2, 2.0)
-
-
-def _offer(client: CloudClient, run_id: str, manifest: BundleManifest, *, token: str) -> dict[str, Any]:
-    return client.post(f"/runs/{run_id}/bundle", json=manifest.model_dump(mode="json"), token=token)
 
 
 @dataclass
 class _Sent:
     """Upload progress, counted as it happens rather than inferred afterwards.
 
-    Mutable and shared with :func:`_put_all` on purpose: when a presigned URL
-    expires mid-batch the exception carries no partial result, and reconstructing
-    "how far did we get" from the next offer is guesswork. This is the one place
-    the answer is known.
+    Mutable and shared with :func:`_put_all` on purpose: when an upload URL
+    expires mid-batch the exception carries no partial result, and
+    reconstructing "how far did we get" from the next create is guesswork. This
+    is the one place the answer is known.
     """
 
     count: int = 0
     nbytes: int = 0
 
 
+def _create(client: CloudClient, manifest: BundleManifest) -> CreateRunResponse:
+    """``POST /v1/runs``, keyed by the run's own id.
+
+    That id is stable across retries of one upload and unique across runs, which
+    is exactly what ``Idempotency-Key`` wants: a second upload after a network
+    failure gets the run the first one made, instead of a second run for one set
+    of results.
+    """
+    body = CreateRunRequest(manifest=manifest).model_dump(mode="json", exclude_none=False)
+    payload = client.post("/runs", json=body, headers={IDEMPOTENCY_HEADER: manifest.run.run_id})
+    try:
+        return CreateRunResponse.model_validate(payload)
+    except ValueError as e:
+        raise CloudError(f"POST /runs: the answer is not a run ({e})") from e
+
+
 def _put_all(
     client: CloudClient,
     source: BlobSource,
-    targets: list[dict[str, Any]],
+    targets: list[UploadTarget],
     *,
     concurrency: int,
     sent: _Sent,
     on_progress: Optional[Callable[[Blob], None]],
 ) -> None:
     """PUT every target, recording progress into *sent* as each one lands."""
-    by_sha = {t["sha256"]: t for t in targets}
+    by_sha = {t.sha256: t for t in targets}
     lock = Lock()
 
     def put(blob: Blob) -> None:
-        client.put_blob(by_sha[blob.sha256]["url"], blob.open, blob.size)
+        target = by_sha[blob.sha256]
+        client.put_blob(target.url, blob.open, blob.size, headers=target.headers)
         with lock:
             sent.count += 1
             sent.nbytes += blob.size
@@ -388,110 +345,69 @@ def _put_all(
         list(pool.map(put, blobs))
 
 
-def upload_bundle(
+def upload_run(
     client: CloudClient,
     source: BlobSource,
     *,
-    run_id: Optional[str] = None,
-    executor: str = "local",
-    trigger: str = "manual",
-    exit_code: Optional[int] = None,
-    duration_ms: Optional[int] = None,
     concurrency: int = 4,
-    claim_timeout: float = 60.0,
-    settle_timeout: float = 30.0,
     on_progress: Optional[Callable[[Blob], None]] = None,
 ) -> UploadOutcome:
-    """Push ``source``'s bundle to the plane and take the run to a verdict."""
+    """Create the run, send what the server asks for, finalize it.
+
+    *source* must already carry ``report.json`` (:func:`attach_report`): the
+    server ingests the run from it and refuses to finalize without it.
+    """
     manifest = source.manifest
-    created = run_id is None
+    known = {f.sha256 for f in manifest.files}
 
-    run = (
-        _create_run(client, manifest, executor=executor, trigger=trigger) if created else client.get(f"/runs/{run_id}")
-    )
-    run_id = str(run["id"])
-
-    job = _claim(
-        client,
-        run_id,
-        steppy_version=manifest.run.steppy_version,
-        runner=f"{executor} upload",
-        timeout=claim_timeout,
-    )
-    token = job["claim_token"]
-    task_id = job["task_id"]
-
-    offer = _offer(client, run_id, manifest, token=token)
+    created = _create(client, manifest)
+    run_id = created.run_id
+    requested = {t.sha256 for t in created.uploads}
     sent = _Sent()
 
-    # One re-offer, no more. A URL that expires mid-upload is ordinary on a slow
-    # link; the offer is keyed on (run, task) and reports what is already held,
-    # so re-offering returns only the remainder and nothing is re-sent. A second
-    # expiry means the URL lifetime is shorter than a single blob takes, which
-    # is a server setting, not something to retry through.
+    # One re-create, no more. A URL that expires mid-upload is ordinary on a
+    # slow link; creating the same run again returns only what is still
+    # missing, so nothing already sent is sent twice. A second expiry means the
+    # URL lifetime is shorter than a single file takes, which is a server
+    # setting, not something to retry through.
     for attempt in (0, 1):
-        if not offer["uploads"]:
+        targets = created.uploads
+        unknown = {t.sha256 for t in targets} - known
+        if unknown:
+            raise CloudError(
+                f"the server asked for {len(unknown)} digest(s) this run does not describe ({sorted(unknown)[0][:12]}…)"
+            )
+        if not targets:
             break
         try:
-            _put_all(client, source, offer["uploads"], concurrency=concurrency, sent=sent, on_progress=on_progress)
+            _put_all(client, source, targets, concurrency=concurrency, sent=sent, on_progress=on_progress)
             break
         except CloudError as e:
             if e.status not in _EXPIRED or attempt == 1:
                 raise
-            offer = _offer(client, run_id, manifest, token=token)
+            created = _create(client, manifest)
+            if created.run_id != run_id:
+                raise CloudError(
+                    f"creating the run again returned another run ({created.run_id}, not {run_id}): "
+                    "the server ignored the Idempotency-Key"
+                ) from e
 
-    finalized = client.post(f"/runs/{run_id}/bundle/finalize", token=token)
-
-    # **Finalize before complete, always.** Completing first would let
-    # `close_if_finished` run with no bundle pending, close the run, and then
-    # refuse to move it to `ingesting` when the bundle lands — the plane's close
-    # statement guards on the run not already being terminal. The results would
-    # still be ingested; the run's status would just be a lie.
-    resolved_exit = derive_exit_code(manifest) if exit_code is None else exit_code
-    client.post(
-        f"/tasks/{task_id}/complete",
-        json={"exit_code": resolved_exit, "duration_ms": duration_ms},
-        token=token,
-    )
-
-    status = _settle(client, run_id, timeout=settle_timeout)
-    payload_bytes = sum(f.size for f in manifest.files)
+    payload = client.post(f"/runs/{run_id}/finalize")
+    try:
+        finalized = FinalizeResponse.model_validate(payload or {})
+    except ValueError as e:
+        raise CloudError(f"POST /runs/{run_id}/finalize: the answer is not a run ({e})") from e
 
     return UploadOutcome(
         run_id=run_id,
-        run_number=int(run.get("number", 0)),
-        run_status=status,
-        created_run=created,
-        task_id=task_id,
-        verified=int(finalized.get("verified", 0)) if isinstance(finalized, dict) else 0,
-        total_files=int(offer.get("total_files", len(manifest.files))),
-        total_blobs=len(manifest.digests()),
+        number=finalized.number if finalized.number is not None else created.number,
+        url=finalized.url or created.url,
+        status=finalized.status,
+        total_files=len(manifest.files),
+        total_blobs=len(known),
+        requested=len(requested),
         uploaded=sent.count,
         uploaded_bytes=sent.nbytes,
-        already_held=int(offer.get("already_held", 0)),
-        # Derived from what was sent, not from the offer: after a re-offer the
-        # offer's `already_held` describes the second round only.
-        skipped_bytes=max(0, payload_bytes - sent.nbytes),
-        payload_bytes=payload_bytes,
-        exit_code=resolved_exit,
+        payload_bytes=sum(f.size for f in manifest.files),
         warnings=list(manifest.warnings),
     )
-
-
-def _settle(client: CloudClient, run_id: str, *, timeout: float) -> str:
-    """Wait briefly for ingestion to land the run's verdict.
-
-    Ingestion is a background job, so `complete` leaves the run at `ingesting`
-    for a moment. Waiting makes the command's last line the truth rather than a
-    waypoint — but only briefly: a slow queue is not this command's failure, and
-    the bundle is safely stored either way. Whatever status we have when the
-    clock runs out is reported as-is.
-    """
-    deadline = time.monotonic() + timeout
-    status = "unknown"
-    while True:
-        run = client.get(f"/runs/{run_id}") or {}
-        status = str(run.get("status", status))
-        if status not in ("ingesting", "running", "queued", "dispatched") or time.monotonic() >= deadline:
-            return status
-        time.sleep(1.0)

@@ -2088,22 +2088,24 @@ class SecurityConfig(BaseModel):
 
 
 class CloudConfig(BaseModel):
-    """Where ``steppy bundle upload`` pushes results.
+    """Where ``steppy run --upload`` and ``steppy bundle upload`` send a run.
 
-    **The URL only, never a token.** A control-plane token is a credential, and
+    **The address only, never a key.** An API key is a credential, and
     ``config.yaml`` is committed — the same line :func:`config._check_credential_hygiene`
-    already draws for ``apps.*.auth.credentials``. The token comes from
-    ``STEPPY_CLOUD_TOKEN`` or ``--token``, and there is deliberately no config
-    key for it to be pasted into.
+    already draws for ``apps.*.auth.credentials``. The key comes from
+    ``STEPPY_API_KEY`` (or ``--api-key`` on ``steppy bundle upload``), and there
+    is deliberately no config key for it to be pasted into.
 
-    Wholly optional and inert when absent, like ``parallel:`` and ``coverage:``.
-    Nothing in Steppy assumes a control plane exists; this block is read by one
-    command and ignored by every other.
+    The last place the address is looked for, after ``--url``, ``STEPPY_URL``
+    and ``STEPPY_CLOUD_URL``. Wholly optional and inert when absent, like
+    ``parallel:`` and ``coverage:``. Nothing in Steppy assumes a Steppy Cloud
+    instance exists; this block is read by the two upload commands and ignored
+    by every other.
     """
 
-    #: Base URL of the control plane, e.g. ``https://steppy.example.com``. No
-    #: version path — the client appends ``/v1``, so a server that moves to v2
-    #: does not need every project to edit its config.
+    #: The Steppy Cloud instance's address, e.g. ``https://steppy.example.com``,
+    #: like ``STEPPY_URL``. No API path — the client appends ``/api/v1``, so a
+    #: server that moves to v2 does not need every project to edit its config.
     url: Optional[str] = None
 
     class Config:
@@ -2547,8 +2549,9 @@ class SteppyConfig(BaseModel):
     # `steppy guide --video` for guides declaring `modes: ['video']`; every
     # other command ignores this block entirely.
     video: VideoConfig = Field(default_factory=VideoConfig)
-    # Optional. Only consulted by `steppy bundle upload`. Holds the control
-    # plane's URL and nothing else — the token is env-only, on purpose.
+    # Optional. Only consulted by `steppy run --upload` and `steppy bundle
+    # upload`. Holds the instance's address and nothing else — the API key is
+    # env-only, on purpose.
     cloud: Optional[CloudConfig] = None
     # Optional. In-app tours compiled from `tour:`-enabled scenarios. Declared
     # last so its validator can read every other block (locales, layouts).

@@ -521,8 +521,10 @@ failed run is one download rather than a scavenger hunt. `--no-videos` / `--no-t
 `--no-guides` trim it; `--max-size 2GiB` drops the cheapest-to-lose artifacts first and
 marks the manifest `truncated`.
 
-`steppy bundle upload` pushes to a Steppy control plane, which is optional and out of
-scope here — everything above works with no plane at all.
+`steppy run --upload` (or `steppy bundle upload` after the run) sends a run to Steppy
+Cloud, which is optional and out of scope here — everything above works with no cloud at
+all, and nothing is uploaded unless one of those is asked for. The author skill's
+"Uploading a run to Steppy Cloud" section covers it.
 
 ---
 
@@ -560,7 +562,7 @@ Those need memory across runs, which is a control plane's job. Do not try to bui
 on top of `steppy report`. Two things that *do* exist for the adjacent needs:
 `steppy flaky` ranks scenarios by flake rate from `.steppy/history.jsonl` (parallel runs
 only — cache that file between CI runs or the history evaporates), and
-`steppy bundle upload` hands a run to a plane if the project has one.
+`steppy run --upload` hands a run to Steppy Cloud if the project has one.
 
 Nor is there an **analytics backend for in-app tours**. The overlay sends nothing anywhere:
 its events (`tour-start`, `tour-step`, `tour-complete`, `tour-dismiss`, `tour-offpath`,

@@ -6,6 +6,46 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`steppy run --upload`** sends the run to Steppy Cloud once the tests are
+  done, failed or not, and prints the run's URL. It reads `STEPPY_API_KEY` (the
+  project's key) and `STEPPY_URL` (the instance's address; the client appends
+  `/api/v1`). Before any test runs it checks the key with the server and prints
+  the project: no key or no address stops the command, and so does a key the
+  server refuses, while a server that cannot be reached only gets a warning. A
+  failed upload is a warning too, and the tests' exit code stands.
+  **`--require-upload`** implies `--upload` and makes a failed upload fail the
+  command. Without either flag nothing is uploaded, even with a key set.
+- **The upload protocol is a published contract**: `steppy.contracts.upload`
+  and `contracts/upload.schema.json`, the models of `GET /v1/key`,
+  `POST /v1/runs`, `POST /v1/runs/{id}/finalize` and the error body. The bundle
+  and report contracts are unchanged (`steppy_bundle: 1`, `steppy_report: 1`).
+
+### Changed
+- **`steppy bundle upload` speaks the new protocol**: it builds the run's
+  `report.json` (the model `steppy report` writes, with each capture referenced
+  by its path in the manifest), creates the run with the manifest of its files,
+  `report.json` among them, uploads only the files the server wants and does
+  not hold yet, and finalizes. Every call uses the API key. Uploading the same
+  run again returns the same run and sends only what is still missing. It exits
+  1 when the upload fails.
+- **New names for the address and the key**: `STEPPY_URL` and `STEPPY_API_KEY`,
+  then `STEPPY_CLOUD_URL` and `STEPPY_CLOUD_TOKEN` as aliases. `STEPPY_CLOUD_URL`
+  keeps its meaning (an API base, to which `/v1` is appended), while `--url`,
+  `STEPPY_URL` and `cloud.url` in `config.yaml` are the instance's address. The
+  key flag is `--api-key`; `--token` still works.
+- **Requests time out after 10 s to connect**, and 429, 5xx and network errors
+  are retried twice (three times before). A refused key is never retried, a 422
+  prints the server's explanation, and a 413 says the manifest is too large.
+
+### Removed
+- **The claim-and-task upload protocol** (`/claim`, the bundle offer,
+  `/tasks/{id}/complete`, waiting for the run's status), with
+  `steppy bundle upload`'s `--attach` and `--exit-code`: the server now reads
+  the verdict from `report.json`. No server speaks the old protocol, and
+  `steppy.cloud`'s `upload_bundle`, `derive_exit_code` and `cloud_client` went
+  with it.
+
 ## [0.9.2] - 2026-11-11
 
 ### Fixed

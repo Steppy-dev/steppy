@@ -1,169 +1,31 @@
-"""``steppy bundle upload`` — the client half of the upload protocol.
+"""``steppy bundle upload`` and the upload protocol (:mod:`steppy.contracts.upload`).
 
-Driven against a fake control plane wired in through ``httpx.MockTransport``,
-which is a real transport: the client's own header merging, ``Content-Length``,
-retries and the two-client split (presigned PUTs must carry no
-``Authorization``) are all exercised. Stubbing ``CloudClient`` instead would
-verify only that the stub was called.
-
-The fake speaks the same routes the plane does — ``docs/contracts/job-api-v1.md``
-over there, ``tests/pg/test_local_run_lifecycle.py`` for the server-side proof
-that they behave this way.
+Driven against :class:`tests._fake_cloud.FakeCloud` through ``httpx.MockTransport``:
+create the run with the manifest, PUT what the server wants and lacks, finalize.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
-import httpx
 import pytest
+from tests._fake_cloud import GOOD_KEY, FakeCloud
 from tests.test_bundle import build_project
+from typer.testing import CliRunner
 
 from steppy.bundle import create_bundle, plan_bundle
-from steppy.cloud import ArchiveSource, CloudAuthError, CloudClient, CloudError, TreeSource, upload_bundle
-from steppy.cloud.client import Endpoint, resolve_endpoint
+from steppy.cloud import ArchiveSource, CloudError, TreeSource, attach_report, upload_run
+from steppy.contracts.report import parse_report
+from steppy.contracts.upload import REPORT_KIND, REPORT_PATH, report_file
 
-BLOB_HOST = "https://blobs.test"
-
-
-class FakePlane:
-    """Enough control plane to run the protocol against.
-
-    Keeps a per-org blob set, so the dedup assertion ("a second upload of the
-    same run sends nothing") is a property of the fake's *storage* rather than
-    of a canned response.
-    """
-
-    def __init__(self, *, claim_conflicts: int = 0, expire_puts: int = 0) -> None:
-        self.blobs: dict[str, bytes] = {}
-        self.runs: dict[str, dict] = {}
-        self.by_key: dict[str, str] = {}
-        self.offers: dict[str, dict] = {}
-        self.calls: list[str] = []
-        self.manifests: list[dict] = []
-        self.completed: list[dict] = []
-        self.auth: list[str | None] = []
-        self._claim_conflicts = claim_conflicts
-        self._expire_puts = expire_puts
-
-    @property
-    def transport(self) -> httpx.MockTransport:
-        return httpx.MockTransport(self._handle)
-
-    def _handle(self, request: httpx.Request) -> httpx.Response:
-        path = request.url.path
-        method = request.method
-
-        if str(request.url).startswith(BLOB_HOST):
-            return self._put_blob(request)
-
-        self.calls.append(f"{method} {path}")
-        body = json.loads(request.content) if request.content else {}
-
-        if method == "POST" and path == "/v1/runs":
-            return self._create_run(request, body)
-        if method == "GET" and path.startswith("/v1/runs/"):
-            return httpx.Response(200, json=self.runs[path.split("/")[3]])
-        if method == "POST" and path.endswith("/claim"):
-            return self._claim(path.split("/")[3])
-        if method == "POST" and path.endswith("/bundle"):
-            return self._offer(path.split("/")[3], body, request)
-        if method == "POST" and path.endswith("/bundle/finalize"):
-            return self._finalize(path.split("/")[3])
-        if method == "POST" and path.endswith("/complete"):
-            self.completed.append(body)
-            return httpx.Response(200, json={"task_id": "T1", "run_status": "ingesting"})
-        return httpx.Response(404, json={"detail": f"no route {method} {path}"})
-
-    def _create_run(self, request: httpx.Request, body: dict) -> httpx.Response:
-        key = request.headers.get("Idempotency-Key")
-        if key and key in self.by_key:
-            return httpx.Response(200, json=self.runs[self.by_key[key]])
-        run_id = f"R{len(self.runs) + 1}"
-        self.runs[run_id] = {
-            "id": run_id,
-            "number": len(self.runs) + 1,
-            "status": "queued",
-            "executor": body.get("executor"),
-            "spec": body.get("spec", {}),
-            "scenarios": body.get("scenarios", []),
-        }
-        if key:
-            self.by_key[key] = run_id
-        return httpx.Response(201, json=self.runs[run_id])
-
-    def _claim(self, run_id: str) -> httpx.Response:
-        if self._claim_conflicts:
-            self._claim_conflicts -= 1
-            return httpx.Response(409, json={"detail": "no claimable whole-run task"})
-        self.runs[run_id]["status"] = "running"
-        return httpx.Response(
-            200,
-            json={
-                "kind": "run",
-                "task_id": "T1",
-                "run_id": run_id,
-                "run_number": self.runs[run_id]["number"],
-                "project_id": "P1",
-                "scenario_slug": None,
-                "attempt": 1,
-                "git": {"sha": None, "branch": None, "pr_number": None, "fetch_token": None},
-                "spec": {},
-                "claim_token": "stp_run_faketoken",
-                "lease_expires_at": "2026-08-08T12:01:00Z",
-                "heartbeat_interval_s": 20,
-                "auth_handoff": None,
-            },
-        )
-
-    def _offer(self, run_id: str, manifest: dict, request: httpx.Request) -> httpx.Response:
-        self.manifests.append(manifest)
-        self.auth.append(request.headers.get("Authorization"))
-        files = {f["sha256"]: f for f in manifest["files"]}
-        missing = [s for s in files if s not in self.blobs]
-        self.offers[run_id] = {"expected": set(missing)}
-        return httpx.Response(
-            200,
-            json={
-                "upload_id": "U1",
-                "uploads": [{"sha256": s, "size": files[s]["size"], "url": f"{BLOB_HOST}/{s}"} for s in missing],
-                "already_held": len(files) - len(missing),
-                "total_files": len(manifest["files"]),
-                "expires_at": "2026-08-08T13:00:00Z",
-            },
-        )
-
-    def _finalize(self, run_id: str) -> httpx.Response:
-        expected = self.offers[run_id]["expected"]
-        absent = [s for s in expected if s not in self.blobs]
-        if absent:
-            return httpx.Response(409, json={"detail": f"{len(absent)} blob(s) were never uploaded"})
-        self.runs[run_id]["status"] = "ingesting"
-        return httpx.Response(
-            200,
-            json={"upload_id": "U1", "verified": len(expected), "already_finalized": False, "run_status": "ingesting"},
-        )
-
-    def _put_blob(self, request: httpx.Request) -> httpx.Response:
-        sha = request.url.path.lstrip("/")
-        # A presigned URL carries its authorisation in the query string. A store
-        # that also receives an Authorization header rejects the pair, so this
-        # is the assertion that keeps the two-client split honest.
-        assert "Authorization" not in request.headers, "a presigned PUT must not carry a bearer token"
-        if self._expire_puts:
-            self._expire_puts -= 1
-            return httpx.Response(403, text="<Error><Code>AccessDenied</Code>Request has expired</Error>")
-        data = request.read()
-        assert request.headers["Content-Length"] == str(len(data))
-        assert hashlib.sha256(data).hexdigest() == sha, "uploaded bytes do not match the digest asked for"
-        self.blobs[sha] = data
-        return httpx.Response(200)
+_ENV = ("STEPPY_API_KEY", "STEPPY_URL", "STEPPY_CLOUD_TOKEN", "STEPPY_CLOUD_URL")
 
 
-def client_for(plane: FakePlane) -> CloudClient:
-    return CloudClient(Endpoint(url="https://plane.test", token="stp_pat_x"), transport=plane.transport, retries=0)
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch) -> None:
+    for name in _ENV:
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
@@ -171,194 +33,184 @@ def project(tmp_path: Path) -> Path:
     return build_project(tmp_path)
 
 
-def tree_source(project: Path) -> TreeSource:
-    return TreeSource(plan_bundle(project_root=project))
+def reported(project: Path):
+    source, _model = attach_report(TreeSource(plan_bundle(project_root=project)), project_root=project)
+    return source
 
 
-# --- endpoint resolution ----------------------------------------------------
+def upload(cloud: FakeCloud, source, **kwargs):
+    with cloud.client() as client:
+        return upload_run(client, source, **kwargs)
 
 
-def test_url_precedence_is_flag_then_env_then_config(monkeypatch) -> None:
-    monkeypatch.setenv("STEPPY_CLOUD_TOKEN", "t")
-    monkeypatch.setenv("STEPPY_CLOUD_URL", "https://from-env")
-    assert resolve_endpoint(config_url="https://from-config").url == "https://from-env"
-    assert resolve_endpoint("https://from-flag", config_url="https://from-config").url == "https://from-flag"
-    monkeypatch.delenv("STEPPY_CLOUD_URL")
-    assert resolve_endpoint(config_url="https://from-config").url == "https://from-config"
+# --- report.json --------------------------------------------------------------
 
 
-def test_a_pasted_v1_url_is_accepted(monkeypatch) -> None:
-    """`/v1` is what every error message and doc shows, so it is what gets
-    pasted. Appending a second one would 404 in a way that reads like an outage."""
-    monkeypatch.setenv("STEPPY_CLOUD_TOKEN", "t")
-    assert resolve_endpoint("https://plane.test/v1/").api == "https://plane.test/v1"
+def test_report_json_is_a_file_of_the_manifest(project: Path) -> None:
+    source = reported(project)
+    entry = report_file(source.manifest)
+    assert entry is not None and entry.path == REPORT_PATH and entry.kind == REPORT_KIND
+    assert entry.size == len(source.report)
+    # Sorted with the others, like every manifest the bundler writes.
+    assert [f.path for f in source.manifest.files] == sorted(f.path for f in source.manifest.files)
 
 
-def test_a_missing_token_names_both_places_it_can_come_from(monkeypatch) -> None:
-    monkeypatch.delenv("STEPPY_CLOUD_TOKEN", raising=False)
-    with pytest.raises(CloudError) as e:
-        resolve_endpoint("https://plane.test")
-    assert "STEPPY_CLOUD_TOKEN" in str(e.value) and "--token" in str(e.value)
+def test_report_json_is_the_report_model_with_captures_by_manifest_path(project: Path) -> None:
+    """The contract: a capture reference is the file's manifest path, which a
+    server resolves through `files[].sha256` — there is no site to link into."""
+    source = reported(project)
+    model = parse_report(json.loads(source.report))
+    paths = {f.path for f in source.manifest.files}
+
+    assert model.run.run_id == source.manifest.run.run_id
+    assert model.totals.verdict == "failed"
+    assert model.capabilities.screenshots == "all"
+    shots = [s for sc in model.scenarios for v in sc.variants for st in v.steps for s in st.screenshots]
+    failure_shots = [v.failure_screenshot for sc in model.scenarios for v in sc.variants if v.failure_screenshot]
+    assert shots and failure_shots
+    assert set(shots + failure_shots) <= paths
 
 
-def test_the_token_never_appears_in_a_repr() -> None:
-    """`--verbose` prints tracebacks, and a dataclass repr would put a live
-    credential in one."""
-    assert "sekrit" not in repr(Endpoint(url="https://plane.test", token="stp_pat_sekrit"))
+def test_the_report_is_reproducible_for_an_unchanged_run(project: Path) -> None:
+    """Same run, same bytes: so a second upload of it sends no new report."""
+    assert reported(project).report == reported(project).report
 
 
-# --- the protocol -----------------------------------------------------------
+# --- the protocol -------------------------------------------------------------
 
 
-def test_upload_sends_every_blob_once_and_then_finalizes(project: Path) -> None:
-    plane = FakePlane()
-    source = tree_source(project)
-    with client_for(plane) as client:
-        outcome = upload_bundle(client, source, settle_timeout=0)
+def test_create_sends_the_manifest_with_the_run_id_as_idempotency_key(project: Path) -> None:
+    cloud = FakeCloud()
+    source = reported(project)
+    upload(cloud, source)
+
+    request = cloud.creates[0]
+    assert request.headers["Idempotency-Key"] == source.manifest.run.run_id
+    assert request.headers["Authorization"] == f"Bearer {GOOD_KEY}"
+    body = json.loads(request.content)
+    assert body["manifest"] == source.manifest.model_dump(mode="json")
+    assert body["manifest"]["steppy_bundle"] == 1
+
+
+def test_the_calls_are_create_put_finalize_and_nothing_else(project: Path) -> None:
+    """No claim, no task, no heartbeat, no status polling."""
+    cloud = FakeCloud()
+    upload(cloud, reported(project))
+    assert cloud.calls == ["POST /api/v1/runs", "POST /api/v1/runs/R1/finalize"]
+
+
+def test_every_wanted_file_is_sent_once_then_the_run_is_finalized(project: Path) -> None:
+    cloud = FakeCloud()
+    source = reported(project)
+    outcome = upload(cloud, source)
 
     digests = {f.sha256 for f in source.manifest.files}
-    assert set(plane.blobs) == digests
-    assert outcome.uploaded == len(digests)
-    assert outcome.uploaded_bytes == sum(len(b) for b in plane.blobs.values())
-    assert outcome.total_files == len(source.manifest.files)
-    assert outcome.created_run is True
+    assert set(cloud.blobs) == digests
+    assert sorted(cloud.puts) == sorted(digests), "a digest shared by two paths is one upload"
+    assert outcome.uploaded == outcome.requested == outcome.total_blobs == len(digests)
+    assert outcome.total_files == len(source.manifest.files) > outcome.total_blobs
+    assert outcome.uploaded_bytes == sum(len(b) for b in cloud.blobs.values())
+    assert cloud.finalized == {"R1": 1}
+    assert outcome.url == "https://cloud.test/r/R1"
+    assert outcome.status == "failed"
+    assert outcome.number == 1
 
 
-def test_finalize_is_sent_before_complete(project: Path) -> None:
-    """The ordering `upload_bundle`'s docstring argues for, asserted.
+def test_only_the_files_the_server_lacks_are_uploaded(project: Path) -> None:
+    cloud = FakeCloud()
+    source = reported(project)
+    screenshots = {f.sha256: b"held" for f in source.manifest.files if f.kind == "screenshot"}
+    cloud.blobs.update(screenshots)
 
-    Completing first lets the plane land a verdict with no bundle pending, and
-    its close statement then refuses to move a terminal run to `ingesting`.
-    """
-    plane = FakePlane()
-    with client_for(plane) as client:
-        upload_bundle(client, tree_source(project), settle_timeout=0)
+    outcome = upload(cloud, source)
 
-    order = [c for c in plane.calls if c.endswith("/bundle/finalize") or c.endswith("/complete")]
-    assert order == ["POST /v1/runs/R1/bundle/finalize", "POST /v1/tasks/T1/complete"]
-
-
-def test_the_second_upload_of_an_unchanged_run_sends_nothing(project: Path) -> None:
-    """The economic argument for the whole protocol, as an assertion."""
-    plane = FakePlane()
-    with client_for(plane) as client:
-        upload_bundle(client, tree_source(project), settle_timeout=0)
-        again = upload_bundle(client, tree_source(project), settle_timeout=0)
-
-    assert again.uploaded == 0
-    assert again.uploaded_bytes == 0
-    assert again.skipped_bytes == again.payload_bytes
-    # In digests, not files — the server counts `already_held` per blob while
-    # `total_files` counts manifest entries, and this fixture has screenshots
-    # that are byte-identical across locales.
-    assert again.already_held == again.total_blobs < again.total_files
+    assert not set(cloud.puts) & set(screenshots)
+    assert set(cloud.puts) == {f.sha256 for f in source.manifest.files} - set(screenshots)
+    assert outcome.uploaded == outcome.requested == len(cloud.puts)
 
 
-def test_the_bundle_run_id_is_the_idempotency_key(project: Path) -> None:
-    """A retried upload must attach to the run the first attempt made, not burn
-    a second run number for one set of results."""
-    plane = FakePlane()
-    with client_for(plane) as client:
-        first = upload_bundle(client, tree_source(project), settle_timeout=0)
-        second = upload_bundle(client, tree_source(project), settle_timeout=0)
+def test_only_the_files_the_server_wants_are_uploaded(project: Path) -> None:
+    """The server keeps what its policy says (by default the screenshots of
+    failed variants); the rest is never sent and the run still finalizes."""
+    cloud = FakeCloud(wants=lambda f: f["kind"] not in ("video", "trace", "screenshot"))
+    source = reported(project)
+    upload(cloud, source)
 
-    assert first.run_id == second.run_id
-    assert len(plane.runs) == 1
+    sent_kinds = {f.kind for f in source.manifest.files if f.sha256 in cloud.puts}
+    assert sent_kinds and not sent_kinds & {"video", "trace", "screenshot"}
+    assert REPORT_KIND in sent_kinds
+    assert cloud.finalized == {"R1": 1}
 
 
-def test_an_expired_presigned_url_triggers_exactly_one_re_offer(project: Path) -> None:
-    """A URL that expires mid-upload is ordinary on a slow link. The offer is
-    keyed on (run, task) and reports what is already held, so re-offering asks
-    for the remainder and nothing already sent is re-sent."""
-    plane = FakePlane(expire_puts=1)
-    source = tree_source(project)
-    with client_for(plane) as client:
-        outcome = upload_bundle(client, source, concurrency=1, settle_timeout=0)
+def test_creating_the_same_run_again_returns_it_and_sends_nothing(project: Path) -> None:
+    """Re-upload: the same Idempotency-Key gets the same run back with nothing
+    missing, and the second finalize changes nothing."""
+    cloud = FakeCloud()
+    first = upload(cloud, reported(project))
+    again = upload(cloud, reported(project))
 
-    assert plane.calls.count("POST /v1/runs/R1/bundle") == 2
-    assert set(plane.blobs) == {f.sha256 for f in source.manifest.files}
-    # Counted as it happened, not inferred: the blobs that landed before the
-    # expiry are not re-sent and must not be double-counted either.
-    assert outcome.uploaded == len(plane.blobs)
+    assert again.run_id == first.run_id == "R1"
+    assert len(cloud.runs) == 1
+    assert again.requested == again.uploaded == again.uploaded_bytes == 0
+    assert cloud.finalized == {"R1": 2}
+    assert again.url == first.url
+
+
+def test_a_different_run_is_a_different_run(project: Path, tmp_path: Path) -> None:
+    cloud = FakeCloud()
+    upload(cloud, reported(project))
+    source = TreeSource(plan_bundle(project_root=project, run_id="20260807T100000Z-cccccc"))
+    second = upload(cloud, attach_report(source, project_root=project)[0])
+    assert second.run_id == "R2"
+    # The captures are the same bytes: only what changed travels.
+    assert second.uploaded < second.total_blobs
+
+
+def test_an_expired_upload_url_is_replaced_by_creating_the_run_again(project: Path) -> None:
+    cloud = FakeCloud(expire_puts=1)
+    source = reported(project)
+    outcome = upload(cloud, source, concurrency=1)
+
+    assert cloud.calls.count("POST /api/v1/runs") == 2
+    assert set(cloud.blobs) == {f.sha256 for f in source.manifest.files}
+    # Counted as it happened, not inferred: nothing sent twice, nothing counted twice.
+    assert outcome.uploaded == len(cloud.puts) == len(set(cloud.puts))
 
 
 def test_a_second_expiry_is_not_retried_through(project: Path) -> None:
-    plane = FakePlane(expire_puts=99)
-    with client_for(plane) as client, pytest.raises(CloudError) as e:
-        upload_bundle(client, tree_source(project), concurrency=1, settle_timeout=0)
+    cloud = FakeCloud(expire_puts=99)
+    with pytest.raises(CloudError) as e:
+        upload(cloud, reported(project), concurrency=1)
     assert e.value.status == 403
-    assert plane.calls.count("POST /v1/runs/R1/bundle") == 2
+    assert cloud.calls.count("POST /api/v1/runs") == 2
+    assert not cloud.finalized
 
 
-def test_the_claim_is_retried_while_the_run_is_still_queued(project: Path) -> None:
-    """Dispatch is a background job: the run exists the moment POST /runs
-    answers, but its task is written a moment later by a worker."""
-    plane = FakePlane(claim_conflicts=2)
-    with client_for(plane) as client:
-        upload_bundle(client, tree_source(project), claim_timeout=10, settle_timeout=0)
-
-    assert plane.calls.count("POST /v1/runs/R1/claim") == 3
+def test_the_put_carries_the_headers_its_url_was_signed_with(project: Path) -> None:
+    cloud = FakeCloud(put_headers={"Content-Type": "application/octet-stream"})
+    upload(cloud, reported(project))
+    assert cloud.finalized == {"R1": 1}
 
 
-def test_a_claim_conflict_on_a_running_run_is_not_retried(project: Path) -> None:
-    """A 409 once the run has left `queued` means somebody else owns it, and
-    retrying is how two uploads race each other forever."""
-    plane = FakePlane(claim_conflicts=99)
-    plane.runs["R1"] = {"id": "R1", "number": 1, "status": "running"}
-    plane.by_key["20260806T100000Z-aaaaaa"] = "R1"
+def test_a_digest_the_run_does_not_describe_is_refused(project: Path) -> None:
+    cloud = FakeCloud()
+    source = reported(project)
 
-    with client_for(plane) as client, pytest.raises(CloudError) as e:
-        upload_bundle(client, tree_source(project), claim_timeout=10, settle_timeout=0)
-    assert "another executor owns it" in str(e.value)
-    assert plane.calls.count("POST /v1/runs/R1/claim") == 1
+    def lying(request):
+        response = cloud._handle(request)
+        if request.url.path == "/api/v1/runs":
+            body = json.loads(response.content)
+            body["uploads"].append({"sha256": "f" * 64, "url": "https://blobs.test/" + "f" * 64})
+            return type(response)(response.status_code, json=body)
+        return response
 
+    import httpx
 
-def test_the_upload_authenticates_with_the_claim_token_not_the_project_token(project: Path) -> None:
-    """The narrowest credential that can do the job, and the one that files the
-    upload under the task — which is what an executor pushing its own partial
-    bundle will need."""
-    plane = FakePlane()
-    with client_for(plane) as client:
-        upload_bundle(client, tree_source(project), settle_timeout=0)
-    assert plane.auth == ["Bearer stp_run_faketoken"]
+    from steppy.cloud import CloudClient, Endpoint
 
-
-def test_an_unauthorised_call_is_never_retried() -> None:
-    def deny(request: httpx.Request) -> httpx.Response:
-        calls.append(request.url.path)
-        return httpx.Response(401, json={"detail": "invalid or expired credentials"})
-
-    calls: list[str] = []
-    client = CloudClient(Endpoint(url="https://plane.test", token="bad"), transport=httpx.MockTransport(deny))
-    with client, pytest.raises(CloudAuthError):
-        client.get("/runs/R1")
-    assert len(calls) == 1, "401 means stop, not back off"
-
-
-# --- the verdict ------------------------------------------------------------
-
-
-def test_the_exit_code_is_derived_from_the_manifest_outcomes(project: Path) -> None:
-    plane = FakePlane()
-    source = tree_source(project)
-    assert any(t.outcome == "failed" for t in source.manifest.tests), "the fixture should carry a failure"
-
-    with client_for(plane) as client:
-        outcome = upload_bundle(client, source, settle_timeout=0)
-
-    assert outcome.exit_code == 1
-    assert plane.completed == [{"exit_code": 1, "duration_ms": None}]
-
-
-def test_an_explicit_exit_code_wins(project: Path) -> None:
-    """`steppy ci run` will know the real one; upload after the fact never does."""
-    plane = FakePlane()
-    with client_for(plane) as client:
-        upload_bundle(client, tree_source(project), exit_code=0, settle_timeout=0)
-    assert plane.completed == [{"exit_code": 0, "duration_ms": None}]
-
-
-# --- the two sources agree --------------------------------------------------
+    client = CloudClient(Endpoint(api="https://cloud.test/api/v1", key=GOOD_KEY), transport=httpx.MockTransport(lying))
+    with client, pytest.raises(CloudError, match="does not describe"):
+        upload_run(client, source)
 
 
 def test_uploading_an_archive_sends_the_same_bytes_as_the_live_tree(project: Path, tmp_path: Path) -> None:
@@ -366,25 +218,85 @@ def test_uploading_an_archive_sends_the_same_bytes_as_the_live_tree(project: Pat
     in one step and uploads in another ships something different from a laptop."""
     archive = create_bundle(project_root=project, target=tmp_path / "b.tar.gz", fmt="gz").path
 
-    from_tree = FakePlane()
-    with client_for(from_tree) as client:
-        upload_bundle(client, tree_source(project), settle_timeout=0)
+    from_tree = FakeCloud()
+    upload(from_tree, reported(project))
+    from_archive = FakeCloud()
+    upload(from_archive, attach_report(ArchiveSource(archive), project_root=project)[0])
 
-    from_archive = FakePlane()
-    with client_for(from_archive) as client:
-        upload_bundle(client, ArchiveSource(archive), settle_timeout=0)
+    tree_files = json.loads(from_tree.creates[0].content)["manifest"]["files"]
+    archive_files = json.loads(from_archive.creates[0].content)["manifest"]["files"]
+    # report.json names its source (tree vs archive), so its bytes differ; every
+    # other file is the same bytes at the same path.
+    assert [f for f in archive_files if f["path"] != REPORT_PATH] == [f for f in tree_files if f["path"] != REPORT_PATH]
+    report = {f["sha256"] for f in tree_files + archive_files if f["path"] == REPORT_PATH}
+    assert {k: v for k, v in from_archive.blobs.items() if k not in report} == {
+        k: v for k, v in from_tree.blobs.items() if k not in report
+    }
 
-    assert from_archive.blobs == from_tree.blobs
-    assert from_archive.manifests[0]["files"] == from_tree.manifests[0]["files"]
+
+# --- the command --------------------------------------------------------------
 
 
-def test_the_offer_body_is_the_manifest_itself(project: Path) -> None:
-    """Not a wrapper: it is what `steppy bundle create` already writes to disk,
-    and the server parses it with the same contract module that produced it."""
-    plane = FakePlane()
-    source = tree_source(project)
-    with client_for(plane) as client:
-        upload_bundle(client, source, settle_timeout=0)
+def _invoke(project: Path, cloud: FakeCloud, monkeypatch, *args: str):
+    from steppy.cli import app
 
-    assert plane.manifests[0] == source.manifest.model_dump(mode="json")
-    assert plane.manifests[0]["steppy_bundle"] == 1
+    monkeypatch.setattr("steppy.cloud.connect", cloud.connect)
+    return CliRunner().invoke(app, ["bundle", "upload", "--project-root", str(project), *args])
+
+
+def test_the_command_uploads_and_prints_the_run_url(project: Path, monkeypatch) -> None:
+    cloud = FakeCloud()
+    result = _invoke(project, cloud, monkeypatch, "--url", "https://cloud.test", "--api-key", GOOD_KEY)
+    assert result.exit_code == 0, result.output
+    assert "https://cloud.test/r/R1" in result.output
+    assert cloud.finalized == {"R1": 1}
+
+
+def test_the_command_reads_the_environment(project: Path, monkeypatch) -> None:
+    monkeypatch.setenv("STEPPY_URL", "https://cloud.test")
+    monkeypatch.setenv("STEPPY_API_KEY", GOOD_KEY)
+    cloud = FakeCloud()
+    result = _invoke(project, cloud, monkeypatch, "--json")
+    assert result.exit_code == 0, result.output
+    outcome = json.loads(result.stdout)
+    assert outcome["run_id"] == "R1" and outcome["url"] == "https://cloud.test/r/R1"
+
+
+def test_the_old_token_flag_still_works(project: Path, monkeypatch) -> None:
+    cloud = FakeCloud()
+    result = _invoke(project, cloud, monkeypatch, "--url", "https://cloud.test", "--token", GOOD_KEY)
+    assert result.exit_code == 0, result.output
+
+
+@pytest.mark.parametrize(
+    "cloud,args,expected",
+    [
+        (FakeCloud(), ["--url", "https://cloud.test", "--api-key", "stp_wrong"], "HTTP 401"),
+        (FakeCloud(unreachable=True), ["--url", "https://cloud.test", "--api-key", GOOD_KEY], "could not reach"),
+        (FakeCloud(fail_with=503), ["--url", "https://cloud.test", "--api-key", GOOD_KEY], "HTTP 503"),
+        (FakeCloud(), ["--url", "https://cloud.test"], "no API key"),
+        (FakeCloud(), ["--api-key", GOOD_KEY], "no Steppy Cloud address"),
+    ],
+    ids=["refused", "unreachable", "server-error", "no-key", "no-url"],
+)
+def test_an_explicit_upload_that_fails_exits_non_zero(project: Path, monkeypatch, cloud, args, expected) -> None:
+    result = _invoke(project, cloud, monkeypatch, *args)
+    assert result.exit_code == 1, result.output
+    assert expected in result.output
+    assert not cloud.finalized
+
+
+def test_a_422_prints_the_servers_detail(project: Path, monkeypatch) -> None:
+    """A report version the server does not accept: its detail says what to do."""
+    cloud = FakeCloud(fail_with=422)
+    result = _invoke(project, cloud, monkeypatch, "--url", "https://cloud.test", "--api-key", GOOD_KEY)
+    assert result.exit_code == 1
+    assert "the fake answers 422" in result.output
+
+
+def test_dry_run_contacts_nothing(project: Path, monkeypatch) -> None:
+    cloud = FakeCloud()
+    result = _invoke(project, cloud, monkeypatch, "--dry-run")
+    assert result.exit_code == 0, result.output
+    assert "report.json included" in " ".join(result.output.split())
+    assert cloud.calls == [] and cloud.puts == []

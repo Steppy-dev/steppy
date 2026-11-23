@@ -121,9 +121,11 @@ output:
 #              --check`. The overlay's buttons ship in en/fr/nl/de (other tour
 #              languages need the host's `strings`). See docs/tours.md in the
 #              Steppy repository.
-#   cloud:     `url:` of a Steppy control plane, for `steppy bundle upload`.
-#              The URL only — the token is read from STEPPY_CLOUD_TOKEN (or
-#              --token) and has no config key on purpose, because this file is
-#              committed. Everything else here works with no plane at all.
+#   cloud:     `url:` of a Steppy Cloud instance, for `steppy run --upload` and
+#              `steppy bundle upload` (STEPPY_URL wins over it). The address
+#              only — the API key is read from STEPPY_API_KEY and has no config
+#              key on purpose, because this file is committed. Nothing is ever
+#              uploaded without --upload, and everything else here works with
+#              no cloud at all.
 # Each is documented with commented examples in the Steppy repo's own config.yaml,
 # and your editor will autocomplete them from the $schema line at the top.

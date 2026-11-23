@@ -147,6 +147,37 @@ def build_report(
     )
 
 
+def build_document(source, *, project_root: Path, non_ui: Sequence[str] = ()) -> ReportModel:
+    """``report.json`` with no site: what an upload sends.
+
+    The same model ``steppy report`` writes, from the same run, with one
+    difference: no capture is copied anywhere, so every capture reference is the
+    file's **manifest path** (``screenshots: all``), resolved to bytes through
+    ``manifest.files[].sha256``. That is the contract
+    :mod:`steppy.contracts.upload` publishes. Writes nothing and renders nothing.
+    """
+    from .. import __version__
+    from .coverage_source import resolve_coverage
+    from .model import build_model
+
+    # Every source's own warnings are the manifest's, which build_model already
+    # carries, so nothing is passed twice.
+    captures = {f.path: f.path for f in source.manifest.files if f.kind in _CAPTURE_KINDS}
+    return build_model(
+        manifest=source.manifest,
+        source=ReportSourceInfo(kind=source.kind, label=source.label),
+        attempts=_timeline(source),
+        coverage=resolve_coverage(source, project_root=project_root, non_ui=non_ui),
+        assets=captures,
+        screenshots_policy="all",
+        steppy_version=__version__,
+    )
+
+
+#: The kinds the report links to as captures; ``assets.plan_assets`` copies the same.
+_CAPTURE_KINDS = frozenset({"screenshot", "failure_screenshot"})
+
+
 def _timeline(source) -> dict:
     """``{nodeid: [TestAttempt]}`` from the run's event JSONL, or ``{}``.
 

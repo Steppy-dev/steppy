@@ -155,7 +155,15 @@ def _from_tree(*, project_root: Path, output_dir: Optional[Path], run_id: Option
         plan = plan_bundle(project_root=project_root, output_dir=output_dir, run_id=run_id)
     except BundleError as e:
         raise ReportSourceError(str(e)) from e
+    return from_plan(plan, project_root=project_root, output_dir=output_dir)
 
+
+def from_plan(plan, *, project_root: Path, output_dir: Optional[Path] = None) -> ReportSource:
+    """A live-tree source over a :class:`~steppy.bundle.BundlePlan` already made.
+
+    What the upload uses, so the tree it builds ``report.json`` from is the one
+    it uploads, walked and hashed once.
+    """
     local: dict[str, Path] = {}
     inline: dict[str, bytes] = {}
     for member in plan.members():

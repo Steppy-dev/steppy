@@ -6,13 +6,15 @@ description: |
   test results", "publish to GitHub Pages / GitLab Pages", "build a run report", "show
   which step failed", "why did my report render empty", "add a coverage badge", "what
   isn't my suite testing", "why is my coverage percentage so low", "set up
-  coverage.non_ui", "package a run", "attach the results to a build", "tour replay
-  failed", "set up in-app tour CI", or edits
+  coverage.non_ui", "package a run", "attach the results to a build", "record the
+  branch / commit / environment of a run", "tour replay failed", "set up in-app tour
+  CI", or edits
   `.github/workflows/steppy.yml`, `.gitlab-ci.yml`, or the `coverage:` / `report:`
   blocks in `config.yaml`.
 
-  Covers: `steppy report` (the static run-report site), what `steppy run` records +
-  `steppy bundle`, the coverage map end to end (record → merge → refresh → gaps), the
+  Covers: `steppy report` (the static run-report site), what `steppy run` records
+  (outcomes, steps, and where the run came from: commit, branch, pull request, CI job,
+  environment) + `steppy bundle`, the coverage map end to end (record → merge → refresh → gaps), the
   e2e-surface badge and the `coverage.non_ui` declaration it depends on, the in-app tour
   replays (`test_<slug>__tour`) and their pipeline order, and the two shipped CI templates.
 
@@ -54,6 +56,13 @@ steppy init --ci-gitlab    # → .gitlab-ci.yml
 Separate booleans rather than `--ci <vendor>`, because `--ci` is a flag people already
 type. Run `steppy update` after upgrading Steppy and both files are reconciled with the
 installed version.
+
+Both carry the Steppy Cloud upload **commented out**: the project's API key from the
+CI's secrets (GitHub) or a Masked CI/CD variable (GitLab), and
+`steppy run --trace ${STEPPY_API_KEY:+--upload}` in place of the plain run line. Nothing
+is uploaded until someone uncomments it, and the `${…:+…}` form passes `--upload` only
+when the key is set, so a fork's pull request — which gets no secrets — still runs its
+tests instead of stopping on a missing key.
 
 ### Two ways to run it on GitHub
 
@@ -501,6 +510,53 @@ entirely plausible:
 
 ---
 
+## Where a run came from
+
+Every `steppy run` records where it came from in `output/.steppy-run.json`, and
+`steppy report`, `steppy bundle create` and the upload carry it as `manifest.run` (and
+`report.json`'s `run`). Nothing to configure on GitHub Actions or GitLab CI:
+
+| Field | GitHub Actions | GitLab CI | Elsewhere |
+|---|---|---|---|
+| `git.branch` | `GITHUB_HEAD_REF` on a pull request, else `GITHUB_REF_NAME`; none on a tag | the merge request's source branch, else `CI_COMMIT_BRANCH`; none on a tag | the local repository (none when detached) |
+| `git.sha` | the pull request's head (from the event file), else `GITHUB_SHA` | `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA` when set (merged results), else `CI_COMMIT_SHA` | `HEAD` |
+| `git.tested_sha` | `GITHUB_SHA` when it differs: the merge commit GitHub builds | `CI_COMMIT_SHA` when it differs: the merge | — |
+| `git.pr`, `git.base_branch` | the pull request's number and base | `CI_MERGE_REQUEST_IID`, its target branch | — |
+| `git.dirty` | — | — | tracked files with uncommitted changes (local runs only) |
+| `ci` | `github-actions`, the workflow run's attempt URL, `owner/name` | `gitlab-ci`, `CI_JOB_URL`, `CI_PROJECT_PATH` | none |
+| `executor` | `ci` | `ci` | `ci` when `CI` is set, else `local` |
+
+No other CI is detected: its checkout is read like a local repository (commit and branch),
+and the flags say the rest. The same four flags work on `steppy run`, `steppy bundle create`
+and `steppy bundle upload`, and each wins over what is detected:
+
+```bash
+steppy run --environment staging                          # what the run tested against
+steppy run --branch "$BRANCH" --commit "$SHA" --pr 42     # a CI Steppy does not detect
+```
+
+**The environment** is free text (`staging`, `prod`, `eu-west`): `--environment`, else
+`$STEPPY_ENVIRONMENT`, else `environment:` in `config.yaml` — which can be
+`${DEPLOY_ENV:-staging}` like any other value. At most 64 characters and no control
+character; a bad value (or a `--commit` that is not a sha) stops `steppy run` before any
+test, and before `--upload` talks to a server.
+
+**The run records, the bundle commands read.** `bundle create` and `bundle upload` use what
+`steppy run` recorded, not what the step or machine they run on says, so packaging a run in
+a later job — or on a laptop, from a downloaded `output/` — still describes the run. Their
+flags override it, and they print what they changed. Given an archive
+(`steppy bundle upload run.tar.zst --environment prod`), the flags change the manifest sent
+and the `report.json` built from it; the archive itself is never rewritten. A run made
+before 0.10 recorded none of this, so for it the bundle commands detect it where they run.
+
+On a GitHub pull request the checkout is a merge commit nobody pushed: `git.sha` is still the
+pull request's head, the commit a reviewer sees, and the merge is `tested_sha`. A step that
+cannot read the event file (a container that does not mount it) records no `sha`, keeps
+`GITHUB_SHA` as `tested_sha`, and warns; pass
+`--commit ${{ github.event.pull_request.head.sha }}` there.
+
+---
+
 ## Results bundles
 
 ```bash
@@ -523,8 +579,9 @@ marks the manifest `truncated`.
 
 `steppy run --upload` (or `steppy bundle upload` after the run) sends a run to Steppy
 Cloud, which is optional and out of scope here — everything above works with no cloud at
-all, and nothing is uploaded unless one of those is asked for. The author skill's
-"Uploading a run to Steppy Cloud" section covers it.
+all, and nothing is uploaded unless one of those is asked for. The shipped CI templates
+carry it commented out (see "The CI loop"); the author skill's "Uploading a run to
+Steppy Cloud" section covers the rest.
 
 ---
 
@@ -533,6 +590,10 @@ all, and nothing is uploaded unless one of those is asked for. The author skill'
 | Symptom | Cause | Fix |
 |---|---|---|
 | Report says "no test outcomes", verdict `unknown` | No recorded run in `output/` (a Steppy older than 0.9.1 needed `--bundle`) | `steppy run` |
+| A pull request's run is filed under branch `42/merge` | Steppy older than 0.10 read `GITHUB_REF_NAME` | Upgrade, or pass `--branch` |
+| A run has no branch | A tag, or a detached checkout outside GitHub/GitLab — both correct | `--branch` if it belongs to one |
+| `steppy run` exits 1 before any test: "… is N characters long" / "control character" | The environment (flag, `STEPPY_ENVIRONMENT` or `config.yaml`) is over 64 characters or holds a tab, newline or the like | Shorten it; plain text only |
+| A warning about the GitHub event file, and no commit on a pull request's run | The step cannot read `GITHUB_EVENT_PATH` (often a container that does not mount it) | `--commit ${{ github.event.pull_request.head.sha }}` |
 | Report shows outcomes but no step detail | `STEPPY_STEP_EVENTS=0`, or tests generated before per-step markers | Unset the env var; re-run `steppy generate` |
 | Badge says `n/a` | Nothing declared — no `coverage.apis`, or `refresh` never ran | Configure `coverage.apis[].openapi`, then `steppy coverage refresh` |
 | Coverage percentage far lower in CI than locally | Triage flags live in the gitignored `.steppy/coverage.db`; CI starts empty | Declare `coverage.non_ui` in `config.yaml` |

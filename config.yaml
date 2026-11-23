@@ -322,3 +322,15 @@ output:
 #     - type: app-assets           # a flat copy your app serves (never inside a build outputDir)
 #       path: ../invoice-app/public/tours
 #     - type: guide                # `steppy build` (static) republishes at <site>/tours/<build-id>/
+
+# What the runs test against, recorded on every run beside its commit, branch,
+# pull request and CI job (all detected on GitHub Actions and GitLab CI). Free
+# text, at most 64 characters; `steppy run --environment` and STEPPY_ENVIRONMENT
+# win over it. Absent by default: a run then has no environment.
+# environment: ${DEPLOY_ENV:-staging}
+
+# A Steppy Cloud instance, for `steppy run --upload` and `steppy bundle upload`.
+# The address only: the API key comes from STEPPY_API_KEY and has no config key,
+# because this file is committed. Nothing is uploaded without --upload.
+# cloud:
+#   url: https://steppy.example.com

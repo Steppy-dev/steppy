@@ -48,12 +48,37 @@ def test_the_github_workflow_has_the_expected_jobs():
     assert "Upload the report" in names
 
 
-def test_the_github_run_step_passes_bundle():
-    """Without --bundle there are no event records, so the report can name a failing
-    test but not the step inside it."""
+@pytest.mark.parametrize("path", [_GITHUB, _GITLAB], ids=["github", "gitlab"])
+def test_no_template_still_passes_bundle(path: Path):
+    """Every run records its events since 0.9.1, and `--bundle` only prints that it
+    is no longer needed — a scaffold written today should not teach it."""
+    assert "--bundle" not in _text(path)
+
+
+def test_the_github_run_step_runs_without_uploading():
+    """Uploading is opt-in (D6): the armed run line never says --upload."""
     doc = yaml.safe_load(_text(_GITHUB))
     run_steps = [s for s in doc["jobs"]["e2e"]["steps"] if s.get("name") == "Run scenarios"]
-    assert run_steps and "--bundle" in run_steps[0]["run"]
+    assert run_steps and run_steps[0]["run"].startswith("steppy run")
+    assert "--upload" not in run_steps[0]["run"]
+    assert "STEPPY_API_KEY" not in run_steps[0]["env"]
+
+
+@pytest.mark.parametrize("path", [_GITHUB, _GITLAB], ids=["github", "gitlab"])
+def test_the_upload_recipe_is_present_and_commented(path: Path):
+    """The scaffold shows how to send runs to Steppy Cloud, and leaves it off: a
+    key from the CI's secrets, `steppy run --upload`, and every line of it commented.
+    The `${STEPPY_API_KEY:+--upload}` form keeps a fork's pull request (no secrets)
+    running its tests instead of stopping on a missing key."""
+    text = _text(path)
+    upload_lines = [line for line in text.splitlines() if "--upload" in line or "STEPPY_API_KEY:" in line]
+    assert any("steppy run --trace ${STEPPY_API_KEY:+--upload}" in line for line in upload_lines)
+    for line in upload_lines:
+        assert line.lstrip().startswith("#"), f"armed upload line: {line!r}"
+    if path == _GITHUB:
+        assert "# STEPPY_API_KEY: ${{ secrets.STEPPY_API_KEY }}" in text
+    else:
+        assert "Masked CI/CD variable" in text
 
 
 def test_the_github_report_step_runs_even_on_failure():
@@ -150,7 +175,8 @@ def test_the_pages_recipe_warns_about_the_single_site_per_repo(path: Path):
 def test_the_gitlab_pipeline_runs_the_report_after_the_run():
     doc = yaml.safe_load(_text(_GITLAB))
     job = doc["e2e"]
-    assert "--bundle" in " ".join(job["script"])
+    assert "steppy run --trace" in job["script"]
+    assert not any("--upload" in line for line in job["script"]), "uploading is opt-in (D6)"
     # after_script, so it also runs when the run failed — and `|| true` so a
     # rendering hiccup never rewrites the job's real status.
     assert any("steppy report" in line for line in job["after_script"])

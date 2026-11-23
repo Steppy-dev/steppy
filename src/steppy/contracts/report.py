@@ -30,7 +30,7 @@ so a test can assert on the model instead of on HTML. ``manifest.build`` refuses
 ``now`` for the same reason.
 
 ``capabilities`` is the **honesty block**. Per-step timelines exist only when the
-run set ``STEPPY_STEP_EVENTS=1`` (which ``steppy run --bundle`` does), coverage
+run set ``STEPPY_STEP_EVENTS=1`` (which every ``steppy run`` does), coverage
 exists only if it was recorded, and assert *strength* is unknowable from a
 detached bundle. Without somewhere to say so, a consumer cannot tell "no timeline
 was recorded" from "the timeline was empty" — the same distinction ``truncated``

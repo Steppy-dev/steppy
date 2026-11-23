@@ -226,7 +226,14 @@ def attach_report(source: TreeSource | ArchiveSource, *, project_root: Path):
     Returns ``(ReportedSource, ReportModel)``. Built by the same code as
     ``steppy report`` (``build_model``), with captures referenced by their
     manifest path rather than copied into a site.
+
+    Built from ``source.manifest``, never from the archive's own copy: a
+    ``bundle upload <archive>`` with metadata flags has overridden it
+    (:func:`~steppy.bundle.override_manifest`), and ``report.json``'s run must
+    be the one the manifest sent says.
     """
+    import dataclasses
+
     from ..contracts.report import report_bytes
     from ..report.build import build_document
     from ..report.source import from_plan, open_source
@@ -234,7 +241,9 @@ def attach_report(source: TreeSource | ArchiveSource, *, project_root: Path):
     if isinstance(source, TreeSource):
         report_source = from_plan(source.plan, project_root=project_root, output_dir=source.output_dir)
     else:
-        report_source = open_source(source.path, project_root=project_root)
+        report_source = dataclasses.replace(
+            open_source(source.path, project_root=project_root), manifest=source.manifest
+        )
     model = build_document(report_source, project_root=project_root)
     return ReportedSource(source, report_bytes(model)), model
 

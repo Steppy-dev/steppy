@@ -13,6 +13,7 @@ from .durations import DurationSyntaxError, parse_ms
 from .exclusive import normalize_group_name
 from .locales import base_language, normalize_locale, validate_locale_tag
 from .presets import PRESETS, IDP_PRESETS
+from .provenance import ENVIRONMENT_MAX, MetadataError, clean_environment
 from .testids import check_test_id_attribute
 from .tour_spec import MAX_LOCALES, is_layout_name, is_media_query, is_tour_id
 
@@ -2553,6 +2554,16 @@ class SteppyConfig(BaseModel):
     # upload`. Holds the instance's address and nothing else — the API key is
     # env-only, on purpose.
     cloud: Optional[CloudConfig] = None
+    # Optional. Names what the runs test against (`staging`, `prod`), recorded
+    # as the run's `environment` (spec I3). `steppy run --environment` and
+    # STEPPY_ENVIRONMENT win over it; `${VAR}` references resolve as anywhere
+    # else, and one left unresolved means no environment.
+    environment: Optional[str] = Field(
+        default=None,
+        max_length=ENVIRONMENT_MAX,
+        description="What the runs test against (staging, prod), recorded as the run's environment. "
+        "steppy run --environment and STEPPY_ENVIRONMENT win over it.",
+    )
     # Optional. In-app tours compiled from `tour:`-enabled scenarios. Declared
     # last so its validator can read every other block (locales, layouts).
     tours: Optional[ToursConfig] = None
@@ -2597,6 +2608,20 @@ class SteppyConfig(BaseModel):
                     f"(declared: {sorted(known) or 'none'}); step `layouts:` refer to screenshot.layouts"
                 )
         return v
+
+    @field_validator("environment", mode="before")
+    @classmethod
+    def validate_environment(cls, v):
+        """At most 64 characters, no control character; empty means none.
+
+        The same rule ``steppy run --environment`` and ``STEPPY_ENVIRONMENT``
+        follow (:func:`steppy.provenance.clean_environment`), so a value is
+        refused here rather than cut by a server after the run.
+        """
+        try:
+            return clean_environment(v, source="environment")
+        except MetadataError as e:
+            raise ValueError(str(e)) from None
 
     @field_validator("locales")
     @classmethod

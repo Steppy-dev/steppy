@@ -91,6 +91,28 @@ def _report_unexpected(e: Exception) -> None:
         traceback.print_exc()
 
 
+#: Help for the run-metadata flags (spec I3), shared by `steppy run`, `steppy
+#: bundle create` and `steppy bundle upload` so the three describe them alike.
+BRANCH_HELP = "The branch to record. Default: detected from GitHub Actions or GitLab CI, else the local repository."
+COMMIT_HELP = (
+    "The commit sha to record. Default: detected (on a pull or merge request, its head, not the merge "
+    "commit the CI tests), else the local repository's HEAD."
+)
+PR_HELP = "The pull or merge request number to record. Default: detected from GitHub Actions or GitLab CI."
+ENVIRONMENT_HELP = (
+    "What the run tested against, e.g. staging: free text, at most 64 characters. "
+    "Else $STEPPY_ENVIRONMENT, else config.yaml's environment key."
+)
+
+
+def print_run_metadata(metadata, out=None) -> None:
+    """One dim line saying where a run came from, then any degraded source."""
+    out = out or console
+    out.print(f"[dim]{escape(metadata.describe())}[/dim]")
+    for warning in metadata.warnings:
+        out.print(f"[yellow]WARNING[/yellow] {escape(warning)}")
+
+
 @contextmanager
 def _cli_errors():
     """Shared command error scaffold (FLAWS §4.2).

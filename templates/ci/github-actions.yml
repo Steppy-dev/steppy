@@ -89,10 +89,26 @@ jobs:
           # Map your repository secrets onto the ${VAR} refs in config.yaml.
           STEPPY_ADMIN_USERNAME: ${{ secrets.STEPPY_ADMIN_USERNAME }}
           STEPPY_ADMIN_PASSWORD: ${{ secrets.STEPPY_ADMIN_PASSWORD }}
-        # --bundle records per-test and per-step events plus JUnit XML, which is
+          # Steppy Cloud (optional) — see the `run:` lines below. The project's
+          # API key comes from the repository's secrets, never from config.yaml;
+          # the address is your instance's (a repository variable here, or
+          # `cloud.url` in config.yaml).
+          # STEPPY_API_KEY: ${{ secrets.STEPPY_API_KEY }}
+          # STEPPY_URL: ${{ vars.STEPPY_URL }}
+        # Every run records per-test and per-step events plus JUnit XML, which is
         # what lets the report below name the step a failure died in instead of
-        # only the test. It changes the pytest invocation, so it is opt-in.
-        run: steppy run --trace --bundle
+        # only the test. It also records where the run came from: the branch, the
+        # commit (on a pull request, its head, not the merge commit GitHub
+        # builds) and a link to this job. `--environment staging` names what it
+        # ran against.
+        run: steppy run --trace
+        # Steppy Cloud: nothing is uploaded unless you ask. To send each run,
+        # uncomment the two env lines above and use this line instead. The
+        # upload happens after the tests, failed or not, prints the run's URL,
+        # and never changes this step's result. `${STEPPY_API_KEY:+--upload}`
+        # passes --upload only when the key is set: a pull request from a fork
+        # gets no secrets, and its tests should still run.
+        # run: steppy run --trace ${STEPPY_API_KEY:+--upload}
 
       # When the suite goes red, the question is almost always "was it the tests
       # or the stack?" — and the stack's own logs are the fastest way to know.
@@ -222,7 +238,7 @@ jobs:
 #     has none and every one of those endpoints counts against you.
 #
 #   - name: Run scenarios
-#     run: steppy run --trace --bundle --coverage
+#     run: steppy run --trace --coverage
 #
 #   - name: Refresh the declared surface
 #     if: always()
@@ -231,8 +247,8 @@ jobs:
 # ── Results bundles ───────────────────────────────────────────────────────────
 #
 # Instead of uploading a loose output/ tree, package the run into one portable,
-# self-describing archive. The run step already passes --bundle, so the event
-# records and JUnit XML a bundle needs are captured; add the packaging step:
+# self-describing archive. Every run records the event records and JUnit XML a
+# bundle needs; add the packaging step:
 #
 #   - name: Package results
 #     if: always()

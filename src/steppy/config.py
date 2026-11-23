@@ -186,6 +186,36 @@ def _load_credentials(config_path: Path) -> Optional[dict]:
     return data if data else None
 
 
+def read_environment(config_path: Optional[Path] = None) -> Optional[str]:
+    """``config.yaml``'s ``environment:`` alone, checked: what labels a run.
+
+    Read on its own rather than through :func:`load_config` because ``steppy run``
+    reads its config best-effort — a config the model rejects for an unrelated
+    reason still runs its tests, since the generated conftest reads the YAML
+    itself — while a bad ``environment:`` must stop the run before any test does.
+
+    ``${VAR}`` references resolve as in :func:`load_config`. Returns None when the
+    file is absent or unreadable or has no such key; raises :class:`ConfigError`
+    for a value :func:`steppy.provenance.clean_environment` refuses.
+    """
+    from .provenance import MetadataError, clean_environment
+
+    if config_path is None:
+        config_path = Path.cwd() / "config.yaml"
+    try:
+        raw = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError, yaml.YAMLError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return clean_environment(
+            _interpolate_env(raw.get("environment")), source=f"{Path(config_path).name}: environment"
+        )
+    except MetadataError as e:
+        raise ConfigError(str(e)) from None
+
+
 def load_config(config_path: Optional[Path] = None) -> SteppyConfig:
     """
     Load and validate the Steppy configuration from config.yaml.

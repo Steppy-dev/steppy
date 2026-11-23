@@ -16,7 +16,35 @@ client, something on the free path has started depending on it.
 import subprocess
 import sys
 
+import pytest
+
 _CLOUD_MODULE_PREFIX = "steppy.cloud"
+_RELOADED = ("steppy.cloud", "steppy.cli", "steppy.bundle_cli")
+
+
+def _is_reloaded(name: str) -> bool:
+    return any(name == prefix or name.startswith(prefix + ".") for prefix in _RELOADED)
+
+
+@pytest.fixture(autouse=True)
+def _restore_the_modules_these_tests_reload():
+    """Put back the modules the checks below purge and re-import.
+
+    Left purged, the next ``from .cloud import …`` anywhere in the run makes a
+    second ``steppy.cloud``, while ``tests/_fake_cloud.py`` still holds the first
+    one's ``CloudClient``: its ``CloudAuthError`` is then not the class
+    ``upload_cli`` catches, and an unrelated test fails depending on file order.
+    """
+    import steppy
+
+    saved = {name: module for name, module in sys.modules.items() if _is_reloaded(name)}
+    attributes = {name: getattr(steppy, name) for name in ("cloud", "cli", "bundle_cli") if hasattr(steppy, name)}
+    yield
+    for name in [name for name in sys.modules if _is_reloaded(name)]:
+        del sys.modules[name]
+    sys.modules.update(saved)
+    for name, module in attributes.items():
+        setattr(steppy, name, module)
 
 
 def _purge(prefix: str) -> None:

@@ -180,8 +180,8 @@ def build_model(
     tests = list(manifest.tests)
     causes, prints = group_manifest_failures(tests)
 
-    # Scenarios come from the tests AND the files, so a run made without
-    # --bundle — no test rows at all — still lists what it captured instead of
+    # Scenarios come from the tests AND the files, so a tree no `steppy run`
+    # recorded — no test rows at all — still lists what it captured instead of
     # rendering an empty page.
     slugs: list[str] = []
     seen: set[str] = set()
@@ -265,7 +265,7 @@ def build_model(
 
     not_passed = sum(1 for s in scenarios if s.outcome not in _PASSING)
     if not tests:
-        # No outcomes were recorded at all — a run without ``--bundle``, or a
+        # No outcomes were recorded at all — a tree no ``steppy run`` recorded, or a
         # capture-only guide run. "passed" would be a claim we have no evidence
         # for, which is the exact failure mode this whole model tries to avoid.
         # ``exit_code`` stays 0 because nothing *failed*: the run itself already

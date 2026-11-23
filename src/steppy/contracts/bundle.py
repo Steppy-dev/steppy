@@ -45,11 +45,53 @@ class _Wire(BaseModel):
 
 class BundleGit(_Wire):
     """Where the run's code came from. Every field optional — a laptop run
-    outside a repository has none of it, and that is not an error."""
+    outside a repository has none of it, and that is not an error.
+
+    ``sha`` is the commit the run *describes*: on a pull or merge request, the
+    request's head, never the merge commit a CI builds to test it. That merge
+    commit, when it differs, is ``tested_sha``. Resolved in this order: the
+    ``--commit`` / ``--branch`` / ``--pr`` flags, then the CI's variables
+    (GitHub Actions, GitLab CI), then the local repository. See
+    :mod:`steppy.provenance`.
+    """
 
     sha: Optional[str] = None
     branch: Optional[str] = None
     pr: Optional[int] = None
+    base_branch: Optional[str] = Field(
+        default=None,
+        description="The branch a pull or merge request targets. None outside one.",
+    )
+    tested_sha: Optional[str] = Field(
+        default=None,
+        description="The commit the run actually tested, when it differs from sha: the merge commit "
+        "a CI builds for a pull or merge request. None when sha is what was tested, or when unknown.",
+    )
+    dirty: Optional[bool] = Field(
+        default=None,
+        description="True when the working tree had uncommitted changes to tracked files when the run "
+        "started, so sha alone does not reproduce it. Checked on local runs only; None means not checked.",
+    )
+
+
+class BundleCi(_Wire):
+    """The CI job that made the run. Present only when one was detected.
+
+    ``provider`` is a plain ``str`` rather than an enum (rule 2 in
+    :mod:`steppy.contracts`): a newer producer may detect a CI this consumer
+    does not know.
+    """
+
+    provider: str = Field(description="github-actions or gitlab-ci.")
+    url: Optional[str] = Field(
+        default=None,
+        description="A link to the job: on GitHub Actions the workflow run's attempt (GitHub gives no "
+        "job URL without its API), on GitLab CI the job.",
+    )
+    repo: Optional[str] = Field(
+        default=None,
+        description="The repository the CI ran in, as owner/name (GitLab: the full project path, group/subgroup/name).",
+    )
 
 
 class BundleSpec(_Wire):
@@ -78,9 +120,17 @@ class BundleRun(_Wire):
     run_id: str
     created_at: str
     steppy_version: str
+    #: ``ci`` when a CI was detected (``GITHUB_ACTIONS``, ``GITLAB_CI`` or
+    #: ``CI`` set), else ``local``; ``--executor`` overrides it. A plain ``str``.
     executor: str = "local"
     git: BundleGit = Field(default_factory=BundleGit)
     spec: BundleSpec = Field(default_factory=BundleSpec)
+    environment: Optional[str] = Field(
+        default=None,
+        description="Free text naming what the run tested against (staging, prod): --environment, else "
+        "STEPPY_ENVIRONMENT, else config.yaml's environment key. At most 64 characters, no control character.",
+    )
+    ci: Optional[BundleCi] = Field(default=None, description="The CI job that made the run, when one was detected.")
 
 
 class BundleTest(_Wire):
@@ -107,7 +157,7 @@ class BundleTest(_Wire):
     #: 1-based index of the step that was in flight when the test died — the
     #: scenario's own step number, so it survives steps skipped by ``only-in:``
     #: or ``layouts:``. Recorded by the env-gated ``STEPPY_STEP_EVENTS`` emitter
-    #: that ``steppy run --bundle`` turns on.
+    #: that every ``steppy run`` turns on (``STEPPY_STEP_EVENTS=0`` turns it off).
     #:
     #: ``None`` is a real answer, not just "unknown": a passing test has no
     #: failed step, and a test that died in fixture teardown closed every step

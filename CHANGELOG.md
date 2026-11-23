@@ -18,8 +18,27 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command. Without either flag nothing is uploaded, even with a key set.
 - **The upload protocol is a published contract**: `steppy.contracts.upload`
   and `contracts/upload.schema.json`, the models of `GET /v1/key`,
-  `POST /v1/runs`, `POST /v1/runs/{id}/finalize` and the error body. The bundle
-  and report contracts are unchanged (`steppy_bundle: 1`, `steppy_report: 1`).
+  `POST /v1/runs`, `POST /v1/runs/{id}/finalize` and the error body.
+- **Every run records where it came from**: the commit, the branch, the pull or
+  merge request and the branch it targets, the CI job, and the environment it
+  tested against, in `output/.steppy-run.json`, so `steppy report`,
+  `steppy bundle create` and the upload describe the run itself rather than
+  whatever checkout they run in later. **GitLab CI is detected** (branch, merge
+  request, merged-results pipelines, tags, the job's link), and so is GitHub
+  Actions, as before. Elsewhere the local repository is read, along with whether
+  tracked files had uncommitted changes.
+- **`--branch`, `--commit`, `--pr` and `--environment`** on `steppy run`,
+  `steppy bundle create` and `steppy bundle upload` override what is detected.
+  The environment is free text (`staging`, `prod`), at most 64 characters:
+  `--environment`, else `STEPPY_ENVIRONMENT`, else a new top-level
+  `environment:` key in `config.yaml`. A value that cannot be used stops
+  `steppy run` before any test.
+- **The bundle contract gains, additively** (`steppy_bundle: 1` unchanged):
+  `run.environment`; `run.ci` (`provider`: `github-actions` or `gitlab-ci`,
+  `url`: a link to the job, `repo`: `owner/name`); and in `run.git`,
+  `base_branch`, `tested_sha` (the merge commit a CI built to test a pull or
+  merge request, when it differs from `sha`) and `dirty` (local runs only).
+  `report.json`'s `run` carries the same fields (`steppy_report: 1` unchanged).
 
 ### Changed
 - **`steppy bundle upload` speaks the new protocol**: it builds the run's
@@ -37,6 +56,31 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Requests time out after 10 s to connect**, and 429, 5xx and network errors
   are retried twice (three times before). A refused key is never retried, a 422
   prints the server's explanation, and a 413 says the manifest is too large.
+- **On a GitHub pull request, the run is the pull request's**: the branch is
+  its head branch (`GITHUB_HEAD_REF`) and the commit its head, read from the
+  event file, instead of `42/merge` and the merge commit GitHub builds, which is
+  now `run.git.tested_sha`. `pull_request_target` is read the same way, and a tag
+  has no branch.
+- **`executor` is `ci` by itself** when `GITHUB_ACTIONS`, `GITLAB_CI` or `CI` is
+  set, else `local`; `--executor` on the bundle commands still wins.
+  `--git-branch` and `--git-sha` are the earlier names of `--branch` and
+  `--commit`, still accepted and no longer shown in the help.
+- **`steppy bundle upload <archive>` applies the metadata flags** (`--branch`,
+  `--commit`, `--pr`, `--environment`, `--executor`, `--run-id`) to the manifest
+  it sends, builds `report.json` after them, and prints what they changed. They
+  were silently ignored before. The archive itself is not rewritten.
+  `--no-guides`, `--max-size` and the other trimming flags say they change
+  nothing for an archive that is already made.
+- **`steppy init --ci` and `--ci-gitlab` show the upload, commented out**: the
+  project's API key from the CI's secrets or variables and
+  `steppy run --trace ${STEPPY_API_KEY:+--upload}`, which runs a fork's pull
+  request (no secrets) without stopping on a missing key. Nothing is uploaded
+  until you uncomment it. `steppy update` refreshes an unedited file.
+- **No generated or scaffolded file says `steppy run --bundle` any more**: the
+  CI templates, the reusable `steppy-e2e.yml` (whose `run-args` default is now
+  `--trace`), the generated `conftest.py` and `_steppy_events.py`, and the
+  docstrings. Every run has recorded its events since 0.9.1; `--bundle` is still
+  accepted and still does nothing more.
 
 ### Removed
 - **The claim-and-task upload protocol** (`/claim`, the bundle offer,

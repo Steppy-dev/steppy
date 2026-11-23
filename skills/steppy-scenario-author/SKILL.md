@@ -1166,6 +1166,17 @@ What `--upload` does, in order:
 
 `steppy run` then `steppy bundle upload` does the same in two commands, for a CI that uploads in a separate step. `steppy bundle upload` is an explicit upload, so it **exits 1 when the upload fails**.
 
+#### What the run says about itself
+
+The run's page shows its commit, branch, pull or merge request, CI job and environment. Every `steppy run` records them — detected from GitHub Actions or GitLab CI, else the local repository (the CI skill's "Where a run came from" has the table) — and the upload sends what the run recorded, even from a later step or another machine. Four flags, the same on `steppy run`, `steppy bundle create` and `steppy bundle upload`, override what is detected:
+
+```bash
+steppy run --upload --environment staging        # what the run tested against: free text, at most 64 characters
+steppy run --upload --branch "$BRANCH" --commit "$SHA" --pr 42   # a CI Steppy does not detect
+```
+
+The environment is `--environment`, else `STEPPY_ENVIRONMENT`, else `environment:` in `config.yaml`. A value that cannot be used stops `steppy run` before any test and before the key check. `steppy bundle upload <archive> --environment prod` applies the flags to the manifest it sends (and the `report.json` built from it), prints what it changed, and leaves the archive alone. `--git-branch` and `--git-sha` are the flags' earlier names and still work.
+
 #### Content-addressed, so re-runs are cheap
 
 The client creates the run with the **manifest** (each file's hash, size and kind, `report.json` among them); the server answers with an upload URL **only for each file it wants and does not hold yet**, then the client finalizes. By default the server keeps the screenshots of failed variants only, and a screenshot it already holds is never sent again. A re-run that changed two screenshots uploads two screenshots — not the 3,000-file tree around them. This is also why `steppy bundle create`'s archives are byte-reproducible: without that, every upload would look entirely new.
@@ -1219,13 +1230,13 @@ steppy bundle upload --concurrency 8           # parallel uploads (ignored when 
 #### CI shape
 
 ```yaml
-- run: steppy run --workers 4 --upload
+- run: steppy run --workers 4 --environment staging ${STEPPY_API_KEY:+--upload}
   env:
     STEPPY_URL: ${{ vars.STEPPY_URL }}
     STEPPY_API_KEY: ${{ secrets.STEPPY_API_KEY }}
 ```
 
-One step: the upload happens even when tests fail, and the step's exit code is the tests'. A pull request from a fork gets no secrets, so `STEPPY_API_KEY` is empty there and `--upload` stops with a configuration error — leave `--upload` off for those, or upload in a separate step that only runs when the secret exists.
+One step: the upload happens even when tests fail, and the step's exit code is the tests'. A pull request from a fork gets no secrets, so `STEPPY_API_KEY` is empty there, and a bare `--upload` would stop with a configuration error; `${STEPPY_API_KEY:+--upload}` passes the flag only when the key is set, so the fork's tests still run. GitLab is the same line, with the key as a Masked CI/CD variable (a Protected one is absent on unprotected branches, which then run without uploading). `steppy init --ci` and `--ci-gitlab` write exactly this, commented out.
 
 ---
 

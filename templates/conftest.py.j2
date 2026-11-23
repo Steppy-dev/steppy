@@ -199,11 +199,11 @@ DEFAULT_TEST_LAYOUT = "desktop"
 #
 #   STEPPY_EMIT_EVENTS=1     stdout ``STEPPY-EVT::`` lines, parsed live by the
 #                            parallel coordinator (``steppy run --workers N``)
-#   STEPPY_EVENTS_DIR=<dir>  per-test JSONL, consumed by ``steppy bundle create``
-#                            (``steppy run --bundle``)
+#   STEPPY_EVENTS_DIR=<dir>  per-test JSONL, consumed by ``steppy report`` and
+#                            ``steppy bundle create`` (every ``steppy run``)
 #
-# A plain single-worker run sets neither and the import never happens, keeping
-# pytest output byte-identical to the historic behaviour.
+# A bare ``pytest`` run sets neither and the import never happens, keeping its
+# output byte-identical to the historic behaviour.
 #
 # Why direct import and not ``pytest_plugins = [...]`` — pytest 8 hard-fails
 # when ``pytest_plugins`` is declared in a non-rootdir conftest (this conftest
@@ -300,7 +300,7 @@ def _steppy_step_record(kind, step_number, **fields):
     their scenario/locale/layout attribution for free. It is only importable
     when the events gate above put this directory on ``sys.path``, and it
     early-returns when no events dir is configured — so step events are
-    automatically inert outside a ``steppy run --bundle``.
+    automatically inert outside a ``steppy run``.
     """
     if not STEP_EVENTS:
         return

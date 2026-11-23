@@ -199,7 +199,7 @@ def _failed_step(row: dict, outcome: str, warnings: list[str]) -> Optional[int]:
 #
 # * ``step-start`` carries ``step``, ``title`` and ``action``; ``step-end``
 #   carries ``step``. Both exist only when ``STEPPY_STEP_EVENTS=1`` — which
-#   ``steppy run --bundle`` sets — so their absence is information, not an error.
+#   every ``steppy run`` sets — so their absence is information, not an error.
 # * Step numbers are **sparse**. A step skipped by ``only-in:`` or ``layouts:``
 #   emits neither marker, so gaps are expected and must never be renumbered.
 # * No total-step-count exists anywhere in a bundle. "step 7", never "7 of 12".

@@ -10,16 +10,15 @@ cheaper half of that trade.
 
 from __future__ import annotations
 
-import os
-import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from .. import __version__
 from ..contracts.bundle import (
     BUNDLE_SCHEMA_VERSION,
+    BundleCi,
     BundleCoverage,
     BundleFile,
     BundleGit,
@@ -28,6 +27,7 @@ from ..contracts.bundle import (
     BundleSpec,
     BundleTest,
 )
+from ..provenance import RunMetadata
 from . import classify as _classify
 from .hashing import sha256_file
 
@@ -71,46 +71,11 @@ class Assembly:
     warnings: list[str] = field(default_factory=list)
 
 
-def _git(project_root: Path, *args: str) -> Optional[str]:
-    """Run a read-only git command, or ``None`` if git/the repo is unavailable."""
-    try:
-        out = subprocess.run(
-            ["git", *args],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    value = out.stdout.strip()
-    return value if out.returncode == 0 and value else None
-
-
-def detect_git(
-    project_root: Path,
-    *,
-    sha: Optional[str] = None,
-    branch: Optional[str] = None,
-    pr: Optional[int] = None,
-) -> BundleGit:
-    """Resolve git provenance: explicit flags → CI env → local git → nothing.
-
-    CI variables come before ``git rev-parse`` because a CI checkout is often
-    detached at a merge commit that does not describe the change under test.
-    """
-    sha = sha or os.environ.get("GITHUB_SHA") or _git(project_root, "rev-parse", "HEAD")
-    branch = branch or os.environ.get("GITHUB_REF_NAME") or _git(project_root, "rev-parse", "--abbrev-ref", "HEAD")
-    if pr is None:
-        ref = os.environ.get("GITHUB_REF", "")
-        # refs/pull/42/merge
-        if ref.startswith("refs/pull/"):
-            candidate = ref.split("/")[2] if len(ref.split("/")) > 2 else ""
-            if candidate.isdigit():
-                pr = int(candidate)
-    if branch == "HEAD":
-        branch = None
-    return BundleGit(sha=sha, branch=branch, pr=pr)
+def contract_metadata(meta: RunMetadata) -> tuple[BundleGit, Optional[BundleCi]]:
+    """A run's metadata as the contract's ``run.git`` and ``run.ci``."""
+    git = BundleGit(**asdict(meta.git))
+    ci = BundleCi(**asdict(meta.ci)) if meta.ci is not None else None
+    return git, ci
 
 
 def _spec_from_sidecar(sidecar: Optional[dict]) -> BundleSpec:
@@ -238,6 +203,8 @@ def build(
     sidecar: Optional[dict] = None,
     executor: str = "local",
     git: Optional[BundleGit] = None,
+    ci: Optional[BundleCi] = None,
+    environment: Optional[str] = None,
     exclude_kinds: frozenset[str] = frozenset(),
     max_size: int = 0,
     junit_xml: Optional[bytes] = None,
@@ -318,6 +285,8 @@ def build(
             executor=executor,
             git=git or BundleGit(),
             spec=_spec_from_sidecar(sidecar),
+            environment=environment,
+            ci=ci,
         ),
         tests=tests,
         files=files,

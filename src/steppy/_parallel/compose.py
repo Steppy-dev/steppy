@@ -253,7 +253,7 @@ def render_override(
         # quotes are the YAML string delimiter here, so double them to escape.
         joined = shlex.join(pytest_extra).replace("'", "''")
         extra_env += f"      STEPPY_PYTEST_EXTRA: '{joined}'\n"
-    # ``--bundle`` sinks. In-container paths under the writable output/ mount —
+    # The run's record sinks. In-container paths under the writable output/ mount —
     # every worker writes into the SAME shared directories, which is safe
     # because both are keyed by scenario and a scenario is claimed by exactly
     # one worker.

@@ -45,9 +45,22 @@ e2e:
     # it. The app under test must be built with those files before the replays run.
     # - steppy tours --check
     - steppy generate
-    # --bundle records per-test and per-step events plus JUnit XML, which is what
+    # Every run records per-test and per-step events plus JUnit XML, which is what
     # lets the report name the step a failure died in rather than only the test.
-    - steppy run --trace --bundle
+    # It also records where the run came from: the branch, the commit (in a
+    # merged-results pipeline, the merge request's head, not the merge GitLab
+    # builds) and a link to this job. `--environment staging` names what it ran
+    # against.
+    - steppy run --trace
+    # Steppy Cloud: nothing is uploaded unless you ask. To send each run, add
+    # STEPPY_API_KEY (the project's API key) as a Masked CI/CD variable — never in
+    # config.yaml — and STEPPY_URL (your instance's address, or `cloud.url` in
+    # config.yaml), then use this line instead of the one above. The upload
+    # happens after the tests, failed or not, prints the run's URL, and never
+    # changes the job's result. `${STEPPY_API_KEY:+--upload}` passes --upload only
+    # when the key is set: a Protected variable is absent on unprotected
+    # branches, and their pipelines should still run the tests.
+    # - steppy run --trace ${STEPPY_API_KEY:+--upload}
   after_script:
     # after_script runs even when the run failed, which is exactly when the
     # report matters. `steppy report` exits 0 either way — it describes
@@ -60,8 +73,9 @@ e2e:
       - output/report/
       - output/
     reports:
-      # Set report.junit_xml in config.yaml, or use --bundle's fixed path, and
-      # GitLab renders per-test results in the merge request widget.
+      # Every run writes JUnit XML under output/junit/<run-id>/, which GitLab
+      # renders as per-test results in the merge request widget. If
+      # report.junit_xml in config.yaml names another path, point this at it.
       junit: output/junit/*/*.xml
 
 # ── Publishing the report to GitLab Pages ─────────────────────────────────────
@@ -135,7 +149,7 @@ e2e:
 #     has none and every one of those endpoints counts against you.
 #
 #   script:
-#     - steppy run --trace --bundle --coverage
+#     - steppy run --trace --coverage
 #   after_script:
 #     - steppy coverage refresh && steppy coverage report --json output/coverage/gaps.json || true
 #     - steppy report || true

@@ -46,6 +46,14 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `steppy.cloud`'s `upload_bundle`, `derive_exit_code` and `cloud_client` went
   with it.
 
+### Fixed
+- **The GitHub Actions workflows run on `ubuntu-24.04`**: the one
+  `steppy init --ci` writes and the default `runs-on` of the reusable
+  `steppy-e2e.yml`. `ubuntu-latest` is now Ubuntu 26.04, where the Playwright
+  Steppy pins (1.60) cannot install Chromium, so the browser step failed before
+  any test ran. A workflow that already passes its own `runs-on` is unchanged;
+  `steppy update` refreshes an unedited `steppy.yml`.
+
 ## [0.9.2] - 2026-11-11
 
 ### Fixed

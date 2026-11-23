@@ -63,7 +63,9 @@ def test_it_declares_the_inputs_a_caller_needs():
     for name in ("compose-file", "compose-up", "run-args", "steppy-ref", "runs-on", "working-directory"):
         assert name in inputs, f"missing input: {name}"
     # A self-hosted label is how this reaches an app that GitHub's runners cannot.
-    assert inputs["runs-on"]["default"] == "ubuntu-latest"
+    # The default is 24.04, not ubuntu-latest (26.04), where the pinned
+    # Playwright cannot install Chromium.
+    assert inputs["runs-on"]["default"] == "ubuntu-24.04"
     # Off-by-default would silently skip the app for every caller that trusted it.
     assert inputs["compose-up"]["default"] is True
 

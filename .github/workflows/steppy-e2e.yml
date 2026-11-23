@@ -34,7 +34,9 @@ on:
       runs-on:
         description: 'Runner to execute on. A self-hosted label reaches an app CI cannot.'
         type: string
-        default: 'ubuntu-latest'
+        # Not ubuntu-latest: that is Ubuntu 26.04 now, where the pinned
+        # Playwright cannot install Chromium.
+        default: 'ubuntu-24.04'
       working-directory:
         description: 'Directory holding config.yaml and scenarios/.'
         type: string

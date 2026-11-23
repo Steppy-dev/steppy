@@ -36,7 +36,9 @@ on:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: that is Ubuntu 26.04 now, where the Playwright this
+    # Steppy release pins cannot install Chromium (`--with-deps` below fails).
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -259,7 +261,7 @@ jobs:
 #
 # It needs a `parallel:` block + per-app `internal_url` in config.yaml,
 # healthchecks on your compose services, and Docker Compose 2.20+ on the runner
-# (ubuntu-latest has it). Two things worth knowing about the CI output:
+# (GitHub's Ubuntu runners have it). Two things worth knowing about the CI output:
 #
 #   * Failed scenarios are automatically re-run once at reduced concurrency. One
 #     that then passes is reported as FLAKY and does NOT fail the build — it lost

@@ -273,8 +273,9 @@ What to expect:
 Only the latest release is supported with security fixes.
 
 **In scope:** Steppy's own code, including the code it generates (`conftest.py`,
-test files), the guide/report sites it builds, the bundle upload client, and the
-in-app tour overlay (`steppy-tour.js`) with the tour files Steppy generates.
+test files), the guide/report sites it builds, the upload client (`steppy run
+--upload` and `steppy bundle upload`), and the in-app tour overlay
+(`steppy-tour.js`) with the tour files Steppy generates.
 **Out of scope:** the application under test, and the documented trade-offs above
 (storage state on disk, shell capture once enabled, artifacts being unredacted
 diagnostic text); for in-app tours, your application's CSP, the guide host's CORS

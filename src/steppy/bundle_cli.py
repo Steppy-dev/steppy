@@ -195,23 +195,6 @@ def create(
             )
 
 
-def _config_cloud_url(project_root: Path) -> Optional[str]:
-    """``cloud.url`` from the project's config, or None.
-
-    A config that does not load is not an error here — the flag and the
-    environment variable both still work, and refusing to upload a finished run
-    because ``config.yaml`` no longer parses would be the same poor trade
-    ``resolve_roots`` already declines to make.
-    """
-    try:
-        from .config import load_config
-
-        config = load_config(project_root / "config.yaml")
-    except Exception:
-        return None
-    return config.cloud.url if config.cloud else None
-
-
 @bundle_app.command("upload")
 def upload(
     bundle_path: Optional[Path] = typer.Argument(
@@ -220,31 +203,29 @@ def upload(
         "from output/ without writing an archive (the usual case).",
     ),
     url: Optional[str] = typer.Option(
-        None, "--url", help="Control plane base URL. Else $STEPPY_CLOUD_URL, else cloud.url."
-    ),
-    token: Optional[str] = typer.Option(
-        None, "--token", help="Project token. Else $STEPPY_CLOUD_TOKEN. There is no config key for it on purpose."
-    ),
-    attach: Optional[str] = typer.Option(
         None,
-        "--attach",
-        help="Id of an existing run on the plane to upload into, instead of creating one. "
-        "What `steppy ci run` will use, where the plane created the run first.",
+        "--url",
+        help="The Steppy Cloud instance's address (the client appends /api/v1). "
+        "Else $STEPPY_URL, else $STEPPY_CLOUD_URL (an API base: only /v1 is appended), else cloud.url.",
+    ),
+    api_key: Optional[str] = typer.Option(
+        None,
+        "--api-key",
+        "--token",
+        help="The project's API key. Else $STEPPY_API_KEY, else $STEPPY_CLOUD_TOKEN. "
+        "There is no config key for it on purpose.",
     ),
     run_id: Optional[str] = typer.Option(
         None,
         "--run-id",
         help="Run identity for manifest.run.run_id, as in `bundle create`. Doubles as the "
-        "idempotency key, so re-uploading attaches to the same run rather than making a second.",
+        "idempotency key, so uploading again returns the same run rather than making a second.",
     ),
     project_root: Path = typer.Option(Path("."), "--project-root", help="Project root."),
     output_dir: Optional[Path] = typer.Option(
         None, "--output-dir", help="The tree to upload. Default: <project-root>/output"
     ),
-    executor: str = typer.Option("local", "--executor", help="What ran the tests, recorded on a created run."),
-    exit_code: Optional[int] = typer.Option(
-        None, "--exit-code", help="The run's verdict. Default: derived from the manifest's test outcomes."
-    ),
+    executor: str = typer.Option("local", "--executor", help="What ran the tests, recorded in the manifest."),
     git_sha: Optional[str] = typer.Option(None, "--git-sha", help="Override the detected commit sha."),
     git_branch: Optional[str] = typer.Option(None, "--git-branch", help="Override the detected branch."),
     pr: Optional[int] = typer.Option(None, "--pr", help="Pull-request number this run belongs to."),
@@ -254,28 +235,28 @@ def upload(
     coverage: bool = typer.Option(True, "--coverage/--no-coverage", help="Include output/coverage/."),
     max_size: str = typer.Option("0", "--max-size", help="Uncompressed payload budget, e.g. 2GiB. 0 disables it."),
     concurrency: int = typer.Option(4, "--concurrency", min=1, help="Parallel uploads (ignored for an archive)."),
-    timeout: float = typer.Option(60.0, "--timeout", help="Per-request timeout, seconds."),
+    timeout: float = typer.Option(60.0, "--timeout", help="Per-request timeout, seconds (10 s to connect)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be uploaded; contact nothing."),
     as_json: bool = typer.Option(False, "--json", help="Print the outcome as JSON."),
 ) -> None:
-    """Push a run's results to a Steppy control plane.
+    """Upload a recorded run to Steppy Cloud.
 
-    Uploads are content-addressed: the server is offered the manifest and hands
-    back URLs only for the files it does not already hold, so a re-run that
-    changed two screenshots uploads two screenshots. Interrupted? Run it again —
-    it attaches to the same run and sends only what is missing.
+    Builds the run's report.json, then creates the run with the manifest of its
+    files: the server answers with an upload URL for each file it wants and
+    does not hold yet, so a re-run that changed two screenshots uploads two
+    screenshots. Interrupted? Run it again — it gets the same run back and sends
+    only what is missing. Exits non-zero when the upload fails.
 
-    Run your scenarios with `steppy run` first. Two things depend on
-    it: the per-test event records, without which the plane gets an empty
-    tests[] and no failure detail; and the run identity in
-    output/.steppy-run.json, which is the idempotency key that makes a retried
-    upload attach rather than create a second run. Without a recorded identity
-    a fresh one is minted per invocation — pass --run-id to pin it, or --attach
-    to upload into a run that already exists.
+    Run your scenarios with `steppy run` first: it records the per-test event
+    records the report is built from, and the run identity in
+    output/.steppy-run.json that makes uploading again return the same run.
+    `steppy run --upload` does both in one command.
     """
     with _cli_errors():
         from .bundle import BundleError, plan_bundle
-        from .cloud import ArchiveSource, CloudError, TreeSource, cloud_client, derive_exit_code, upload_bundle
+        from .cloud import ArchiveSource, CloudError, TreeSource, attach_report, connect, resolve_endpoint
+        from .report.source import ReportSourceError
+        from .upload_cli import config_cloud_url, print_outcome, run_with_progress
 
         try:
             if bundle_path is not None:
@@ -295,9 +276,11 @@ def upload(
                         coverage=coverage,
                         max_size=_parse_size(max_size),
                         executor=executor,
-                    )
+                    ),
+                    output_dir=output_dir,
                 )
-        except BundleError as e:
+            source, report = attach_report(source, project_root=project_root)
+        except (BundleError, ReportSourceError) as e:
             _error(str(e))
             raise typer.Exit(1)
 
@@ -306,101 +289,24 @@ def upload(
             _print_summary(manifest, run_id_source="planned")
             console.print(
                 f"\n[dim]Dry run — nothing uploaded. {len(manifest.files)} file(s), "
-                f"{_human(sum(f.size for f in manifest.files))} before dedup; "
-                f"verdict would be exit {derive_exit_code(manifest) if exit_code is None else exit_code}.[/dim]"
+                f"{_human(sum(f.size for f in manifest.files))} before dedup, report.json included "
+                f"(verdict {report.totals.verdict}).[/dim]"
             )
             raise typer.Exit(0)
 
         try:
-            client = cloud_client(url=url, token=token, config_url=_config_cloud_url(project_root), timeout=timeout)
+            endpoint = resolve_endpoint(url, api_key, config_url=lambda: config_cloud_url(project_root))
+            with connect(endpoint, timeout=timeout) as client:
+                outcome = run_with_progress(client, source, concurrency=concurrency)
         except CloudError as e:
-            _error(str(e))
+            _error(f"upload failed: {e}")
             raise typer.Exit(1)
-
-        with client:
-            try:
-                outcome = _run_upload(
-                    upload_bundle,
-                    client,
-                    source,
-                    run_id=attach,
-                    executor=executor,
-                    exit_code=exit_code,
-                    concurrency=concurrency,
-                )
-            except CloudError as e:
-                _error(str(e))
-                raise typer.Exit(1)
 
         if as_json:
             typer.echo(_json.dumps(outcome.as_dict(), indent=2))
             raise typer.Exit(0)
 
-        _print_upload_summary(outcome, client.endpoint.url)
-
-
-def _run_upload(upload_bundle, client, source, *, run_id, executor, exit_code, concurrency):
-    """Drive the upload behind a byte-oriented progress bar.
-
-    Progress is measured in bytes rather than files: a bundle is a handful of
-    megabyte screenshots among hundreds of tiny sidecars, so a file counter
-    would sit at 90% for most of the wall clock.
-    """
-    from rich.progress import BarColumn, Progress, TextColumn, TimeElapsedColumn
-
-    total = sum(f.size for f in source.manifest.files)
-    with Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("{task.fields[sent]}"),
-        TimeElapsedColumn(),
-        console=console,
-        transient=True,
-    ) as progress:
-        bar = progress.add_task("uploading", total=total or 1, sent="")
-        sent = 0
-
-        def advance(blob) -> None:
-            nonlocal sent
-            sent += blob.size
-            progress.update(bar, completed=sent, sent=_human(sent))
-
-        return upload_bundle(
-            client,
-            source,
-            run_id=run_id,
-            executor=executor,
-            exit_code=exit_code,
-            concurrency=concurrency,
-            on_progress=advance,
-        )
-
-
-def _print_upload_summary(outcome, base_url: str) -> None:
-    verb = "Created run" if outcome.created_run else "Uploaded to run"
-    console.print(f"\n[bold]{verb}[/bold] #{outcome.run_number} [dim]{outcome.run_id}[/dim]")
-
-    # Blobs, not files: uploads are content-addressed, so a screenshot that is
-    # byte-identical across two locales is one upload serving two manifest
-    # entries. Reporting "3 of 4 files" for that would be a lie in both numbers.
-    if outcome.uploaded:
-        console.print(
-            f"[bold]Uploaded[/bold] {outcome.uploaded} of {outcome.total_blobs} blob(s), "
-            f"{_human(outcome.uploaded_bytes)} [dim]({outcome.total_files} file(s))[/dim]"
-        )
-    else:
-        console.print("[bold]Uploaded[/bold] nothing — the server already held every blob in this run")
-    if outcome.skipped_bytes:
-        console.print(f"[dim]{_human(outcome.skipped_bytes)} not sent — already held (content-addressed dedup)[/dim]")
-
-    for warning in outcome.warnings:
-        console.print(f"[yellow]WARNING[/yellow] {warning}")
-
-    colour = {"completed": "green", "failed": "red", "error": "red", "expired": "red", "canceled": "yellow"}.get(
-        outcome.run_status, "yellow"
-    )
-    console.print(f"[bold]Status[/bold] [{colour}]{outcome.run_status}[/{colour}]")
-    console.print(f"[dim]{base_url}/runs/{outcome.run_id}[/dim]")
+        print_outcome(outcome)
 
 
 @bundle_app.command("inspect")

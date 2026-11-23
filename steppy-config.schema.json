@@ -279,7 +279,7 @@
     },
     "CloudConfig": {
       "additionalProperties": false,
-      "description": "Where ``steppy bundle upload`` pushes results.\n\n**The URL only, never a token.** A control-plane token is a credential, and\n``config.yaml`` is committed \u2014 the same line :func:`config._check_credential_hygiene`\nalready draws for ``apps.*.auth.credentials``. The token comes from\n``STEPPY_CLOUD_TOKEN`` or ``--token``, and there is deliberately no config\nkey for it to be pasted into.\n\nWholly optional and inert when absent, like ``parallel:`` and ``coverage:``.\nNothing in Steppy assumes a control plane exists; this block is read by one\ncommand and ignored by every other.",
+      "description": "Where ``steppy run --upload`` and ``steppy bundle upload`` send a run.\n\n**The address only, never a key.** An API key is a credential, and\n``config.yaml`` is committed \u2014 the same line :func:`config._check_credential_hygiene`\nalready draws for ``apps.*.auth.credentials``. The key comes from\n``STEPPY_API_KEY`` (or ``--api-key`` on ``steppy bundle upload``), and there\nis deliberately no config key for it to be pasted into.\n\nThe last place the address is looked for, after ``--url``, ``STEPPY_URL``\nand ``STEPPY_CLOUD_URL``. Wholly optional and inert when absent, like\n``parallel:`` and ``coverage:``. Nothing in Steppy assumes a Steppy Cloud\ninstance exists; this block is read by the two upload commands and ignored\nby every other.",
       "properties": {
         "url": {
           "anyOf": [

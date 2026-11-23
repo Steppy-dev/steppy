@@ -19,10 +19,12 @@ Compatibility rules, enforced in code rather than by convention:
 4. **Absent keys default** — inherited from the screenshot sidecars, whose
    ``device_scale_factor`` is the worked example (absent means 1).
 
-Two contracts live here: ``bundle`` (``manifest.json`` — what a run *produced*)
-and ``report`` (``report.json`` — what a run *means*). Only ``bundle`` is
-re-exported below, because both modules define ``accepts`` and ``schema_json``
-and flattening them would collide; import ``steppy.contracts.report`` directly.
+Three contracts live here: ``bundle`` (``manifest.json`` — what a run
+*produced*), ``report`` (``report.json`` — what a run *means*) and ``upload``
+(the ``/v1`` calls that send both to a Steppy Cloud instance). Only ``bundle``
+is re-exported below, because the modules define ``accepts`` and
+``schema_json`` and flattening them would collide; import
+``steppy.contracts.report`` and ``steppy.contracts.upload`` directly.
 """
 
 from .bundle import (

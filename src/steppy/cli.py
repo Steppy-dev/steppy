@@ -1065,6 +1065,20 @@ def run(
         "scenario has failed (the app or auth is probably down). On by default; "
         "overrides parallel.circuit_breaker.enabled.",
     ),
+    upload: bool = typer.Option(
+        False,
+        "--upload",
+        help="Upload the run to Steppy Cloud after the tests, failed or not, and print its URL. "
+        "Reads STEPPY_API_KEY and STEPPY_URL (the instance's address). Checks the key before any "
+        "test runs: a missing or refused key stops the command, an unreachable server only warns. "
+        "A failed upload is a warning and leaves the tests' exit code unchanged. Without this flag "
+        "nothing is uploaded, even with a key set.",
+    ),
+    require_upload: bool = typer.Option(
+        False,
+        "--require-upload",
+        help="Like --upload, but a failed upload fails the command.",
+    ),
 ):
     """
     Run generated pytest tests.
@@ -1073,6 +1087,24 @@ def run(
     You can also run pytest directly: pytest tests/e2e/
     """
     with _cli_errors():
+        # Uploading is opt-in only (D6): a key in the environment is never
+        # enough, so screenshots cannot leave a laptop by accident. The start
+        # check runs before anything else — no test, no Docker stack — and
+        # `upload_cli` (and with it httpx) is imported only on this branch.
+        upload_to = None
+        if upload or require_upload:
+            from .upload_cli import preflight
+
+            upload_to = preflight(project_root=Path.cwd())
+
+        def finish(code: int) -> None:
+            """Exit with the tests' code, after the upload when one was asked for."""
+            if upload_to is not None:
+                from .upload_cli import upload_finished_run
+
+                code = upload_finished_run(upload_to, project_root=Path.cwd(), exit_code=code, require=require_upload)
+            raise typer.Exit(code)
+
         # Parallel-mode dispatch. Lazy import keeps the single-worker path
         # from loading any coordinator/worker code at module-load time —
         # enforced by tests/test_no_parallel_import_on_default_path.py.
@@ -1102,7 +1134,7 @@ def run(
             if ctx.args:
                 reject_xdist_args(ctx.args)
 
-            raise typer.Exit(
+            finish(
                 run_parallel(
                     workers=workers,
                     scenario=scenario,
@@ -1275,8 +1307,9 @@ def run(
         if coverage and run_id:
             _merge_coverage_after_run(run_id, console)
 
-        # Exit with pytest's exit code
-        raise typer.Exit(result.returncode)
+        # Exit with pytest's exit code — after the upload, which never changes
+        # it unless --require-upload says so.
+        finish(result.returncode)
 
 
 # ── Rerun commands ──────────────────────────────────────────────────────────

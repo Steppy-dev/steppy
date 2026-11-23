@@ -1147,62 +1147,71 @@ Useful with no server involved at all: a self-describing archive to attach to a 
 
 **Point `steppy report` at one to read it**: `steppy report <bundle>.tar.zst -o ./site` renders the same site the run would have produced locally, so reviewing a stranger's failed CI run needs no unpacking and no guessing. Unpacking works too (`tar -xf` then `steppy report ./unpacked`), and so do `steppy guide` / `steppy build` on the unpacked tree — that is the whole reason the archive holds `output/` unrewritten.
 
-### Uploading a bundle to a control plane
+### Uploading a run to Steppy Cloud
 
-`steppy bundle upload` pushes a run's results to a **Steppy control plane** — the hosted side that remembers runs, diffs them against a baseline, and tracks flake rate over time. Everything above works with no plane at all; this section only matters if the project has one. Nothing in Steppy assumes it exists.
+`steppy run --upload` sends a run's results to **Steppy Cloud** (the SaaS, or a self-hosted instance): run history per branch, a shareable run page, a badge. Everything above works with no cloud at all; this section only matters if the project has one. **Nothing is ever uploaded unless asked**: a key in the environment is never enough on its own, so screenshots cannot leave a laptop by accident.
 
 ```bash
-steppy run                       # 1. records the artifacts a bundle needs
-steppy bundle upload             # 2. push straight from output/ — no archive written
+export STEPPY_API_KEY=stp_…                        # the project's key, created on its page in the cloud
+export STEPPY_URL=https://steppy.example.com       # the instance's address (the client appends /api/v1)
+steppy run --upload                                # check the key, run the tests, upload, print the run's URL
 ```
 
-**Run `steppy run` first** (a Steppy older than 0.9.1 needs `steppy run --bundle`). Two things depend on what it records, and both fail quietly otherwise:
+What `--upload` does, in order:
 
-- **Per-test event records.** Without them the plane receives an empty `tests[]` — the upload succeeds and the run shows no failure detail at all.
-- **The run identity** in `output/.steppy-run.json`, which doubles as the **idempotency key**. With it, a retried upload *attaches* to the same run; without it a fresh run id is minted per invocation, so a flaky network turns one run into three. Pin it with `--run-id` if the identity was never recorded, or `--attach <run-id>` to upload into a run the plane already created.
+1. **Before any test runs**, it checks the key with the server and prints the project it belongs to. No key or no address stops the command with a configuration error, and so does a key the server refuses (401/403). A server that cannot be reached only gets a warning: the tests run, and the upload is tried after them.
+2. The tests run as usual.
+3. **After them, failed or not**, it builds the run's `report.json` (the same model `steppy report` writes) and the manifest of the run's files, uploads what the server asks for, and prints the run's URL as the last line.
+4. **An upload failure is a warning, and the tests' exit code stands.** An outage never breaks a test run. `--require-upload` (which implies `--upload`) makes a failed upload fail the command instead.
+
+`steppy run` then `steppy bundle upload` does the same in two commands, for a CI that uploads in a separate step. `steppy bundle upload` is an explicit upload, so it **exits 1 when the upload fails**.
 
 #### Content-addressed, so re-runs are cheap
 
-The client offers the **manifest** first; the server replies with presigned upload URLs **only for the digests it does not already hold**; finalize re-verifies them before ingestion is queued. A re-run that changed two screenshots uploads two screenshots — not the 3,000-file tree around them. This is also why `steppy bundle create`'s archives are byte-reproducible: without that, every upload would look entirely new.
+The client creates the run with the **manifest** (each file's hash, size and kind, `report.json` among them); the server answers with an upload URL **only for each file it wants and does not hold yet**, then the client finalizes. By default the server keeps the screenshots of failed variants only, and a screenshot it already holds is never sent again. A re-run that changed two screenshots uploads two screenshots — not the 3,000-file tree around them. This is also why `steppy bundle create`'s archives are byte-reproducible: without that, every upload would look entirely new.
 
-**Interrupted uploads just resume.** Run the command again — it attaches to the same run and sends only what is missing. There is no state file to clean up and no `--resume` flag; the offer is keyed to the run and reports what is already held, so resumability falls out of the protocol rather than being bookkept.
+**Interrupted uploads just resume.** Run `steppy bundle upload` again — the run's id is the idempotency key, so the server returns the same run with what is still missing. There is no state file and no `--resume` flag. That id is the one `steppy run` recorded in `output/.steppy-run.json`; pin one with `--run-id` if the identity was never recorded.
 
-> **Reading the output**: `uploaded` and `already_held` are counted in **blobs** (distinct content digests), while `total_files` counts **manifest entries** (paths). Byte-identical files collapse to one blob, so the two numbers routinely disagree — one real capture reported 3,204 files as 1,587 blobs. That gap is the deduplication working, not a discrepancy to chase.
+> **Reading the output**: the counts are in **distinct files** (content digests), while the run lists **paths**. Byte-identical captures collapse to one upload, and the server asks only for what it keeps, so "uploaded 12 of 340" with 900 paths is the protocol working, not a discrepancy.
 
 #### No archive by default
 
-With no argument, the upload reads **straight from `output/`** and writes no `.tar.zst`. The protocol is per-file, so an archive would be created only to be read back. Pass a path when an earlier CI step already built one:
+With no argument, `steppy bundle upload` reads **straight from `output/`** and writes no `.tar.zst`. The protocol is per file, so an archive would be created only to be read back. Pass a path when an earlier CI step already built one:
 
 ```bash
 steppy bundle create                             # CI step A — produces an archive to keep as a job artifact
 steppy bundle upload output/bundles/steppy-bundle-<run-id>.tar.zst   # CI step B — uploads that exact archive
 ```
 
-#### Endpoint and token
+#### Address and key
 
 | Setting | Resolution order |
 |---|---|
-| Endpoint | `--url` → `$STEPPY_CLOUD_URL` → `cloud.url` in `config.yaml` |
-| Token | `--token` → `$STEPPY_CLOUD_TOKEN` — **and nothing else** |
+| Address | `--url` (`bundle upload` only) → `$STEPPY_URL` → `$STEPPY_CLOUD_URL` → `cloud.url` in `config.yaml` |
+| API key | `--api-key` (`bundle upload` only) → `$STEPPY_API_KEY` → `$STEPPY_CLOUD_TOKEN` — **and nothing else** |
+
+`--url`, `STEPPY_URL` and `cloud.url` are the **instance's address**; the client appends `/api/v1`. `STEPPY_CLOUD_TOKEN` and `STEPPY_CLOUD_URL` are the earlier names, kept as aliases, and `STEPPY_CLOUD_URL` keeps its earlier meaning: an API base to which only `/v1` is appended. `steppy run` takes no address or key flag, because a key on a command line ends up in shell history and CI logs.
 
 ```yaml
-# config.yaml — the URL is fine to commit
+# config.yaml — the address is fine to commit
 cloud:
-  url: https://plane.example.com
+  url: https://steppy.example.com
 ```
 
-**There is deliberately no config key for the token.** `config.yaml` is a committed file; a `cloud.token:` field would exist purely to be filled in and pushed. Use the environment variable — in CI, a repository secret.
+**There is deliberately no config key for the API key.** `config.yaml` is a committed file; a `cloud.key:` field would exist purely to be filled in and pushed. Use the environment variable — in CI, a repository secret.
+
+Requests time out after 10 s to connect; 429, 5xx and network errors are retried twice, a refused key never. A 422 prints the server's explanation (a report format the server does not accept says to upgrade Steppy), and a 413 means the run's manifest is too large for it.
 
 #### Trimming and rehearsing
 
-Same artifact switches as `bundle create`, plus upload-specific ones:
+`steppy bundle upload` takes the same artifact switches as `bundle create`, plus upload-specific ones:
 
 ```bash
 steppy bundle upload --dry-run                 # show what would be sent; contacts nothing
 steppy bundle upload --no-videos --no-traces   # skip the heavy artifacts
 steppy bundle upload --max-size 2GiB           # drop cheapest-to-lose first, mark manifest truncated
 steppy bundle upload --json                    # machine-readable outcome, for a CI step that gates on it
-steppy bundle upload --concurrency 8           # parallel blob PUTs (ignored when uploading an archive)
+steppy bundle upload --concurrency 8           # parallel uploads (ignored when uploading an archive)
 ```
 
 `--dry-run` is worth running once when wiring up CI — it tells you what the payload looks like before you discover the size in a billing dashboard.
@@ -1210,15 +1219,13 @@ steppy bundle upload --concurrency 8           # parallel blob PUTs (ignored whe
 #### CI shape
 
 ```yaml
-- run: steppy run --workers 4
-- run: steppy bundle upload
-  if: always()                    # a failed run is exactly the one worth uploading
+- run: steppy run --workers 4 --upload
   env:
-    STEPPY_CLOUD_URL: ${{ vars.STEPPY_CLOUD_URL }}
-    STEPPY_CLOUD_TOKEN: ${{ secrets.STEPPY_CLOUD_TOKEN }}
+    STEPPY_URL: ${{ vars.STEPPY_URL }}
+    STEPPY_API_KEY: ${{ secrets.STEPPY_API_KEY }}
 ```
 
-`if: always()` is the load-bearing line. A step that only runs on green uploads nothing on the days you need the results.
+One step: the upload happens even when tests fail, and the step's exit code is the tests'. A pull request from a fork gets no secrets, so `STEPPY_API_KEY` is empty there and `--upload` stops with a configuration error — leave `--upload` off for those, or upload in a separate step that only runs when the secret exists.
 
 ---
 

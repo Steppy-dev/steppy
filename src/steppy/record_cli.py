@@ -6,9 +6,10 @@ V1 is a post-processor over ``playwright codegen`` - a headed browser opens, the
 user performs the flow and closes the window, and the generated pytest is
 transformed (with :mod:`ast`) into Steppy scenario Markdown. Recorded fill values
 that look like secrets are placeholderized to ``${VAR}`` refs (login is collapsed
-to ``- action: login``), a blanket ``input[type='password']`` screenshot mask is
-recommended, and the existing selector lint runs on the output. Recordings always
-land as **drafts for review** - the ``steppy-scenario-author`` skill refines them.
+to ``- action: login``), their fields and every ``input[type='password']`` are
+masked in the draft's front matter (``mask:``), and the existing selector lint
+runs on the output. Recordings always land as **drafts for review** - the
+``steppy-scenario-author`` skill refines them.
 
 This is a **foundational V1 ("CLI plumbing")**. It will be extended and improved
 when Steppy is implemented on the open-source React/Vue showcases (the
@@ -475,10 +476,12 @@ def _emit_value(v: str) -> str:
     return '"' + v + '"'
 
 
-def _render(title: str, auth_false: bool, steps: list[dict]) -> str:
+def _render(title: str, auth_false: bool, steps: list[dict], mask: list[str]) -> str:
     fm: dict = {"title": title, "description": "Recorded with steppy record", "tags": ["e2e"]}
     if auth_false:
         fm["auth"] = False
+    if mask:
+        fm["mask"] = mask
     out: list[str] = ["---", yaml.safe_dump(fm, sort_keys=False, allow_unicode=True).strip(), "---", ""]
     for i, s in enumerate(steps, 1):
         out.append(f"### {i}. {s['_title']}")
@@ -553,13 +556,14 @@ def codegen_source_to_scenario(
     for s in steps:
         s["_title"] = _step_title(s)
 
-    markdown = _render(title, auth_false, steps)
+    mask_selectors = sorted(mask)
+    markdown = _render(title, auth_false, steps, mask_selectors)
     return RecordResult(
         markdown=markdown,
         step_count=len(steps),
         notes=notes,
         env_vars=sorted(env_vars),
-        mask_selectors=sorted(mask),
+        mask_selectors=mask_selectors,
     )
 
 
@@ -573,13 +577,11 @@ def _print_report(result: RecordResult, out_path: Path) -> None:
             console.print(f"  [dim]note[/dim] {escape(note)}")
     if result.mask_selectors:
         console.print(
-            "\n[bold]Redact secrets in screenshots[/bold] - add to config.yaml "
-            "(comments there are preserved only if you edit by hand):"
+            "\n[bold]Masked in this scenario's screenshots[/bold] - `mask:` in the draft's front matter "
+            "(move an entry to `screenshot.mask` in config.yaml to mask it in every scenario):"
         )
-        console.print("  screenshot:")
-        console.print("    mask:")
         for sel in result.mask_selectors:
-            console.print(f'      - "{escape(sel)}"')
+            console.print(f"  {escape(sel)}")
     if result.env_vars:
         console.print("\n[bold]Set these before running the generated test:[/bold]")
         for name in result.env_vars:
@@ -773,8 +775,8 @@ def register_record(app: typer.Typer) -> None:
         Wraps `playwright codegen`: a headed browser opens; perform your flow, then
         close the window. The recorded actions become a draft `scenarios/<slug>.md`
         - a reviewable starting point, not a finished scenario. Detected secrets are
-        collapsed to `- action: login` or placeholderized to ${VAR} refs, and a
-        password screenshot mask is recommended. Refine the draft with the
+        collapsed to `- action: login` or placeholderized to ${VAR} refs, and their
+        fields are masked in screenshots (`mask:`). Refine the draft with the
         steppy-scenario-author skill, then `steppy validate` / `steppy generate`.
 
         V1 (CLI plumbing) - extended when Steppy lands on the OSS showcases.

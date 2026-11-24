@@ -7,6 +7,7 @@ from typing import Optional
 from .assertions import parse_assertion
 from .durations import parse_ms
 from ._templating import make_template_env, template_search_paths
+from .masks import merge_masks
 from .models import Scenario, SteppyConfig
 from .presets import IDP_PRESETS
 
@@ -39,6 +40,8 @@ class SteppyGenerator:
         which is shared with the guide and build assemblers.
         """
         self.config = config
+        #: What a generate should tell the author without failing.
+        self.warnings: list[str] = []
 
         self._search_paths = [str(p) for p in template_search_paths(templates_dir, project_root)]
         self.env = make_template_env(templates_dir, project_root)
@@ -129,14 +132,53 @@ class SteppyGenerator:
         emit neither, or ``failed_step`` could name a step that never ran.
         """
         number = step.step_number
-        title = SteppyGenerator._py_str(step.step_title)
-        action = SteppyGenerator._py_str(step.action)
         inner = body.strip("\n")
-        opening = f"    _steppy_mark_step({number}, {title}, {action})"
+        opening = f"    {SteppyGenerator._step_marker(step)}"
         closing = f"    _steppy_end_step({number})"
         if not inner.strip():
             return f"{opening}\n{closing}\n"
         return f"{opening}\n{inner}\n{closing}\n"
+
+    @staticmethod
+    def _step_marker(step) -> str:
+        """The call that opens a step, naming the masks its captures take.
+
+        The masks travel on the marker, not through a module-level table the
+        conftest would look up, so a conftest that predates them fails the test
+        (an unexpected argument) instead of capturing unmasked.
+        """
+        title = SteppyGenerator._py_str(step.step_title)
+        action = SteppyGenerator._py_str(step.action)
+        mask = f", mask={step.mask!r}" if getattr(step, "mask", None) else ""
+        return f"_steppy_mark_step({step.step_number}, {title}, {action}{mask})"
+
+    @staticmethod
+    def _with_effective_masks(scenario: Scenario) -> Scenario:
+        """``scenario`` with every step carrying the scenario's masks beside its own.
+
+        The union is resolved here, once, so the test body, the tour replay and
+        an overridden template all read it off the step. The same object when
+        nothing is masked, which keeps the generated file byte-identical.
+        """
+        if not scenario.declared_masks():
+            return scenario
+        steps = [s.model_copy(update={"mask": merge_masks(scenario.mask, s.mask) or None}) for s in scenario.steps]
+        return scenario.model_copy(update={"steps": steps})
+
+    @staticmethod
+    def _check_masks_rendered(code: str, scenario: Scenario) -> None:
+        """Refuse a project-local ``test_scenario.py.j2`` that would drop the masks.
+
+        Generated without them, the scenario's captures would show exactly what
+        the author asked to cover, and nothing would say so.
+        """
+        rendered = f"SCENARIO_MASK = {scenario.declared_masks()!r}" in code
+        if not rendered or any(s.mask and SteppyGenerator._step_marker(s) not in code for s in scenario.steps):
+            raise ValueError(
+                f"{scenario.slug} declares a mask, and your templates/test_scenario.py.j2 override predates scenario "
+                "masks: copy the bundled template's changes into it (SCENARIO_MASK, bracket_step), or remove the "
+                "override"
+            )
 
     @staticmethod
     def _apply_optional(body: str, step) -> str:
@@ -406,29 +448,28 @@ class SteppyGenerator:
         template = self.env.get_template("test_scenario.py.j2")
 
         roles_needed = sorted(scenario.get_roles())
+        scenario = self._with_effective_masks(scenario)
+        scenario_mask = scenario.declared_masks()
 
-        if tour_plan is None:
-            # ``tour_replay`` is passed explicitly rather than left undefined: an
-            # undefined name resolves to Jinja's ``missing`` sentinel, and a
-            # re-imported jinja2 (tests purge sys.modules) makes the compiled
-            # template compare it against a different sentinel object.
-            return template.render(
-                scenario=scenario,
-                config=self.config,
-                roles_needed=roles_needed,
-                tour_replay=None,
-            )
+        # ``tour_replay`` and ``scenario_mask`` are passed explicitly rather than
+        # left undefined: an undefined name resolves to Jinja's ``missing``
+        # sentinel, and a re-imported jinja2 (tests purge sys.modules) makes the
+        # compiled template compare it against a different sentinel object.
+        replay = None
+        if tour_plan is not None:
+            from .tours.replay import build_replay
 
-        from .tours.replay import build_replay
-
-        replay = build_replay(scenario, tour_plan, self.config)
+            replay = build_replay(scenario, tour_plan, self.config)
         code = template.render(
             scenario=scenario,
             config=self.config,
             roles_needed=roles_needed,
             tour_replay=replay,
+            scenario_mask=repr(scenario_mask) if scenario_mask else None,
         )
-        if f"def {replay.function_name}(" not in code:
+        if scenario_mask:
+            self._check_masks_rendered(code, scenario)
+        if replay is not None and f"def {replay.function_name}(" not in code:
             # A project-local templates/test_scenario.py.j2 that predates in-app
             # tours renders no replay — refuse rather than ship a tour CI never checks.
             raise ValueError(
@@ -534,7 +575,7 @@ class SteppyGenerator:
 
         template = self.env.get_template("conftest.py.j2")
 
-        return template.render(
+        code = template.render(
             config=self.config,
             roles=sorted(all_roles),
             tours_enabled=self._tours_enabled(),
@@ -542,6 +583,20 @@ class SteppyGenerator:
             # preset table itself to resolve `auth.form.preset`.
             idp_form_presets={name: kit["form"] for name, kit in IDP_PRESETS.items()},
         )
+        if "SCENARIO_MASK" not in code:
+            # A project-local conftest.py.j2 that predates masked failure captures.
+            masked = [s.slug for s in all_scenarios if s.declared_masks()]
+            if masked:
+                raise ValueError(
+                    f"{masked[0]} declares a mask, and your templates/conftest.py.j2 override predates scenario "
+                    "masks: copy the bundled template's changes into it, or remove the override"
+                )
+            if self.config.screenshot.mask:
+                self.warnings.append(
+                    "your templates/conftest.py.j2 override predates masked failure screenshots, so screenshot.mask "
+                    "does not apply to them: copy the bundled template's changes into it, or remove the override"
+                )
+        return code
 
     def _tours_enabled(self) -> bool:
         tours = getattr(self.config, "tours", None)

@@ -26,6 +26,10 @@ from ._steppy_tours import TourProbe, _tour_start, _tour_expect_step, _tour_ensu
 {% endif %}
 
 SCENARIO = "{{ scenario.slug }}"
+{% if scenario_mask %}
+# Every mask of this scenario and its steps: a failure screenshot applies them all.
+SCENARIO_MASK = {{ scenario_mask }}
+{% endif %}
 SCENARIO_LAYOUTS = {% if scenario.layouts %}{{ scenario.layouts | tojson }}{% else %}None{% endif %}
 {% macro scoped_locator(role, selector, within, match) -%}
 {{ role }}_page{% if within %}.locator(_interp({{ within | pystr }}, _vars)){% endif %}.locator(_interp({{ selector | pystr }}, _vars)){{ match | format_match_suffix }}

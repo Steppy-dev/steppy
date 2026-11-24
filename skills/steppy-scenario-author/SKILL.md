@@ -51,6 +51,7 @@ layouts:                      # optional; viewports this flow must pass in (keys
   - desktop
   - mobile
 exclusive: billing            # optional; never run at the same time as other scenarios naming this group
+mask: [data-testid="iban"]    # optional; covered with a solid box in this scenario's screenshots — see Masking
 tour: true                    # optional; also compile an in-app tour (needs tours.enabled) — see In-app tours
 guide:                        # optional; cursor animation timings for the HTML guide
   enabled: true               # opt this scenario into `steppy run --guide` / `steppy guide --guide`
@@ -67,6 +68,7 @@ guide:                        # optional; cursor animation timings for the HTML 
 - selector: [data-testid="create-project-btn"]
 - screenshot: editor
 - screenshot-when: before       # optional; "before" | "after" (default)
+- mask: [data-testid="email"]   # optional; also covered in THIS step's screenshots — see Masking
 - only-in: guide                # optional; "test" | "guide". Default: runs in both modes
 - layouts:                      # optional; whitelist of layouts for THIS step. Default: all layouts
   - desktop
@@ -78,7 +80,7 @@ guide:                        # optional; cursor animation timings for the HTML 
 
 **Hard rules:**
 - Steps are `### N. Title` headings. The number is cosmetic; order is what counts.
-- Every step field is a hyphen-prefixed `- key: value` line. Nested blocks (`guide-text`, `tour-text`, `fields`, `guide-cursor`, `layouts`) are indented one level. Dict children use plain `key: value` lines (no hyphens); list children use `- item` lines.
+- Every step field is a hyphen-prefixed `- key: value` line. Nested blocks (`guide-text`, `tour-text`, `fields`, `guide-cursor`, `layouts`, `mask`) are indented one level. Dict children use plain `key: value` lines (no hyphens); list children use `- item` lines.
 - `extra: forbid` is enforced — unknown keys **fail validation**. If something doesn't parse, you typed a key the parser doesn't know. Keys take the hyphenated form shown here (`screenshot-when`, `guide-text`) or the underscore form (`screenshot_when`, `guide_text`).
 - Quotes around a simple `- key: value` are stripped, so `- value: "Notebook"` and `- value: Notebook` are the same. Quotes and apostrophes *inside* a value are kept and escaped in the generated code: `- value: L'adresse` and `- expect: toast("L'élément a été créé")` are valid as written.
 - A YAML block scalar (`|`, `|-`, `>`) holds a multi-line value: `custom` `code:`, a multi-line `value:`.
@@ -321,6 +323,48 @@ Supported on every interactive action: `click`, `fill`, `fill-form`, `fill-date`
 **When to leave as `after` (default)**:
 - `fill` / `fill-form` where you want the guide reader to see the populated values
 - `click` that reveals a dropdown or in-place change on the same page
+
+### Masking — keep secrets and personal data out of screenshots
+
+A mask covers every element its selector matches with a solid box as the screenshot is taken. It can be declared in three places, and a capture takes the **union** of those that apply; nothing a scenario writes can remove the project's.
+
+| Where | Covers |
+|---|---|
+| `screenshot.mask` in `config.yaml` | every screenshot of every scenario (put what is always sensitive here) |
+| `mask:` in front matter | every screenshot of this scenario |
+| `- mask:` on a step | this step's screenshots only: before, after, and every fill-form frame |
+
+Every action accepts `mask:`, even one that takes no screenshot: **failure screenshots are masked with everything** the project, the scenario and all of its steps declare.
+
+```markdown
+---
+title: Pay an invoice
+mask:
+  - [data-testid="iban"]
+  - .customer-name
+---
+
+### 2. Fill in the contact
+- role: editor
+- action: fill-form
+- fields:
+    '[data-testid="email"]': "jane@example.com"
+    '[data-testid="phone"]': "+32 470 00 00 00"
+- screenshot: editor
+- mask:
+    - [data-testid="email"]
+    - [data-testid="phone"]
+```
+
+**How a mask is written** — the same in both places, with one difference:
+
+- **One selector is plain text.** `mask: [data-testid="iban"]` is that selector, not a YAML list. So are `mask: .customer-name` and `mask: [data-testid="card"] .name`.
+- **A list is indented, one selector per line** (quotes optional), **or a `[...]` of quoted selectors**: `mask: ['.a', ".b"]`. An unquoted `[.a, .b]` is an error.
+- **An id selector in front matter or in a list is quoted**: `mask: '#iban'`, `mask: '.card #iban'`. YAML reads an unquoted `#` as a comment, and Steppy refuses it rather than mask something else. On a step's own line (`- mask: #iban`) it needs no quotes, like `- selector:`, and that line takes no comment.
+- Selectors are used as written: no `{{var}}`, no `${VAR}`.
+- An empty mask, or an entry that is not text (`true`, `12`), fails `steppy validate` and `steppy generate`. A malformed selector fails at run time: the step's capture raises, and the failure screenshot is **not saved** (it fails closed; the test's output says why).
+
+**What a mask does not do:** it covers pixels only. Error messages, call logs, console lines and captured variables are not masked; neither are Playwright traces and videos (`steppy run` warns when you record one with a mask declared, and turns nothing off). A mask that matches nothing is not an error, so look at the captures, and mask by `data-testid`: the selector lint flags a brittle mask like any other selector. `page.screenshot(...)` in `custom` code is yours; `take_screenshot(...)` from the generated conftest is masked. The box's colour is the project's `screenshot.mask_color`.
 
 ---
 
@@ -1037,7 +1081,7 @@ Anywhere a value supports `{{var}}` (target, selector, value, fields, custom cod
 ## Workflow
 
 0. **Set the project up once** — `steppy init` scaffolds `config.yaml`, an example scenario, the JSON config schema, a `.gitignore`, and installs these skills into `.claude/skills/` (`--no-skills` opts out). **After upgrading Steppy, run `steppy update`**: it reconciles the Steppy-owned scaffold — config schema, these skills, the CI workflow — with the installed version, so an assistant reading `.claude/skills/` is describing the Steppy you actually have. `steppy update --check` is the CI-able read-only form: it scans scenarios and config for deprecated usage and exits non-zero on anything breaking.
-1. **Draft — or bootstrap — the scenario** in `scenarios/my-flow.md`. Write it by hand following the grammar above, or bootstrap a **draft** from a live click-through: `steppy record <url> --role admin --slug my-flow` wraps `playwright codegen` and post-processes the recording into `scenarios/my-flow.md`. It collapses a username/password/submit sequence to a single `action: login`, placeholderizes secret fields (password/token/…) to `${VAR}` refs, suggests an `input[type='password']` screenshot mask, and runs the selector lint — then you refine it here. Recordings are **drafts for review** (a foundational V1 — CLI plumbing), so always read one before `steppy generate`.
+1. **Draft — or bootstrap — the scenario** in `scenarios/my-flow.md`. Write it by hand following the grammar above, or bootstrap a **draft** from a live click-through: `steppy record <url> --role admin --slug my-flow` wraps `playwright codegen` and post-processes the recording into `scenarios/my-flow.md`. It collapses a username/password/submit sequence to a single `action: login`, placeholderizes secret fields (password/token/…) to `${VAR}` refs, masks those fields and every `input[type='password']` in screenshots (the draft's front-matter `mask:`), and runs the selector lint — then you refine it here. Recordings are **drafts for review** (a foundational V1 — CLI plumbing), so always read one before `steppy generate`.
 2. `steppy validate` — catches typos, missing fields, unknown actions **before** you run anything.
 3. `steppy generate` — rebuilds `tests/e2e/conftest.py` and `tests/e2e/test_my_flow.py`.
 4. `steppy run --guide` — runs every `guide.enabled` scenario with screenshots on (or `steppy run -s my-flow --screenshots` for a single scenario). When `apps.<role>.i18n.localstorage` is configured, `--guide` auto-parametrizes the run over every locale in `config.yaml` (one screenshot set per language) **and auto-enables `--no-asserts`** (text assertions like `toast(...)` and `row-contains(...)` are language-specific and would fail every non-default locale). When `screenshot.layouts` is configured, `--guide` also auto-parametrizes over every layout (cartesian with locales). Use `steppy run --locales fr,nl` to capture an explicit subset of locales, or `steppy run --guide --layouts desktop` to capture an explicit subset of layouts. `steppy run --layouts desktop,mobile` (without `--guide`) works in test mode too — useful to verify plain test scenarios across device viewports. Pass `steppy run --no-asserts` standalone if you want to skip assertions without going through `--guide`.

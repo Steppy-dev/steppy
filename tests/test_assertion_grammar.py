@@ -224,6 +224,7 @@ def test_universal_fields_are_accepted_everywhere(field):
         "role": "editor",
         "screenshot": True,
         "screenshot_when": "before",
+        "mask": [".a"],
         "guide_text": {"en": "hi"},
         "guide_cursor": {"behavior": "click", "target": "#a"},
         "only_in": "test",

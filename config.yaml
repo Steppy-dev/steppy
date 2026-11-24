@@ -108,8 +108,10 @@ screenshot:
       height: 844
       device_scale_factor: 2
   # Redaction: elements matching these selectors are covered with a solid box in
-  # every screenshot (Playwright native mask). Use it to keep secrets/PII out of
-  # published guides. Empty = no masking. See SECURITY.md.
+  # every screenshot, the failure ones included (Playwright native mask). Use it to
+  # keep secrets/PII out of published guides and reports. A scenario (`mask:` in its
+  # front matter) and a step (`- mask:`) add their own, never remove these. Pixels
+  # only: not text, traces or videos. Empty = no masking. See SECURITY.md.
   # mask:
   #   - "input[name='password']"
   #   - ".customer-name"

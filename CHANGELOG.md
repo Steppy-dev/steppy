@@ -39,8 +39,22 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `base_branch`, `tested_sha` (the merge commit a CI built to test a pull or
   merge request, when it differs from `sha`) and `dirty` (local runs only).
   `report.json`'s `run` carries the same fields (`steppy_report: 1` unchanged).
+- **Screenshot masks per scenario and per step**: `mask:` in a scenario's front
+  matter and `mask:` on a step (any action), with the selectors of
+  `screenshot.mask`. They add to the project's masks and never remove one; a
+  step's masks cover all of its captures, fill-form frames included. One selector
+  is plain text, and a bare `mask: [data-testid="iban"]` is that selector, not a
+  YAML list; a list is indented, or a `[...]` of quoted selectors. An empty mask,
+  an entry that is not text, or a spelling YAML would read as something else is an
+  error in `steppy validate` and `steppy generate`, and so is a blank or
+  bracket-less entry in `screenshot.mask`. The selector lint reads masks too. A
+  scenario without a mask generates the same test file as before.
+- **`steppy run` and `steppy rerun` warn when a mask is declared and a trace or a
+  video is on**: Playwright can mask neither. Nothing is turned off.
 
 ### Changed
+- **`steppy record` writes the masks it finds into the draft's front matter**
+  (`mask:`) instead of printing a `screenshot.mask` block to paste.
 - **`steppy bundle upload` speaks the new protocol**: it builds the run's
   `report.json` (the model `steppy report` writes, with each capture referenced
   by its path in the manifest), creates the run with the manifest of its files,
@@ -97,6 +111,25 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Steppy pins (1.60) cannot install Chromium, so the browser step failed before
   any test ran. A workflow that already passes its own `runs-on` is unchanged;
   `steppy update` refreshes an unedited `steppy.yml`.
+
+### Security
+- **Failure screenshots ignored `screenshot.mask`.** The full-page capture of a
+  failing test (`output/screenshots/_failures/`) was taken without the masks, in
+  every version that has them, although `SECURITY.md` said every screenshot was
+  masked. It is now masked with the project's, the scenario's and every step's
+  masks, and it fails closed: when the masked capture cannot be taken, no image is
+  saved and the test's output says why. **An image no longer outlives its run**
+  either: each test removes the failure screenshots of its earlier runs before its
+  setup, so one that now passes, is skipped or dies in setup shows none, and a
+  bundle, a report and an upload leave out those of tests the run did not run
+  (a warning counts them). Until now they stayed, and were shown as the current
+  run's, until the same test failed again. **Run `steppy generate` after upgrading**,
+  since the fix is in the generated `conftest.py` (a project-local
+  `templates/conftest.py.j2` needs the change too; `steppy generate` says so).
+  **If you use `screenshot.mask`, check what earlier runs left behind**: that
+  folder, CI artifacts, results bundles, published reports and uploaded runs.
+  `SECURITY.md` now says what a mask covers and what it does not (text, traces,
+  videos, and step screenshots taken before the mask was declared).
 
 ## [0.9.2] - 2026-11-11
 

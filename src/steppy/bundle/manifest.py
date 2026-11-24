@@ -103,6 +103,7 @@ def walk_candidates(
     """
     candidates: list[Candidate] = []
     warnings: list[str] = []
+    earlier_failures = 0
 
     for path in sorted(output_dir.rglob("*")):
         if path.is_dir():
@@ -123,6 +124,7 @@ def walk_candidates(
 
         entry = _classify.classify(rel, ctx)
         if entry is None:
+            earlier_failures += _classify.is_failure_screenshot(rel, ctx)
             continue
         if entry.kind in exclude_kinds:
             continue
@@ -148,6 +150,8 @@ def walk_candidates(
             )
         )
 
+    if earlier_failures:
+        warnings.append(f"left out {earlier_failures} failure screenshot(s) of tests this run did not run")
     return candidates, warnings
 
 

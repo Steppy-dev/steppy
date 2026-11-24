@@ -12,6 +12,7 @@ from .buildid import check_build_id_syntax
 from .durations import DurationSyntaxError, parse_ms
 from .exclusive import normalize_group_name
 from .locales import base_language, normalize_locale, validate_locale_tag
+from .masks import merge_masks, normalize_masks
 from .presets import PRESETS, IDP_PRESETS
 from .provenance import ENVIRONMENT_MAX, MetadataError, clean_environment
 from .testids import check_test_id_attribute
@@ -318,7 +319,8 @@ _REQUIRED_FIELDS: dict[str, tuple[tuple[str, str], ...]] = {
 
 #: Fields every action accepts, whatever it is: identity, the trailing
 #: ``expect:``, screenshot/guide metadata, the conditional-execution filters and
-#: the two internal tracking slots.
+#: the two internal tracking slots. ``mask`` is here, not only on the actions
+#: that take a screenshot: every step's masks cover the failure screenshot too.
 _UNIVERSAL_FIELDS: frozenset[str] = frozenset(
     {
         "tour",
@@ -332,6 +334,7 @@ _UNIVERSAL_FIELDS: frozenset[str] = frozenset(
         "expect",
         "screenshot",
         "screenshot_when",
+        "mask",
         "guide_text",
         "guide_cursor",
         "only_in",
@@ -528,6 +531,10 @@ class Step(BaseModel):
     # Screenshot and guide
     screenshot: Optional[str | bool] = None  # False, "all", True, or a role name defined in config.apps
     screenshot_when: Literal["before", "after"] = Field(default="after", alias="screenshot-when")
+    # Selectors covered with a solid box in this step's captures, on top of the
+    # project's (`screenshot.mask`) and the scenario's. One selector or a list,
+    # always stored as a list. `steppy.masks` owns the grammar.
+    mask: Optional[list[str]] = None
     guide_text: Optional[GuideText] = Field(default=None, alias="guide-text")
     guide_cursor: Optional[GuideCursorOverride] = Field(default=None, alias="guide-cursor")
 
@@ -1123,6 +1130,16 @@ class Step(BaseModel):
                 raise ValueError(str(exc)) from exc
         return self
 
+    @field_validator("mask", mode="before")
+    @classmethod
+    def validate_mask(cls, v):
+        """One selector or a list of them, stored as a list (``steppy.masks``).
+
+        ``mode="before"`` because pydantic's own message, "Input should be a
+        valid list", would not tell the author to quote the selector.
+        """
+        return normalize_masks(v)
+
     @field_validator("screenshot")
     @classmethod
     def validate_screenshot(cls, v: str | bool | None) -> str | bool | None:
@@ -1270,6 +1287,10 @@ class Scenario(BaseModel):
     # indivisibility (a retry pass legitimately re-runs a subset of a group).
     exclusive: Optional[str] = None
 
+    # Selectors covered with a solid box in every capture of this scenario, on
+    # top of the project's `screenshot.mask`. Absent ⇒ byte-identical output.
+    mask: Optional[list[str]] = None
+
     # Guide rendering configuration (cursor timings, etc.)
     guide: GuideConfig = Field(default_factory=GuideConfig)
 
@@ -1320,6 +1341,12 @@ class Scenario(BaseModel):
                 raise ValueError(f"'layouts' entries must be non-empty strings, got: {item!r}")
         return v
 
+    @field_validator("mask", mode="before")
+    @classmethod
+    def validate_mask(cls, v):
+        """Mirrors ``Step.validate_mask``."""
+        return normalize_masks(v)
+
     @field_validator("exclusive", mode="before")
     @classmethod
     def normalize_exclusive(cls, v):
@@ -1361,6 +1388,10 @@ class Scenario(BaseModel):
         if isinstance(v, dict):
             return SeedConfig(**v)
         return v
+
+    def declared_masks(self) -> list[str]:
+        """Every mask this scenario declares: its front matter's, then each step's."""
+        return merge_masks(self.mask, *(step.mask for step in self.steps))
 
     def get_roles(self) -> set[str]:
         """Get all unique roles used in this scenario."""
@@ -1625,12 +1656,20 @@ class ScreenshotConfig(BaseModel):
     # over these layouts in addition to locales.
     layouts: dict[str, LayoutConfig] = Field(default_factory=dict)
     # Redaction: CSS selectors whose matched elements are covered with a solid
-    # box in every captured screenshot (Playwright's native ``mask=``). Use it
-    # to keep secrets and personal data (passwords, customer records) out of published guides.
+    # box in every captured screenshot (Playwright's native ``mask=``), the
+    # failure screenshots included. Use it to keep secrets and personal data
+    # (passwords, customer records) out of published guides and reports. A
+    # scenario's and a step's own ``mask:`` add to it, never remove from it.
     # Empty (default) = no masking, byte-identical output. ``mask_color`` is any
     # CSS color string for the overlay boxes.
     mask: list[str] = Field(default_factory=list)
     mask_color: str = "#000000"
+
+    @field_validator("mask")
+    @classmethod
+    def validate_mask(cls, v: list[str]) -> list[str]:
+        """Refuse an entry that would mask nothing: blank, or a ``[…]`` YAML took for a list."""
+        return normalize_masks(v, env_refs=True) if v else v
 
 
 class TimingConfig(BaseModel):

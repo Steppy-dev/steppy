@@ -275,6 +275,11 @@ def list_scenarios(
         console.print(f"[green]Total:[/green] {len(scenarios)} scenario(s)")
 
 
+def _print_generator_warnings(generator: SteppyGenerator) -> None:
+    for warning in generator.warnings:
+        console.print(f"[yellow]WARNING[/yellow] {escape(warning)}")
+
+
 @app.command()
 def generate(
     scenario: Optional[Path] = typer.Argument(
@@ -486,6 +491,8 @@ def generate(
 
             if tour_pipeline is not None:
                 results.update(tour_pipeline.emit(dry_run=dry_run))
+
+            _print_generator_warnings(generator)
 
         except typer.Exit:
             raise
@@ -851,6 +858,51 @@ def _apply_report_and_modes(
     return trace_mode, video_mode
 
 
+def _warn_unmasked_recordings(
+    trace_mode: str,
+    video_mode: str,
+    *,
+    scenarios_dir: Path,
+    scenario: Optional[str] = None,
+    tag: Optional[list[str]] = None,
+) -> None:
+    """Say that a trace or a video records what the masks cover (spec I7).
+
+    Playwright masks screenshots only. Nothing is turned off: a trace is often
+    the one thing that explains a failure, so the choice stays the user's.
+    Nothing is read or printed unless one of the two is on.
+    """
+    recorded = [name for name, mode in (("trace", trace_mode), ("video", video_mode)) if mode and mode != "off"]
+    if not recorded or not _declares_mask(scenarios_dir, scenario, tag):
+        return
+    console.print(
+        f"[yellow]WARNING[/yellow] A screenshot mask is declared, but Playwright cannot mask a {' or a '.join(recorded)}: "
+        f"{'it records' if len(recorded) == 1 else 'they record'} what the mask covers (see SECURITY.md)",
+        soft_wrap=True,
+    )
+
+
+def _declares_mask(scenarios_dir: Path, scenario: Optional[str], tag: Optional[list[str]]) -> bool:
+    """Whether the project, or a scenario this run may select, declares a mask.
+
+    Best-effort, because it only feeds a warning: a config or a scenario that
+    cannot be read must not stop a run whose tests are already generated.
+    """
+    try:
+        if load_config().screenshot.mask:
+            return True
+    except ConfigError:
+        pass
+    for path in sorted(scenarios_dir.glob(f"{scenario}.md" if scenario else "*.md")):
+        try:
+            parsed = parse_scenario_file(path)
+        except ParseError:
+            continue
+        if parsed.declared_masks() and (not tag or parsed.has_all_tags(tag)):
+            return True
+    return False
+
+
 def _new_coverage_run_id() -> str:
     """Back-compat alias for :func:`steppy.runmeta.new_run_id`.
 
@@ -1170,6 +1222,7 @@ def run(
             # `--video` / `--retries` flags were silently dropped in parallel
             # mode — see tests/test_parallel_report_flags.py.
             par_trace, par_video, par_retries, _ = _resolve_report_modes(trace=trace, video=video, retries=retries)
+            _warn_unmasked_recordings(par_trace, par_video, scenarios_dir=scenarios_dir, scenario=scenario, tag=tag)
             if ctx.args:
                 reject_xdist_args(ctx.args)
 
@@ -1281,6 +1334,7 @@ def run(
         trace_mode, video_mode = _apply_report_and_modes(
             pytest_cmd, trace=trace, video=video, retries=retries, console=console
         )
+        _warn_unmasked_recordings(trace_mode, video_mode, scenarios_dir=scenarios_dir, scenario=scenario, tag=tag)
 
         # Every run is recorded: one identity, plus the two artifact sinks
         # `steppy report` and `steppy bundle create` read. Opt-in (`--bundle`)
@@ -1489,6 +1543,7 @@ def rerun(
         trace_mode, video_mode = _apply_report_and_modes(
             pytest_cmd, trace=trace, video=video, retries=retries, console=console
         )
+        _warn_unmasked_recordings(trace_mode, video_mode, scenarios_dir=scenarios_dir)
 
         # Add passthrough arguments from context
         if ctx.args:
@@ -1857,6 +1912,7 @@ def guide(
                 updated = sum(1 for status in results.values() if status == "updated")
                 unchanged = sum(1 for status in results.values() if status == "unchanged")
 
+                _print_generator_warnings(generator)
                 console.print(f"  [green]OK[/green] {generated} generated, {updated} updated, {unchanged} unchanged\n")
             except typer.Exit:
                 raise

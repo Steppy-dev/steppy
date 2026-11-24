@@ -141,6 +141,17 @@ steppy coverage report
 # Expect: "Coverage: merged N scenario(s) …" after the run summary, and
 # output/coverage/raw/<run_id>/ containing one subdir per scenario regardless
 # of which worker ran it.
+
+# 8c. Screenshot masks against a real browser (no Docker — needs Playwright
+#     Chromium). Serves a page of solid-colour boxes, runs the full generate →
+#     run --screenshots loop on failing scenarios, and reads the pixels: the
+#     project's, the scenario's and the step's masks in the step captures, all of
+#     them in both roles' failure captures, a control box untouched, and no image
+#     when the masked capture cannot be taken (bad selector, crashed page). An
+#     unmasked image an earlier run left is gone, whether the test now passes, dies
+#     in setup or fails again, from the folder and from the report.
+STEPPY_IT=1 python -m pytest tests/integration/test_screenshot_mask_it.py -q
+# Expect: 9 passed in under 2 min.
 ```
 
 ```bash

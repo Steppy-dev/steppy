@@ -10,6 +10,7 @@ import frontmatter
 from pydantic import ValidationError
 
 from .assertions import ASSERTION_FORMS, split_top_level
+from .masks import DUPLICATE_HINT, inline_yaml, quote_front_matter, quote_items
 from .models import Scenario, Step
 
 
@@ -170,12 +171,19 @@ def _load_frontmatter(text: str) -> frontmatter.Post:
     """Load a scenario's frontmatter, tolerating French ``Segment : …`` values.
 
     Only the ``---`` header is repaired (see :func:`_quote_colon_scalars`); the
-    body is Markdown and stays as written.
+    body is Markdown and stays as written. A top-level ``mask:`` is made ready
+    for YAML first, because an attribute selector reads as a list
+    (:mod:`steppy.masks`).
     """
+    m = _FRONTMATTER.match(text)
+    if m:
+        header = quote_front_matter(m.group(2))
+        if header != m.group(2):
+            text = m.group(1) + header + m.group(3) + text[m.end() :]
+            m = _FRONTMATTER.match(text)
     try:
         return frontmatter.loads(text)
     except yaml.YAMLError as original:
-        m = _FRONTMATTER.match(text)
         if not m:
             raise
         repaired = _quote_colon_scalars(m.group(2))
@@ -309,12 +317,16 @@ def lint_scenario_selectors(scenario: Scenario) -> list[str]:
 
     Inspects every author-written CSS surface that flows verbatim into a generated
     locator call: ``step.selector``, ``step.within``, the ``guide-cursor.target``
-    override, and the ``from.selector`` of a ``capture from.type=dom`` step.
+    override, the ``from.selector`` of a ``capture from.type=dom`` step, and the
+    masks of the front matter and of each step (a mask that stops matching fails
+    no test, it only stops masking).
     ``navigate``'s ``target`` is intentionally excluded — it is a URL, not a
     selector. Every warning ends with the same nudge toward stable locators.
     Callers print these as warnings and must NOT fail on them (FLAWS §6.3).
     """
     warnings: list[str] = []
+    for selector in scenario.mask or []:
+        warnings += _selector_warnings("scenario", "mask", selector)
     for step in scenario.steps:
         step_label = f"step {step.step_number}" if step.step_number is not None else "step"
         fields: list[tuple[str, Any]] = [
@@ -325,16 +337,19 @@ def lint_scenario_selectors(scenario: Scenario) -> list[str]:
             fields.append(("guide-cursor.target", step.guide_cursor.target))
         if isinstance(step.from_, dict):
             fields.append(("from.selector", step.from_.get("selector")))
+        fields.extend(("mask", selector) for selector in step.mask or [])
         for field_name, selector in fields:
             if not selector or not isinstance(selector, str):
                 continue
-            reasons = _lint_one_selector(selector)
-            for reason in reasons:
-                warnings.append(
-                    f"{step_label}: brittle {field_name} '{selector}' — {reason}; "
-                    f"prefer a data-testid or role-based locator"
-                )
+            warnings += _selector_warnings(step_label, field_name, selector)
     return warnings
+
+
+def _selector_warnings(where: str, field_name: str, selector: str) -> list[str]:
+    return [
+        f"{where}: brittle {field_name} '{selector}' — {reason}; prefer a data-testid or role-based locator"
+        for reason in _lint_one_selector(selector)
+    ]
 
 
 #: Above this, a scenario ``timeout:`` reads like a whole-test limit (ms).
@@ -463,9 +478,15 @@ def _structured_step_keys() -> frozenset[str]:
 
     Derived from the model so a new list-valued field works without editing the
     parser — and so a field that changes type cannot leave a stale entry here.
+
+    ``mask`` is the one list-valued field left out: its entries are selectors, so
+    :mod:`steppy.masks` reads its text, where ``[…]`` is a list only when every
+    entry in it is quoted.
     """
     keys: set[str] = set()
     for name, field in Step.model_fields.items():
+        if name == "mask":
+            continue
         annotation = str(field.annotation)
         nested_model = "GuideText" in annotation or "GuideCursor" in annotation
         if "list[" in annotation or "dict[" in annotation or nested_model:
@@ -475,6 +496,21 @@ def _structured_step_keys() -> frozenset[str]:
 
 #: Computed once: ``Step.model_fields`` does not change at run time.
 _STRUCTURED_STEP_KEYS = _structured_step_keys()
+
+
+def _parse_inline_mask(value: str) -> Any:
+    """A step's one-line ``- mask:`` value: YAML's reading where it decides, else the text."""
+    text = inline_yaml(value)
+    if text is not None:
+        try:
+            return yaml.safe_load(text)
+        except yaml.YAMLError:
+            pass
+    # ``"[data-testid="iban"]"``: quoted the step grammar's way, where the outer
+    # quotes go and nothing between them is escaped.
+    if len(value) > 1 and value[0] in "\"'" and value[-1] == value[0]:
+        return value[1:-1]
+    return value
 
 
 def _parse_step_content(content: str, step_title: str, file_path: Path) -> dict[str, Any]:
@@ -519,6 +555,11 @@ def _parse_step_content(content: str, step_title: str, file_path: Path) -> dict[
         key = key.strip()
         value = value.strip()
 
+        # A repeated key silently wins, which for a mask means showing what the
+        # first one covered.
+        if key == "mask" and key in step_data:
+            raise ParseError(DUPLICATE_HINT)
+
         # YAML block scalar indicator (`|`, `|-`, `|+`, `>`, `>-`, `>+`) —
         # the actual value spans the indented lines that follow, and newline
         # handling depends on the indicator. Defer to PyYAML so we get correct
@@ -551,6 +592,8 @@ def _parse_step_content(content: str, step_title: str, file_path: Path) -> dict[
                     nested = "\n".join(nested_lines)
                     if key == "expect":
                         nested = _quote_assertion_items(nested)
+                    elif key == "mask":
+                        nested = quote_items(nested)
                     yaml_text = f"{key}:\n" + nested
                     parsed = _safe_load_lenient(yaml_text)
                     step_data[key] = parsed[key]
@@ -558,6 +601,12 @@ def _parse_step_content(content: str, step_title: str, file_path: Path) -> dict[
                     raise ParseError(f"Failed to parse nested content for '{key}': {e}")
                 i = i + 1 + len(nested_lines)
                 continue
+
+        # A mask is a selector before it is YAML (see steppy.masks).
+        if key == "mask":
+            step_data[key] = _parse_inline_mask(value)
+            i += 1
+            continue
 
         # A YAML flow collection on the `- key:` line itself, for the keys whose
         # value is a collection. CLAUDE.md has documented `- layouts: [desktop,

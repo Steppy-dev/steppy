@@ -109,7 +109,11 @@ output:
 #              `coverage.non_ui` there (health checks, webhooks, cron callbacks)
 #              or CI counts them against you — triage flags live in the
 #              gitignored .steppy/coverage.db and a fresh checkout has none.
-#   security:  shell-capture gate; see also `screenshot.mask` for redaction
+#   security:  shell-capture gate
+#   screenshot.mask: selectors covered with a solid box in every screenshot, the
+#              failure ones included, e.g. `mask: ["input[name='password']"]`
+#              (`mask_color:` for the box). A scenario's or a step's own `mask:`
+#              adds to it. Pixels only: not text, traces or videos (SECURITY.md).
 #   pdf:       paper settings for `--pdf` / `--handbook`
 #   video:     `--video` narrated MP4 export, incl. the `video.tts` provider
 #              (none | piper | espeak | elevenlabs | openai | azure | google | http).

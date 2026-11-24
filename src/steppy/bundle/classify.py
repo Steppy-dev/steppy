@@ -243,6 +243,11 @@ def _guide_file(parts: tuple[str, ...], ctx: ClassifyContext) -> BundleFile:
     )
 
 
+def is_failure_screenshot(rel: Path, ctx: ClassifyContext) -> bool:
+    """Whether ``rel`` (relative to ``output/``) is in the ``_failures/`` tree."""
+    return rel.parts[:2] == (ctx.screenshots_dirname, FAILURES_DIRNAME)
+
+
 def classify(rel: Path, ctx: ClassifyContext) -> Optional[BundleFile]:
     """Classify one path relative to ``output/``.
 
@@ -256,8 +261,13 @@ def classify(rel: Path, ctx: ClassifyContext) -> Optional[BundleFile]:
     root = parts[0]
 
     if root == ctx.screenshots_dirname:
-        if len(parts) >= 2 and parts[1] == FAILURES_DIRNAME:
+        if is_failure_screenshot(rel, ctx):
             scenario, locale, layout = _attribute_nodeid(Path(parts[-1]).stem, ctx)
+            if scenario is None and ctx.nodeid_index:
+                # No test of this run wrote it, so an earlier run did. Nothing
+                # can show it as this run's, and it may predate the masks. A run
+                # that recorded no test keeps every image: nothing says whose.
+                return None
             return BundleFile(
                 path="",
                 kind=KIND_FAILURE_SCREENSHOT,

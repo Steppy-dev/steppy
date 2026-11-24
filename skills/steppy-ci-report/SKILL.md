@@ -308,6 +308,30 @@ same information for a machine:
 Traces and videos are **named, not copied** — a Playwright trace needs
 `playwright show-trace` to open, so a link would be a dead end.
 
+### What is masked in what you publish
+
+A report, a bundle and an upload show the screenshots exactly as they were captured, so
+masking happens before any of them (`screenshot.mask` in `config.yaml`, `mask:` in a
+scenario's front matter or on a step; the grammar is in `steppy-scenario-author`):
+
+- **Step captures** take the project's, the scenario's and the step's own masks.
+- **Failure screenshots** are full page and take every mask of the project, the scenario
+  and all its steps. When the masked capture cannot be taken there is **no image** for that
+  failure, on purpose, and the job log says why:
+  `screenshot: not saved, the masked capture failed: …`. Fix the selector it names.
+- **A failure screenshot is always this run's**: a test removes its earlier ones before
+  its setup, and those of tests the run did not run are left out
+  (`left out N failure screenshot(s) of tests this run did not run`).
+- **Traces and videos are never masked.** The CI templates run with `--trace`, so a project
+  with masks gets a one-line warning on every run, and the traces of failed tests land in the
+  `output/` artifact showing what the masks cover. Drop `--trace`, or keep that artifact
+  private and leave them out of what you share: `steppy bundle create --no-traces --no-videos`.
+- **Text is never masked**: error messages, failure tails, console lines, `pytest.log`.
+
+Failure screenshots made with Steppy 0.9.2 or older ignored `screenshot.mask`. After
+upgrading, run `steppy generate` (the fix is in the generated `conftest.py`) and check the
+artifacts, bundles and published reports of earlier runs.
+
 ---
 
 ## Publishing to Pages
@@ -317,7 +341,8 @@ templates carry the job **commented out**, with the warning below. Do not arm it
 user without saying this out loud:
 
 > **Pages is public.** Screenshots show the app with real-looking data in it.
-> `screenshot.mask` redacts fields at capture time and the report marks every page
+> `screenshot.mask` (and a scenario's or a step's `mask:`) covers fields at capture
+> time, failure screenshots included, and the report marks every page
 > `noindex` with a `Disallow: /` robots.txt — but a leak is permanent and cannot be
 > taken back. This is for showcase and open-source repos. For client work, read the
 > report from the CI artifact instead.

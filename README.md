@@ -247,8 +247,8 @@ validate` / `steppy generate`.
 It records as an **authenticated** session by default (loading `.auth/<role>.json` if
 present — run `steppy auth login <role>` first) and **never bakes secrets**: a
 username/password/submit sequence collapses to a single `- action: login` (credentials
-come from `config.yaml`), password/token fields become `${VAR}` env refs, and the command
-prints a ready-to-paste `screenshot.mask` block to redact passwords in screenshots.
+come from `config.yaml`), password/token fields become `${VAR}` env refs, and those fields
+are masked in the scenario's screenshots (`mask:` in the draft's front matter).
 Selectors prefer `data-testid`; the selector lint runs on the output.
 
 > **V1 (CLI plumbing).** A foundational recorder — the client-facing browser-extension
@@ -1006,7 +1006,10 @@ Steppy runs anywhere pytest runs. Two pieces make it CI-native:
   `steppy run --trace` flag) saves a Playwright trace zip under `output/traces/`
   for each failed test, one per role page (`<test>__<role>_page.zip`) — open it with `playwright show-trace <zip>` for a
   step-by-step, DOM-snapshotted replay. The per-failure full-page screenshot +
-  console/network dump under `output/screenshots/_failures/` is always produced.
+  console/network dump under `output/screenshots/_failures/` is always produced,
+  masked with everything the project, the scenario and its steps declare (and not
+  saved at all when the masks cannot be applied). Traces and videos cannot be
+  masked: `steppy run` warns when you record one with a mask declared.
 
 - **Workflow templates** — ready-to-copy pipelines ship in the package for both
   vendors: `templates/ci/github-actions.yml` and `templates/ci/gitlab-ci.yml`
@@ -1082,7 +1085,8 @@ The site is relative and self-contained, so publishing it is a copy. Both shippe
 CI templates carry the job, commented out, plus the warnings below.
 
 > **Pages is public.** Your screenshots show your app with real-looking data in it.
-> `screenshot.mask` redacts fields at capture time and the report marks every page
+> `screenshot.mask` (and a scenario's or a step's `mask:`) covers fields at capture
+> time, failure screenshots included, and the report marks every page
 > `noindex` with a `Disallow: /` robots.txt — but a leak is permanent and cannot be
 > taken back. This is for showcase and open-source repos; for client work, read the
 > report from the CI artifact instead. GitLab Pages can be restricted to project

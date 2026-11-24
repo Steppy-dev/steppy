@@ -126,9 +126,10 @@ def steps_to_markdown(steps: list[dict], heading: str, role: Optional[str], extr
         # `note:` / `screenshot:` / `guide-text:` ride on the FIRST step only.
         # Duplicating a note onto every fragment would say the same thing three
         # times; duplicating a screenshot would capture the same frame three
-        # times.
-        if index == 1:
-            for key, value in extra:
+        # times. A `mask:` is the exception: it covers the captures of the step
+        # that carries it, so it rides on all of them.
+        for key, value in extra:
+            if index == 1 or key == "mask":
                 if value.startswith(_NESTED):
                     lines.append(f"- {key}:")
                     lines.extend(value[len(_NESTED) :].splitlines())

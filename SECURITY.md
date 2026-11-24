@@ -117,34 +117,119 @@ templates under review.
 
 ## Screenshot redaction
 
-Screenshots captured for guides can contain sensitive data (passwords, personal data).
-Configure `screenshot.mask` with CSS selectors to cover matching elements with a
-solid box (Playwright's native `mask=`), applied to **every** screenshot:
+Screenshots can show sensitive data (passwords, personal data). A **mask** covers
+every element its selector matches with a solid box (Playwright's native `mask=`).
+It is applied as the screenshot is taken, so the PNG never contains the masked
+pixels: what is not in the file cannot leak from a guide, a report, a bundle or an
+upload.
+
+A mask can be declared in three places, and a capture always takes the **union** of
+those that apply to it. A scenario or a step adds masks; nothing it writes can
+remove the project's.
+
+| Where | Applies to |
+|---|---|
+| `screenshot.mask` in `config.yaml` | every screenshot of the project |
+| `mask:` in a scenario's front matter | every screenshot of that scenario |
+| `mask:` on a step | that step's screenshots, before or after the action, every fill-form frame included |
 
 ```yaml
+# config.yaml
 screenshot:
   mask:
     - "input[name='password']"
     - ".customer-name"
-  mask_color: "#000000"
+  mask_color: "#000000"     # the box's colour, for every mask of the project
 ```
 
-An empty/omitted `mask` list disables redaction (default). Masking is applied at
-capture time, so the raw PNGs never contain the redacted pixels.
+```markdown
+---
+title: Pay an invoice
+mask: [data-testid="iban"]
+---
+
+### 3. Fill in the contact
+- role: editor
+- action: fill
+- selector: [data-testid="phone"]
+- value: "+32 470 00 00 00"
+- screenshot: editor
+- mask: [data-testid="phone"]
+```
+
+No mask anywhere disables redaction (the default). `steppy validate` and `steppy
+generate` refuse an empty mask or one that is not text, and a malformed selector
+fails at run time.
+
+### Failure screenshots
+
+A failing test saves a full-page screenshot of every role's page under
+`output/screenshots/_failures/`. It is masked with **everything**: the project's
+masks, the scenario's, and those of all its steps, because what an earlier step
+showed may still be on screen.
+
+**It fails closed.** When the masked capture cannot be taken (a malformed selector,
+a crashed page), no image is saved, never an unmasked one, and the test's output
+says why.
+
+**An image does not outlive its run.** Before its setup, each test removes the
+failure screenshots its earlier runs left, so a test that now passes, is skipped or
+dies in setup has none, and one that fails again has the new one. A retry in the
+same process (`--retries`) keeps the image of the attempt that failed. A bundle, a
+report and an upload leave out the failure screenshots of tests the run did not run
+(they stay on disk, and a warning counts them). An image that cannot be removed, on
+Windows when another program holds it, is named in the test's output.
+
+Up to 0.9.2, failure screenshots ignored `screenshot.mask`, and stayed until the
+same test failed again. The fix is in the
+generated `conftest.py`, so run `steppy generate` after upgrading, and check what
+earlier runs left: `output/screenshots/_failures/`, CI artifacts, results bundles,
+published reports and uploaded runs. A project-local `templates/conftest.py.j2`
+keeps its own behaviour until you bring the change into it; `steppy generate` warns
+about one that masks no failure screenshot, and refuses a scenario mask it would
+ignore.
+
+### What a mask does not cover
+
+- **Anything but pixels.** Text is not masked: error messages and tracebacks,
+  Playwright's call logs, console output, page URLs and titles, `pytest.log`,
+  captured variables, and a scenario's own values. See "Results bundles" below.
+- **Traces and videos.** Playwright can mask neither, so both record what a mask
+  covers: a trace holds DOM snapshots, network payloads and its own screenshots.
+  `steppy run` prints a warning when a mask is declared and a trace or a video is
+  on, and turns nothing off. Leave them out of what you share:
+  `steppy bundle create --no-traces --no-videos`.
+- **A step screenshot taken before the mask.** A mask acts as the picture is taken.
+  Step screenshots stay on disk between runs, because guides are built from them, and
+  the report, bundle or upload of a later run carries them until
+  `steppy run --screenshots` or `--guide` takes them again. After adding a mask, take
+  them again, or delete `output/screenshots/`.
+- **What a selector does not match.** A mask that matches nothing is not an error,
+  and a renamed test-id silently stops being masked. Look at the captures after
+  changing the app, and prefer a `data-testid` to a positional selector (the
+  selector lint of `steppy validate` reads masks too).
+- **The inside of an iframe**, for a selector written for the outer page. Mask the
+  `<iframe>` element, or cross into it with Playwright's
+  `iframe >> internal:control=enter-frame >> .secret`.
+- **A screenshot your own code takes.** `page.screenshot(...)` in a `custom` step or
+  a `call` helper is not masked; `take_screenshot(...)` and
+  `take_screenshot_with_bbox(...)` from the generated conftest are.
 
 ## Results bundles
 
 `steppy bundle create` packages a whole run into one portable file: every
 screenshot, the failure logs, and (unless excluded) Playwright traces and videos.
-Masking is applied at capture time, so a bundle inherits it — there are no
-unredacted pixels to leak. But the aggregation itself is the thing to think about:
+Masking is applied at capture time, so a bundle's screenshots inherit it, the
+failure ones included, as long as the tests were generated with the masks in place.
+Its traces, videos and text do not. The aggregation itself is the thing to think
+about:
 
 - **A bundle is as sensitive as the screenshots in it.** One file, easy to attach
   to a ticket or forward. Treat it like the `output/` directory it contains.
 - **Traces and videos are the least redacted artifacts.** A Playwright trace holds
-  full DOM snapshots and network payloads, and neither trace nor video goes through
-  `screenshot.mask`. Drop them when a bundle is going anywhere you would not send
-  the raw run: `steppy bundle create --no-traces --no-videos`.
+  full DOM snapshots and network payloads, and no mask reaches a trace or a video.
+  Drop them when a bundle is going anywhere you would not send the raw run:
+  `steppy bundle create --no-traces --no-videos`.
 - **Inspect before sharing.** `steppy bundle inspect <file>` prints the manifest —
   what is in the archive, by kind and count — without extracting anything.
 - **No credential store is archived.** The bundler walks `output/` only, so
@@ -155,7 +240,7 @@ unredacted pixels to leak. But the aggregation itself is the thing to think abou
   `output/failures/<slug>/pytest.log` and traces are diagnostic text straight from
   pytest and Playwright. If a test surfaces a value in an error — a filled field in
   a call log, an API response in an assertion — it lands in the bundle unredacted.
-  `screenshot.mask` covers pixels, not tracebacks.
+  Masks cover pixels, not tracebacks.
 
 ## In-app tours
 

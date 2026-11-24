@@ -212,7 +212,8 @@ DEFAULT_TEST_LAYOUT = "desktop"
 #
 # The imported names must never collide with a hook this conftest defines
 # itself (``pytest_generate_tests``, ``pytest_collection_modifyitems``,
-# ``pytest_runtest_makereport``) — the import would silently shadow it.
+# ``pytest_runtest_setup``, ``pytest_runtest_makereport``) — the import would
+# silently shadow it.
 if __import__("os").environ.get("STEPPY_EMIT_EVENTS") == "1" or __import__("os").environ.get("STEPPY_EVENTS_DIR"):
     import sys as _sys
     _sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -312,8 +313,15 @@ def _steppy_step_record(kind, step_number, **fields):
         pass
 
 
-def _steppy_mark_step(step_number, step_title, action):
-    """Mark the start of a step."""
+# What the running step masks in its captures, beside ``screenshot.mask``: its
+# own ``mask:`` and its scenario's, as the generator resolved them.
+_STEP_MASK: list = []
+
+
+def _steppy_mark_step(step_number, step_title, action, mask=()):
+    """Mark the start of a step, and set what its captures mask."""
+    global _STEP_MASK
+    _STEP_MASK = list(mask)
     _steppy_step_record("step-start", step_number, title=step_title, action=action)
 
 
@@ -1511,12 +1519,100 @@ def _coverage_stop_and_write(state, request) -> None:
         print(f"[steppy] coverage record failed: {exc}", flush=True)
 
 
+# ``<sanitised nodeid>__<page fixture>.png``, split at the LAST ``__``: a role
+# name holds none, so the first group is the whole id of the test that wrote it.
+_FAILURE_IMAGE = re.compile(r"(?P<test>.+)__(?P<fixture>\w+?_page(?:_noauth)?)\.png")
+
+# Tests whose images of an earlier run are gone, in this pytest process.
+_FAILURE_IMAGES_CLEARED: set = set()
+
+
+def _is_page_fixture(name: str) -> bool:
+    return name.endswith("_page") or name.endswith("_page_noauth")
+
+
+def _clear_failure_images(item) -> None:
+    """Remove the failure screenshots earlier runs left for this very test.
+
+    Only images whose file name carries this test's whole id, whatever the role
+    (a scenario may have dropped one since): an id that merely extends this one
+    is another test, which may be running in another worker. Never raises: a
+    file that cannot be removed (a lock on Windows) is printed.
+    """
+    test = _sanitise_nodeid(item.nodeid)
+    fixtures = {f for f in (*_PAGE_FIXTURES, *getattr(item, "fixturenames", ())) if _is_page_fixture(f)}
+    exact = {f"{test}__{f}.png" for f in fixtures}
+    try:
+        names = os.listdir(SCREENSHOTS_DIR / "_failures")
+    except OSError:
+        return  # No failure screenshot was ever taken here.
+    for name in names:
+        match = _FAILURE_IMAGE.fullmatch(name)
+        if name in exact or (match and match["test"] == test):
+            path = SCREENSHOTS_DIR / "_failures" / name
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                print(f"\n[steppy] an earlier failure screenshot could not be removed: {path} ({exc})", flush=True)
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_setup(item):
+    """Before a test's setup, drop the failure screenshots of its earlier runs.
+
+    A wrapper, so it runs before any fixture and before a skip: whatever this
+    run's outcome is (passed, skipped, dead in setup), an image under
+    ``_failures/`` is from it. An image of an earlier run may predate the masks,
+    and the report joins images to tests by name, so it would be shown, bundled
+    and uploaded as this run's.
+
+    Once per test and process. A retry in the same process (``--retries``) keeps
+    the image of the attempt that failed, because the events keep that attempt
+    and the report shows its failure text. The parallel retry pass is a new
+    process: it starts over, as its events, JUnit and captures do.
+    """
+    if item.nodeid not in _FAILURE_IMAGES_CLEARED:
+        _FAILURE_IMAGES_CLEARED.add(item.nodeid)
+        _clear_failure_images(item)
+    yield
+
+
+def _capture_failure(page: Page, path: Path, masks) -> "str | None":
+    """Save a full-page failure screenshot; return why there is none, else None.
+
+    Fails closed: a capture whose masks cannot be applied (a malformed selector,
+    a crashed page) leaves no file, and is never retried without them. The path
+    is cleared first too, so the image of an attempt before this one cannot
+    stand in for it.
+    """
+    masked = False
+    try:
+        path.unlink(missing_ok=True)
+        kwargs = _screenshot_mask_kwargs(page, masks)
+        masked = bool(kwargs)
+        page.screenshot(path=str(path), full_page=True, timeout=5000, **kwargs)
+        return None
+    except Exception as exc:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        reason = (str(exc).strip() or type(exc).__name__).splitlines()[0]
+        return f"the masked capture failed: {reason}" if masked else f"the capture failed: {reason}"
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """Capture a screenshot, URL, title, JS errors, and failed requests from
     every active ``*_page`` fixture when a test fails. Lands under
     ``output/screenshots/_failures/`` with details printed inline so the user
     can diagnose without re-running with extra flags.
+
+    The screenshot is masked with everything the project, the scenario and all
+    of its steps declare: what an earlier step showed may still be on screen.
+    One that cannot be taken masked is not taken at all (``_capture_failure``).
 
     Best-effort: any exception during capture is swallowed so a debug aid
     never compounds a real test failure.
@@ -1529,6 +1625,10 @@ def pytest_runtest_makereport(item, call):
     rep = outcome.get_result()
     if rep.when == "call":
         item._steppy_call_failed = rep.failed
+    if rep.when == "setup" and rep.failed:
+        # A retry that died in setup has no page to show, and an image here
+        # would be of an earlier attempt, beside this one's failure text.
+        _clear_failure_images(item)
     if rep.when != "call" or not rep.failed:
         return
     failure_dir = SCREENSHOTS_DIR / "_failures"
@@ -1537,16 +1637,14 @@ def pytest_runtest_makereport(item, call):
     except OSError:
         return
     safe_id = _sanitise_nodeid(item.nodeid)
+    scenario_mask = getattr(getattr(item, "module", None), "SCENARIO_MASK", ())
     for fixture_name, value in item.funcargs.items():
-        if not (fixture_name.endswith("_page") or fixture_name.endswith("_page_noauth")):
+        if not _is_page_fixture(fixture_name):
             continue
         if not hasattr(value, "screenshot"):
             continue
         path = failure_dir / f"{safe_id}__{fixture_name}.png"
-        try:
-            value.screenshot(path=str(path), full_page=True, timeout=5000)
-        except Exception:
-            path = None
+        not_saved = _capture_failure(value, path, scenario_mask)
         try:
             url = value.url
         except Exception:
@@ -1559,8 +1657,10 @@ def pytest_runtest_makereport(item, call):
             f"\n[steppy] {fixture_name} failure  url={url}  title={title!r}",
             flush=True,
         )
-        if path is not None:
+        if not_saved is None:
             print(f"  screenshot: {path}", flush=True)
+        else:
+            print(f"  screenshot: not saved, {not_saved}", flush=True)
         _dump_page_diagnostics(value, prefix="  ")
 
 
@@ -2102,18 +2202,24 @@ def _screenshot_folder(scenario: str) -> Path:
     return folder
 
 
-def _screenshot_mask_kwargs(page: Page) -> dict:
-    """Build page.screenshot(mask=...) kwargs from `screenshot.mask` config.
+def _screenshot_mask_kwargs(page: Page, masks=None) -> dict:
+    """Build page.screenshot(mask=...) kwargs: `screenshot.mask` plus ``masks``.
 
-    Returns {} when no mask selectors are configured, so output is byte-identical
-    for projects that don't redact. Otherwise returns solid-box masks over every
-    matched element (secrets/personal-data redaction — see SECURITY.md).
+    ``masks`` defaults to the running step's, and is always added to the
+    project's, never used instead of them. Returns {} when nothing is masked, so
+    output is byte-identical for projects that don't redact. Otherwise returns
+    solid-box masks over every matched element (secrets/personal-data redaction
+    — see SECURITY.md).
     """
-    masks = CONFIG.get("screenshot", {}).get("mask", []) or []
-    if not masks:
+    settings = CONFIG.get("screenshot") or {}
+    project = settings.get("mask") or []
+    if isinstance(project, str):
+        project = [project]
+    selectors = list(dict.fromkeys([*project, *(_STEP_MASK if masks is None else masks)]))
+    if not selectors:
         return {}
-    color = CONFIG.get("screenshot", {}).get("mask_color", "#000000")
-    return {"mask": [page.locator(sel) for sel in masks], "mask_color": color}
+    color = settings.get("mask_color", "#000000")
+    return {"mask": [page.locator(sel) for sel in selectors], "mask_color": color}
 
 
 def take_screenshot(page: Page, scenario: str, step: int, suffix: str = ""):

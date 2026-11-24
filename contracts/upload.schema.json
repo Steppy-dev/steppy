@@ -1,5 +1,47 @@
 {
   "$defs": {
+    "BundleCi": {
+      "additionalProperties": true,
+      "description": "The CI job that made the run. Present only when one was detected.\n\n``provider`` is a plain ``str`` rather than an enum (rule 2 in\n:mod:`steppy.contracts`): a newer producer may detect a CI this consumer\ndoes not know.",
+      "properties": {
+        "provider": {
+          "description": "github-actions or gitlab-ci.",
+          "title": "Provider",
+          "type": "string"
+        },
+        "repo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The repository the CI ran in, as owner/name (GitLab: the full project path, group/subgroup/name).",
+          "title": "Repo"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A link to the job: on GitHub Actions the workflow run's attempt (GitHub gives no job URL without its API), on GitLab CI the job.",
+          "title": "Url"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "title": "BundleCi",
+      "type": "object"
+    },
     "BundleCoverage": {
       "additionalProperties": true,
       "description": "Pointer to the coverage records carried in this bundle.\n\n``run_id`` may legitimately differ from ``run.run_id``: a bundle created\nwith an explicit ``--run-id`` names itself after the identity its consumer\nassigned, while the records on disk keep whatever the run recorded them\nunder.",
@@ -117,8 +159,21 @@
     },
     "BundleGit": {
       "additionalProperties": true,
-      "description": "Where the run's code came from. Every field optional \u2014 a laptop run\noutside a repository has none of it, and that is not an error.",
+      "description": "Where the run's code came from. Every field optional \u2014 a laptop run\noutside a repository has none of it, and that is not an error.\n\n``sha`` is the commit the run *describes*: on a pull or merge request, the\nrequest's head, never the merge commit a CI builds to test it. That merge\ncommit, when it differs, is ``tested_sha``. Resolved in this order: the\n``--commit`` / ``--branch`` / ``--pr`` flags, then the CI's variables\n(GitHub Actions, GitLab CI), then the local repository. See\n:mod:`steppy.provenance`.",
       "properties": {
+        "base_branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The branch a pull or merge request targets. None outside one.",
+          "title": "Base Branch"
+        },
         "branch": {
           "anyOf": [
             {
@@ -130,6 +185,19 @@
           ],
           "default": null,
           "title": "Branch"
+        },
+        "dirty": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True when the working tree had uncommitted changes to tracked files when the run started, so sha alone does not reproduce it. Checked on local runs only; None means not checked.",
+          "title": "Dirty"
         },
         "pr": {
           "anyOf": [
@@ -154,6 +222,19 @@
           ],
           "default": null,
           "title": "Sha"
+        },
+        "tested_sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The commit the run actually tested, when it differs from sha: the merge commit a CI builds for a pull or merge request. None when sha is what was tested, or when unknown.",
+          "title": "Tested Sha"
         }
       },
       "title": "BundleGit",
@@ -220,9 +301,34 @@
       "additionalProperties": true,
       "description": "Run identity and provenance.",
       "properties": {
+        "ci": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BundleCi"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The CI job that made the run, when one was detected."
+        },
         "created_at": {
           "title": "Created At",
           "type": "string"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Free text naming what the run tested against (staging, prod): --environment, else STEPPY_ENVIRONMENT, else config.yaml's environment key. At most 64 characters, no control character.",
+          "title": "Environment"
         },
         "executor": {
           "default": "local",

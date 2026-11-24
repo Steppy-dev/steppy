@@ -12,8 +12,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
+from .. import provenance as _provenance
 from ..contracts.bundle import BundleManifest, parse_manifest
 from ..runmeta import EVENTS_SUBDIR, JUNIT_SUBDIR, bundle_dirs, new_run_id, read_run_sidecar
 from . import archive as _archive
@@ -48,6 +49,11 @@ class BundlePlan:
     run_id: str
     run_id_source: str
     fmt: str
+    #: ``recorded`` (the run's sidecar) or ``detected`` (a run before 0.10, or
+    #: none recorded): where ``manifest.run``'s git, CI and environment came from.
+    metadata_source: str = "recorded"
+    #: What the flags changed in that metadata, for the command to print.
+    overrides: list[_provenance.Change] = field(default_factory=list)
 
     @property
     def manifest(self) -> BundleManifest:
@@ -67,6 +73,7 @@ class BundleResult:
     fmt: str
     compressed_size: int = 0
     warnings: list[str] = field(default_factory=list)
+    overrides: list[_provenance.Change] = field(default_factory=list)
 
     @property
     def payload_size(self) -> int:
@@ -204,6 +211,85 @@ def resolve_run_id(
     return new_run_id(), "minted"
 
 
+def resolve_metadata(
+    project_root: Path,
+    sidecar: Optional[dict[str, Any]],
+    *,
+    branch: Optional[str] = None,
+    commit: Optional[str] = None,
+    pr: Optional[int] = None,
+    environment: Optional[str] = None,
+    executor: Optional[str] = None,
+) -> tuple[_provenance.RunMetadata, list[_provenance.Change], str]:
+    """``(metadata, overrides, source)`` for ``manifest.run``.
+
+    The run's own record wins over anything detected now: ``steppy run``
+    resolved its metadata when it started (flags, then the CI, then the
+    repository), and a bundle made later — another CI step, another machine, a
+    tree edited since — would describe another checkout. Only a run that
+    recorded none (before 0.10, or no sidecar at all) is detected here, without
+    the working-tree check, which would describe the tree as it is now. The
+    flags then override either.
+    """
+    from ..config import ConfigError, read_environment
+
+    try:
+        _provenance.check_flags(branch=branch, commit=commit, pr=pr, environment=environment)
+        recorded = _provenance.from_sidecar(sidecar)
+        if recorded is not None:
+            base, source = recorded, "recorded"
+        else:
+            base = _provenance.detect(
+                project_root, config_environment=read_environment(project_root / "config.yaml"), dirty=False
+            )
+            source = "detected"
+        meta, changes = _provenance.override(
+            base, branch=branch, commit=commit, pr=pr, environment=environment, executor=executor
+        )
+    except (_provenance.MetadataError, ConfigError) as e:
+        raise BundleError(str(e)) from None
+    return meta, changes, source
+
+
+def override_manifest(
+    manifest: BundleManifest,
+    *,
+    run_id: Optional[str] = None,
+    branch: Optional[str] = None,
+    commit: Optional[str] = None,
+    pr: Optional[int] = None,
+    environment: Optional[str] = None,
+    executor: Optional[str] = None,
+) -> tuple[BundleManifest, list[_provenance.Change]]:
+    """An existing bundle's manifest with the flags applied, and what they changed.
+
+    What ``steppy bundle upload <archive>`` sends: an archive describes the run
+    that made it, but the flags of the command are the user's last word, the
+    same as for a live tree. The archive itself is never rewritten — only the
+    manifest sent. ``run.ci`` is left as the archive has it: no flag names a CI.
+    Fields of a newer producer survive (``model_copy``, never a rebuild).
+    """
+    try:
+        base = _provenance.RunMetadata.from_dict(manifest.run.model_dump(mode="json"))
+        meta, changes = _provenance.override(
+            base, branch=branch, commit=commit, pr=pr, environment=environment, executor=executor
+        )
+    except _provenance.MetadataError as e:
+        raise BundleError(str(e)) from None
+
+    run = manifest.run
+    update: dict[str, Any] = {}
+    if run_id and run_id != run.run_id:
+        changes.insert(0, _provenance.Change("run_id", run.run_id, run_id))
+        update["run_id"] = run_id
+    if changes:
+        git_fields = {k: v for k, v in meta.as_dict()["git"].items() if getattr(run.git, k, None) != v}
+        update.update(executor=meta.executor, environment=meta.environment, git=run.git.model_copy(update=git_fields))
+    if not update:
+        return manifest, []
+    return manifest.model_copy(update={"run": run.model_copy(update=update)}), changes
+
+
 def _excluded_kinds(*, guides: bool, traces: bool, videos: bool, coverage: bool) -> frozenset[str]:
     excluded: set[str] = set()
     for flag, key in ((guides, "guides"), (traces, "traces"), (videos, "videos"), (coverage, "coverage")):
@@ -218,10 +304,13 @@ def plan_bundle(
     output_dir: Optional[Path] = None,
     run_id: Optional[str] = None,
     fmt: str = _archive.FORMAT_AUTO,
-    executor: str = "local",
+    executor: Optional[str] = None,
+    branch: Optional[str] = None,
+    commit: Optional[str] = None,
+    pr: Optional[int] = None,
+    environment: Optional[str] = None,
     git_sha: Optional[str] = None,
     git_branch: Optional[str] = None,
-    pr: Optional[int] = None,
     guides: bool = True,
     traces: bool = True,
     videos: bool = True,
@@ -234,6 +323,10 @@ def plan_bundle(
     entry point ``steppy bundle upload`` uses instead — see :class:`BundlePlan`.
     ``fmt`` is carried through so a caller can report it; nothing here depends
     on the codec.
+
+    ``branch`` / ``commit`` / ``pr`` / ``environment`` / ``executor`` override
+    the run's metadata (:func:`resolve_metadata`); ``git_branch`` / ``git_sha``
+    are their earlier names, still accepted.
     """
     project_root = Path(project_root).resolve()
     output_dir = Path(output_dir).resolve() if output_dir else project_root / "output"
@@ -243,7 +336,21 @@ def plan_bundle(
             f"no output directory at {output_dir} — run your scenarios first (`steppy run`), then create the bundle"
         )
 
+    sidecar = read_run_sidecar(output_dir.parent)
+    # Before the walk: a bad flag should fail in milliseconds, not after hashing
+    # a gigabyte of screenshots.
+    meta, overrides, metadata_source = resolve_metadata(
+        project_root,
+        sidecar,
+        branch=branch or git_branch,
+        commit=commit or git_sha,
+        pr=pr,
+        environment=environment,
+        executor=executor,
+    )
+
     roots, warnings = resolve_roots(project_root, output_dir)
+    warnings.extend(meta.warnings)
     resolved_run_id, run_id_source = resolve_run_id(project_root, output_dir, run_id, roots.coverage_dirname)
 
     events_dir, junit_dir = bundle_dirs(output_dir.parent, resolved_run_id)
@@ -257,11 +364,12 @@ def plan_bundle(
     if not tests:
         warnings.append(
             "no test outcomes recorded — manifest.tests[] is empty. "
-            "Re-run with `steppy run` (0.9.1 or later, or `--bundle` before) so per-test event records are captured"
+            "Re-run with `steppy run` (0.9.1 or later) so per-test event records are captured"
         )
 
     junit_xml = _results.merge_junit(junit_dir)
     events = [(f"{EVENTS_SUBDIR}/{p.name}", p) for p in _results.read_event_files(events_dir)]
+    git, ci = _manifest.contract_metadata(meta)
 
     assembly = _manifest.build(
         project_root=project_root,
@@ -274,9 +382,11 @@ def plan_bundle(
         coverage_dirname=roots.coverage_dirname,
         guides_dirname=roots.guides_dirname,
         reports_dirname=roots.reports_dirname,
-        sidecar=read_run_sidecar(output_dir.parent),
-        executor=executor,
-        git=_manifest.detect_git(project_root, sha=git_sha, branch=git_branch, pr=pr),
+        sidecar=sidecar,
+        executor=meta.executor,
+        git=git,
+        ci=ci,
+        environment=meta.environment,
         exclude_kinds=_excluded_kinds(guides=guides, traces=traces, videos=videos, coverage=coverage),
         max_size=max_size,
         junit_xml=junit_xml,
@@ -284,7 +394,14 @@ def plan_bundle(
         extra_warnings=warnings,
     )
 
-    return BundlePlan(assembly=assembly, run_id=resolved_run_id, run_id_source=run_id_source, fmt=fmt)
+    return BundlePlan(
+        assembly=assembly,
+        run_id=resolved_run_id,
+        run_id_source=run_id_source,
+        fmt=fmt,
+        metadata_source=metadata_source,
+        overrides=overrides,
+    )
 
 
 def create_bundle(
@@ -294,10 +411,13 @@ def create_bundle(
     target: Optional[Path] = None,
     run_id: Optional[str] = None,
     fmt: str = _archive.FORMAT_AUTO,
-    executor: str = "local",
+    executor: Optional[str] = None,
+    branch: Optional[str] = None,
+    commit: Optional[str] = None,
+    pr: Optional[int] = None,
+    environment: Optional[str] = None,
     git_sha: Optional[str] = None,
     git_branch: Optional[str] = None,
-    pr: Optional[int] = None,
     guides: bool = True,
     traces: bool = True,
     videos: bool = True,
@@ -332,9 +452,10 @@ def create_bundle(
         run_id=run_id,
         fmt=resolved_fmt,
         executor=executor,
-        git_sha=git_sha,
-        git_branch=git_branch,
+        branch=branch or git_branch,
+        commit=commit or git_sha,
         pr=pr,
+        environment=environment,
         guides=guides,
         traces=traces,
         videos=videos,
@@ -350,6 +471,7 @@ def create_bundle(
             run_id_source=plan.run_id_source,
             fmt=resolved_fmt,
             warnings=plan.manifest.warnings,
+            overrides=plan.overrides,
         )
 
     target_path = _resolve_target(target, Path(project_root).resolve(), plan.run_id, resolved_fmt)
@@ -363,6 +485,7 @@ def create_bundle(
         fmt=resolved_fmt,
         compressed_size=compressed,
         warnings=plan.manifest.warnings,
+        overrides=plan.overrides,
     )
 
 

@@ -14,7 +14,12 @@ from rich.table import Table
 
 from .tours_cli import prepare_tours_or_exit, run_tour_checks, tours_enabled, warn_opted_in_but_disabled
 from ._cli_common import (
+    BRANCH_HELP,
+    COMMIT_HELP,
+    ENVIRONMENT_HELP,
+    PR_HELP,
     console,
+    print_run_metadata,
     set_verbose as _set_verbose,
     _debug_enabled,
     _error,
@@ -25,10 +30,10 @@ from ._cli_common import (
     require_generated_tests,
     DEFAULT_SEED_TIMEOUT,
 )
-from . import selection
+from . import provenance, selection
 from .captures import DEFAULT_GUIDES_DIR, DEFAULT_SCREENSHOTS_DIR, resolve_output_dir
 from .locales import LocaleSyntaxError, normalize_locale
-from .config import load_config, ConfigError
+from .config import load_config, read_environment, ConfigError
 from .parser import (
     parse_scenario_file,
     parse_scenarios_from_directory,
@@ -893,7 +898,7 @@ def _write_coverage_gaps(settings, console: Console) -> None:
     bundle. So a bundle downloaded from CI has the raw records but no way to
     answer "how much of the declared surface does this suite reach?". This file
     is what crosses that gap, and writing it here means
-    ``steppy run --coverage --bundle`` is self-sufficient rather than needing an
+    ``steppy run --coverage`` is self-sufficient rather than needing an
     extra incantation in every CI config.
 
     Best-effort, and quiet about it: the merge already succeeded by this point, so
@@ -1079,14 +1084,48 @@ def run(
         "--require-upload",
         help="Like --upload, but a failed upload fails the command.",
     ),
+    branch: Optional[str] = typer.Option(None, "--branch", help=BRANCH_HELP),
+    commit: Optional[str] = typer.Option(None, "--commit", help=COMMIT_HELP),
+    pr: Optional[int] = typer.Option(None, "--pr", min=1, help=PR_HELP),
+    environment: Optional[str] = typer.Option(None, "--environment", help=ENVIRONMENT_HELP),
 ):
     """
     Run generated pytest tests.
 
     Wraps pytest with Steppy-specific environment variables and filtering.
     You can also run pytest directly: pytest tests/e2e/
+
+    Every run records where it came from (commit, branch, pull request, CI job,
+    environment) in output/.steppy-run.json, for `steppy report`, `steppy
+    bundle create` and the upload: detected from GitHub Actions or GitLab CI,
+    else the local repository, unless --branch, --commit, --pr or
+    --environment says otherwise.
     """
     with _cli_errors():
+        # Where the run came from (spec I3). Its values are checked before
+        # anything else, so a bad one stops the command before any test and
+        # before the upload's key check talks to a server; they are detected
+        # (the CI's variables, `git`) only once the run is about to start, and
+        # recorded in its sidecar, so a later `bundle create` / `bundle upload`
+        # describes this run, not whatever checkout it happens to run in.
+        try:
+            provenance.check_flags(branch=branch, commit=commit, pr=pr, environment=environment)
+            provenance.check_environment_variable()
+            config_environment = read_environment()
+        except (provenance.MetadataError, ConfigError) as e:
+            _error(f"{e}. No test was run.")
+            raise typer.Exit(1)
+
+        def run_metadata() -> provenance.RunMetadata:
+            return provenance.resolve(
+                Path.cwd(),
+                branch=branch,
+                commit=commit,
+                pr=pr,
+                environment=environment,
+                config_environment=config_environment,
+            )
+
         # Uploading is opt-in only (D6): a key in the environment is never
         # enough, so screenshots cannot leave a laptop by accident. The start
         # check runs before anything else — no test, no Docker stack — and
@@ -1159,6 +1198,7 @@ def run(
                     strict_flaky=strict_flaky,
                     fail_fast=fail_fast,
                     bundle=True,
+                    run_metadata=run_metadata(),
                 )
             )
 
@@ -1273,6 +1313,7 @@ def run(
             events_dir=events_dir,
         )
 
+        metadata = run_metadata()
         write_run_sidecar(
             Path.cwd(),
             run_id=run_id,
@@ -1288,9 +1329,12 @@ def run(
                 "tag": list(tag) if tag else None,
                 "scenario": scenario,
             },
+            executor=metadata.executor,
+            metadata=metadata.sidecar_fields(),
         )
         prune_recorded_runs(Path.cwd())
         console.print(f"[dim]Run {run_id} recorded — steppy report / steppy bundle create read it[/dim]")
+        print_run_metadata(metadata, console)
 
         console.print(f"\n[dim]Command: {' '.join(pytest_cmd)}[/dim]\n")
 

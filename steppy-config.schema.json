@@ -1971,6 +1971,20 @@
     "dropdown": {
       "$ref": "#/$defs/DropdownConfig"
     },
+    "environment": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the runs test against (staging, prod), recorded as the run's environment. steppy run --environment and STEPPY_ENVIRONMENT win over it.",
+      "title": "Environment"
+    },
     "fieldset": {
       "$ref": "#/$defs/FieldsetConfig"
     },

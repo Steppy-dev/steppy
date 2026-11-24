@@ -240,6 +240,7 @@ def run_parallel(
     strict_flaky: bool = False,
     fail_fast: Optional[bool] = None,
     bundle: bool = False,
+    run_metadata: Optional[Any] = None,
 ) -> int:
     """Top-level coordinator. Returns the process exit code (0 on success).
 
@@ -261,6 +262,10 @@ def run_parallel(
     ``steppy bundle create`` read (``cli.run`` always passes it now). Both land under the shared ``output/`` mount and are keyed by
     scenario, which is safe precisely because the queue guarantees a scenario is
     claimed by exactly one worker.
+
+    ``run_metadata`` is where the run came from
+    (:class:`steppy.provenance.RunMetadata`), resolved by ``cli.run`` before
+    dispatch and recorded in the run's sidecar beside the spec.
     """
     console = Console()
 
@@ -411,7 +416,7 @@ def run_parallel(
 
     # Two ids, deliberately. ``stack_id`` names the Compose projects and the tmp
     # dir, where short and opaque is all that is wanted. ``run_id`` is the run's
-    # IDENTITY — it names ``output/coverage/raw/<run_id>/`` and the ``--bundle``
+    # IDENTITY — it names ``output/coverage/raw/<run_id>/`` and the run's record
     # sinks, and both are resolved elsewhere by taking the lexicographically last
     # directory (``coverage.merge.latest_run_id``). A bare uuid cannot be sorted,
     # so this path used to make that resolution arbitrary; the sortable form is
@@ -432,7 +437,7 @@ def run_parallel(
     queue = Queue(root=tmp_dir)
     tasks = _order_tasks_longest_first(tasks, project_root, console)
     # The flattened task order is the real execution order, which is what the
-    # --bundle sidecar wants to record.
+    # run sidecar wants to record.
     ordered_slugs = [slug for task in tasks for slug in task.slugs]
     batches = {t.task_id: list(t.slugs) for t in tasks if t.is_batch}
     if batches:
@@ -566,9 +571,15 @@ def run_parallel(
                 "scenario": scenario,
             },
             slugs=ordered_slugs,
+            executor=run_metadata.executor if run_metadata is not None else "local",
+            metadata=run_metadata.sidecar_fields() if run_metadata is not None else None,
         )
         prune_recorded_runs(project_root)
         console.print(f"[dim]Run {run_id} recorded — steppy report / steppy bundle create read it[/dim]")
+        if run_metadata is not None:
+            from ._cli_common import print_run_metadata
+
+            print_run_metadata(run_metadata, console)
 
     exit_code = 0
     project_names: list[str] = []

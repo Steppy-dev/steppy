@@ -182,7 +182,7 @@ def _timeline(source) -> dict:
     """``{nodeid: [TestAttempt]}`` from the run's event JSONL, or ``{}``.
 
     Absent step events are a *capability*, not a failure: they exist only when the
-    run set ``STEPPY_STEP_EVENTS=1`` (which ``steppy run --bundle`` does), and a
+    run set ``STEPPY_STEP_EVENTS=1`` (which every ``steppy run`` does), and a
     tree generated before the markers existed emits none either. The model records
     which, and the page says so.
     """

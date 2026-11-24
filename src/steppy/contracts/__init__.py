@@ -30,6 +30,7 @@ is re-exported below, because the modules define ``accepts`` and
 from .bundle import (
     ACCEPTED_BUNDLE_VERSIONS,
     BUNDLE_SCHEMA_VERSION,
+    BundleCi,
     BundleCoverage,
     BundleFile,
     BundleGit,
@@ -44,6 +45,7 @@ from .bundle import (
 __all__ = [
     "ACCEPTED_BUNDLE_VERSIONS",
     "BUNDLE_SCHEMA_VERSION",
+    "BundleCi",
     "BundleCoverage",
     "BundleFile",
     "BundleGit",

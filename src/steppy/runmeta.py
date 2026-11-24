@@ -108,10 +108,17 @@ def write_run_sidecar(
     spec: dict,
     executor: str = "local",
     slugs: Optional[list[str]] = None,
+    metadata: Optional[dict] = None,
 ) -> Optional[Path]:
     """Write ``output/.steppy-run.json``. Best-effort — returns ``None`` and
     never raises, because failing a whole test run over a metadata file would
     be a poor trade. ``steppy bundle create`` says so loudly when it is absent.
+
+    ``metadata`` is where the run came from — ``git``, ``ci``, ``environment``
+    (:meth:`steppy.provenance.RunMetadata.sidecar_fields`) — resolved when the
+    run started. Recorded for the same reason as ``spec``: it describes the
+    run, and a bundle made later, or on another machine, would detect another
+    checkout. Keys mirror ``manifest.run``, like the rest of this file.
     """
     payload: dict[str, Any] = {
         "steppy_run": RUN_SIDECAR_VERSION,
@@ -121,6 +128,8 @@ def write_run_sidecar(
         "executor": executor,
         "spec": spec,
     }
+    if metadata:
+        payload.update({k: v for k, v in metadata.items() if k not in payload})
     if slugs is not None:
         payload["slugs"] = list(slugs)
     try:

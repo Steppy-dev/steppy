@@ -65,9 +65,9 @@ on:
         type: string
         default: 'retry,report'
       run-args:
-        description: 'Arguments for `steppy run`. --bundle is what lets the report name a failing STEP.'
+        description: 'Arguments for `steppy run`, e.g. --environment staging. Every run records the events that let the report name a failing STEP.'
         type: string
-        default: '--trace --bundle'
+        default: '--trace'
       report-output:
         type: string
         default: 'output/report'

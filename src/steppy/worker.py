@@ -92,7 +92,7 @@ def _build_pytest_argv(
                               plugin is missing rather than failing the run.
       STEPPY_PYTEST_EXTRA   → the user's ``--`` passthrough argv, shlex-encoded
                               by ``compose.render_override``.
-      STEPPY_JUNIT_DIR      → ``--junitxml=<dir>/<slug>.xml`` (``--bundle``).
+      STEPPY_JUNIT_DIR      → ``--junitxml=<dir>/<slug>.xml`` (every run).
                               Per SCENARIO, not per worker: N workers share one
                               ``output/`` mount, so a single fixed path would
                               leave only the last finisher's report — which is

@@ -127,5 +127,9 @@ output:
 #              key on purpose, because this file is committed. Nothing is ever
 #              uploaded without --upload, and everything else here works with
 #              no cloud at all.
+#   environment: what the runs test against, e.g. `environment: staging` (or
+#              `${DEPLOY_ENV:-staging}`), recorded on every run beside its commit,
+#              branch and CI job. `steppy run --environment` and STEPPY_ENVIRONMENT
+#              win over it. Free text, at most 64 characters.
 # Each is documented with commented examples in the Steppy repo's own config.yaml,
 # and your editor will autocomplete them from the $schema line at the top.

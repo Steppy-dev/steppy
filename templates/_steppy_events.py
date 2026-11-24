@@ -1,19 +1,18 @@
 """Pytest plugin: emit ``STEPPY-EVT::*`` events for the parallel coordinator.
 
 Loaded when EITHER of two independent gates is set — the generated
-``conftest.py`` opts in behind the same condition, so a plain single-worker run
-loads nothing and its pytest output stays byte-identical to the historic
+``conftest.py`` opts in behind the same condition, so a bare ``pytest`` run
+loads nothing and its output stays byte-identical to the historic
 behaviour:
 
   STEPPY_EMIT_EVENTS=1     stdout lines, parsed live by the coordinator's
                            EventBus (``steppy run --workers N``)
   STEPPY_EVENTS_DIR=<dir>  one JSONL line per event, appended to
                            ``<dir>/<scenario>__<locale>-<layout>.jsonl``
-                           (``steppy run --bundle``)
+                           (every ``steppy run``)
 
 The two sinks are orthogonal: the coordinator wants a live stream it can render,
-a results bundle wants a durable per-test record. A parallel run under
-``--bundle`` sets both.
+a results bundle wants a durable per-test record. A parallel run sets both.
 
 Each stdout event is one line prefixed ``STEPPY-EVT::`` for machine parsing.
 Every emission uses ``flush=True`` so the coordinator sees events in real time

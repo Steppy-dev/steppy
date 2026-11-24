@@ -31,7 +31,9 @@ from .create import (
     archive_members,
     create_bundle,
     inspect_bundle,
+    override_manifest,
     plan_bundle,
+    resolve_metadata,
     verify_bundle,
 )
 
@@ -42,6 +44,8 @@ __all__ = [
     "archive_members",
     "create_bundle",
     "inspect_bundle",
+    "override_manifest",
     "plan_bundle",
+    "resolve_metadata",
     "verify_bundle",
 ]

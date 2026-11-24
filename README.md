@@ -1065,8 +1065,8 @@ Traces and videos are **named, not copied**: a Playwright trace needs
 
 ### Honest about what it cannot know
 
-A report of an `output/` tree with no recorded run (one from a Steppy older than 0.9.1,
-run without `--bundle`) says so and lists the scenarios it found
+A report of an `output/` tree with no recorded run (one from a Steppy older than 0.9.1
+that ran without `--bundle`) says so and lists the scenarios it found
 captures for, rather than rendering an empty page. A run with no per-step events
 says *that* instead of drawing an empty timeline. Coverage rebuilt from a detached
 bundle's raw records refuses to report assert *strength*, because the scenario
@@ -1137,6 +1137,14 @@ outcome=failed  scenario=order-lifecycle  locale=fr  layout=mobile  failed_step=
 ```
 
 `failed_step` is the step that started and never finished, which is why a test that dies in fixture teardown reports `null` instead of blaming its last step. Export `STEPPY_STEP_EVENTS=0` to keep everything else and drop the per-step records.
+
+It records where the run came from too — the commit, the branch, the pull or merge request and the branch it targets, the CI job, and the environment — and the bundle's `manifest.run` carries it. On GitHub Actions and GitLab CI it is detected (a pull request's own head commit, not the merge commit the CI builds to test it); elsewhere the local repository is read, including whether tracked files had uncommitted changes. `--branch`, `--commit`, `--pr` and `--environment` override it, on `steppy run` and on `steppy bundle create`:
+
+```bash
+steppy run --environment staging     # or STEPPY_ENVIRONMENT, or `environment: staging` in config.yaml
+```
+
+A bundle made later, in another CI step or on another machine, still describes the run: `steppy bundle create` reads what the run recorded rather than detecting its own checkout.
 
 It composes with everything else, including `--workers N`: each worker writes into the shared `output/` mount under per-scenario filenames, and `steppy bundle create` merges them.
 

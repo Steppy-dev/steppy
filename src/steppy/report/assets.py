@@ -155,7 +155,7 @@ def _variants_to_include(manifest: BundleManifest, policy: str) -> set[tuple]:
     """The (scenario, locale, layout) keys whose step captures travel.
 
     Under ``failed`` this is every variant that did not pass — and, when there are
-    no test rows at all (a run made without ``--bundle``), nothing: an empty set is
+    no test rows at all (a tree no ``steppy run`` recorded), nothing: an empty set is
     the honest answer, and the report says so rather than shipping the whole
     corpus by accident.
     """

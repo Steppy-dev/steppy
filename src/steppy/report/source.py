@@ -130,7 +130,7 @@ def open_source(
     """Resolve *path* to a :class:`ReportSource`.
 
     ``None`` means the project's live ``output/`` tree — the case a CI job hits
-    right after ``steppy run --bundle``, and the only one where a local coverage
+    right after ``steppy run``, and the only one where a local coverage
     store may be consulted.
     """
     if path is None:

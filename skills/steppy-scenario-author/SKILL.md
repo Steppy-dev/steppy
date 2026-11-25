@@ -1185,7 +1185,7 @@ steppy bundle inspect <file>  # print the manifest without extracting
 steppy bundle verify <file>   # re-hash every member against the manifest
 ```
 
-Every `steppy run` records what a bundle needs (since 0.9.1; before, only `steppy run --bundle` did, and the flag is still accepted). `steppy bundle create` then packages `output/` **exactly as Steppy wrote it** — no path rewriting — plus a generated `manifest.json`, a merged `junit.xml`, and the event JSONL. Unpacking it yields a tree `steppy guide` and `steppy build` consume unchanged.
+Every `steppy run` records what a bundle needs (since 0.9.1; before, only `steppy run --bundle` did, and the flag is still accepted). `steppy bundle create` then packages the run's files **exactly as Steppy wrote them** — no path rewriting — plus a generated `manifest.json`, a merged `junit.xml`, and the event JSONL. Unpacking it yields a tree `steppy guide` and `steppy build` consume unchanged. **It holds the run's own captures only**: step screenshots an earlier run took stay on disk for your guides but are left out of the report, the bundle and the upload, so to build guides from a bundle, bundle a run that took them (`--guide` or `--screenshots`).
 
 Useful with no server involved at all: a self-describing archive to attach to a CI job, so a failed run is one download rather than a scavenger hunt through artifacts. Per-step events are what let the manifest name the *step* a test died on, not just the test. `--no-videos` / `--no-traces` / `--no-guides` trim it; `--max-size 2GiB` drops the cheapest-to-lose artifacts first and marks the manifest `truncated`.
 

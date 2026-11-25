@@ -318,6 +318,29 @@ def _steppy_step_record(kind, step_number, **fields):
 _STEP_MASK: list = []
 
 
+def _record_captures(*paths) -> None:
+    """Write down which capture files this run took, and their bytes' digest.
+
+    Step captures stay on disk between runs (guides are built from them), so a
+    file's name says nothing about which run took it. The run's own event
+    records do: the report, the bundle and the upload keep a capture only when
+    its path AND its digest are recorded here, which also rules out one that
+    something else overwrote since. Inert outside ``steppy run``; never raises.
+    """
+    if not os.environ.get("STEPPY_EVENTS_DIR"):
+        return
+    try:
+        from _steppy_events import _record
+
+        root = Path(__file__).parent.parent.parent
+        for path in paths:
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            name = os.path.relpath(path, root).replace(os.sep, "/")
+            _record("capture", _steppy_current_nodeid(), path=name, sha256=digest)
+    except Exception:
+        pass
+
+
 def _steppy_mark_step(step_number, step_title, action, mask=()):
     """Mark the start of a step, and set what its captures mask."""
     global _STEP_MASK
@@ -1519,63 +1542,71 @@ def _coverage_stop_and_write(state, request) -> None:
         print(f"[steppy] coverage record failed: {exc}", flush=True)
 
 
-# ``<sanitised nodeid>__<page fixture>.png``, split at the LAST ``__``: a role
+# ``<sanitised nodeid>__<page fixture>.<ext>``, split at the LAST ``__``: a role
 # name holds none, so the first group is the whole id of the test that wrote it.
-_FAILURE_IMAGE = re.compile(r"(?P<test>.+)__(?P<fixture>\w+?_page(?:_noauth)?)\.png")
+_TEST_ARTIFACT = re.compile(r"(?P<test>.+)__(?P<fixture>\w+?_page(?:_noauth)?)\.(?:png|zip|webm)")
 
-# Tests whose images of an earlier run are gone, in this pytest process.
-_FAILURE_IMAGES_CLEARED: set = set()
+# Tests whose artifacts of an earlier run are gone, in this pytest process.
+_EARLIER_ARTIFACTS_CLEARED: set = set()
 
 
 def _is_page_fixture(name: str) -> bool:
     return name.endswith("_page") or name.endswith("_page_noauth")
 
 
-def _clear_failure_images(item) -> None:
-    """Remove the failure screenshots earlier runs left for this very test.
+def _clear_artifacts(item, folder: Path, suffix: str, label: str, also: str = "") -> None:
+    """Remove the files earlier runs left in ``folder`` for this very test.
 
-    Only images whose file name carries this test's whole id, whatever the role
-    (a scenario may have dropped one since): an id that merely extends this one
-    is another test, which may be running in another worker. Never raises: a
-    file that cannot be removed (a lock on Windows) is printed.
+    Only files whose name carries this test's whole id, whatever the role (a
+    scenario may have dropped one since): an id that merely extends this one is
+    another test, which may be running in another worker. Never raises: a file
+    that cannot be removed (a lock on Windows) is printed.
     """
     test = _sanitise_nodeid(item.nodeid)
     fixtures = {f for f in (*_PAGE_FIXTURES, *getattr(item, "fixturenames", ())) if _is_page_fixture(f)}
-    exact = {f"{test}__{f}.png" for f in fixtures}
+    exact = {f"{test}__{f}{suffix}" for f in fixtures} | {also}
     try:
-        names = os.listdir(SCREENSHOTS_DIR / "_failures")
+        names = os.listdir(folder)
     except OSError:
-        return  # No failure screenshot was ever taken here.
+        return  # Nothing was ever saved here.
     for name in names:
-        match = _FAILURE_IMAGE.fullmatch(name)
-        if name in exact or (match and match["test"] == test):
-            path = SCREENSHOTS_DIR / "_failures" / name
+        match = _TEST_ARTIFACT.fullmatch(name)
+        if name in exact or (match and match["test"] == test and name.endswith(suffix)):
             try:
-                path.unlink()
+                (folder / name).unlink()
             except FileNotFoundError:
                 pass
             except OSError as exc:
-                print(f"\n[steppy] an earlier failure screenshot could not be removed: {path} ({exc})", flush=True)
+                print(f"\n[steppy] an earlier {label} could not be removed: {folder / name} ({exc})", flush=True)
+
+
+def _clear_failure_images(item) -> None:
+    _clear_artifacts(item, SCREENSHOTS_DIR / "_failures", ".png", "failure screenshot")
 
 
 @pytest.hookimpl(hookwrapper=True, tryfirst=True)
 def pytest_runtest_setup(item):
-    """Before a test's setup, drop the failure screenshots of its earlier runs.
+    """Before a test's setup, drop the failure screenshots, the traces and the
+    videos of its earlier runs.
 
     A wrapper, so it runs before any fixture and before a skip: whatever this
-    run's outcome is (passed, skipped, dead in setup), an image under
-    ``_failures/`` is from it. An image of an earlier run may predate the masks,
-    and the report joins images to tests by name, so it would be shown, bundled
-    and uploaded as this run's.
+    run's outcome is (passed, skipped, dead in setup), a file named after the
+    test is from it. One of an earlier run may predate the masks (a trace or a
+    video is never masked), and the report joins these files to tests by name,
+    so it would be shown, bundled and uploaded as this run's.
 
     Once per test and process. A retry in the same process (``--retries``) keeps
-    the image of the attempt that failed, because the events keep that attempt
-    and the report shows its failure text. The parallel retry pass is a new
-    process: it starts over, as its events, JUnit and captures do.
+    what the attempt that failed left, because the events keep that attempt and
+    the report shows its failure text. The parallel retry pass is a new process:
+    it starts over, as its events, JUnit and captures do.
     """
-    if item.nodeid not in _FAILURE_IMAGES_CLEARED:
-        _FAILURE_IMAGES_CLEARED.add(item.nodeid)
+    if item.nodeid not in _EARLIER_ARTIFACTS_CLEARED:
+        _EARLIER_ARTIFACTS_CLEARED.add(item.nodeid)
         _clear_failure_images(item)
+        # Before 0.9.1 a trace or a video was named after the test alone.
+        test = _sanitise_nodeid(item.nodeid)
+        _clear_artifacts(item, TRACES_DIR, ".zip", "trace", also=f"{test}.zip")
+        _clear_artifacts(item, VIDEOS_DIR, ".webm", "video", also=f"{test}.webm")
     yield
 
 
@@ -2229,6 +2260,7 @@ def take_screenshot(page: Page, scenario: str, step: int, suffix: str = ""):
     folder = _screenshot_folder(scenario)
     name = f"step-{step:02d}{'-' + suffix if suffix else ''}.png"
     page.screenshot(path=str(folder / name), **_screenshot_mask_kwargs(page))
+    _record_captures(folder / name)
 
 
 def _apply_highlight(page: Page, selector: str) -> None:
@@ -2426,6 +2458,7 @@ def take_screenshot_with_bbox(
         "target": target_payload,
     }
     json_path.write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+    _record_captures(png_path, json_path)
 
 
 def take_fillform_progressive_frames(

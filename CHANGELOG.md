@@ -129,7 +129,24 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **If you use `screenshot.mask`, check what earlier runs left behind**: that
   folder, CI artifacts, results bundles, published reports and uploaded runs.
   `SECURITY.md` now says what a mask covers and what it does not (text, traces,
-  videos, and step screenshots taken before the mask was declared).
+  videos).
+- **A run published an earlier run's step screenshots as its own.** They stay on
+  disk between runs, because guides are built from them, so a run without
+  `--screenshots` carried them in its report, its bundle and its upload, even
+  taken before a mask was declared. A run now records each capture it takes in
+  its event records, with its digest, and only those are published. Left out,
+  with a warning that counts them: a capture no run recorded (taken before 0.10,
+  or by `steppy rerun` or a bare `pytest`: take it again), and the guides under
+  `output/guides` built before the run or from such captures, whose pages would be
+  broken and whose PDFs and videos hold the same pixels. Nothing is deleted, and
+  guides build as before. The report says once when a run took no step
+  screenshots (`capabilities.step_screenshots` in `report.json`). **Run
+  `steppy generate` after upgrading**: a `conftest.py` generated before records
+  none, and its captures are then left out. A tree no `steppy run` recorded keeps
+  every capture, as before.
+- **Traces and videos of an earlier run** are handled like failure screenshots:
+  each test removes its own before its setup (Playwright's own runner clears its
+  results the same way), and those of tests the run did not run are left out.
 
 ## [0.9.2] - 2026-11-11
 

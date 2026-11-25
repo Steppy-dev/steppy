@@ -10,7 +10,8 @@ and the step's masks in the step captures (fill-form frames included), all of
 them in the failure captures of both role pages, a control box untouched, and
 no image at all when the masked capture cannot be taken. An unmasked image an
 earlier run left is gone too, whatever this run's outcome, from the folder and
-from the report.
+from the report, and the step screenshots an earlier run took stay on disk for the
+guides but are in no report, bundle or upload of a run that did not take them.
 
 Run it:  STEPPY_IT=1 python -m pytest tests/integration/test_screenshot_mask_it.py -q
 (PowerShell:  $env:STEPPY_IT='1'; python -m pytest tests/integration/... -q)
@@ -20,6 +21,7 @@ import json
 import os
 import subprocess
 import sys
+import tarfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -98,6 +100,8 @@ def project(tmp_path: Path, app_url: str) -> Path:
                 - '[data-testid="project"]'
               mask_color: "#123456"
             timing: {{step_timeout: 2000}}
+            locales: [en]
+            default_locale: en
             """),
         encoding="utf-8",
     )
@@ -122,14 +126,16 @@ _OPEN = """
 """
 
 
-def _run(project: Path, name: str, front: str, steps: str, outcome: str = "1 failed") -> str:
+def _run(
+    project: Path, name: str, front: str, steps: str, outcome: str = "1 failed", shots: tuple = ("--screenshots",)
+) -> str:
     """Write one scenario, generate it, run it; returns the run's output."""
     front = f"{front}\n" if front else ""
     (project / "scenarios" / f"{name}.md").write_text(
         f"---\ntitle: Masked\nauth: false\n{front}---\n{steps}", encoding="utf-8"
     )
     output = ""
-    for args in (["generate"], ["run", "--screenshots", "--scenario", name], ["report"]):
+    for args in (["generate"], ["run", *shots, "--scenario", name], ["report"]):
         result = subprocess.run(
             [sys.executable, "-m", "steppy", *args],
             cwd=project,
@@ -144,6 +150,21 @@ def _run(project: Path, name: str, front: str, steps: str, outcome: str = "1 fai
         assert args[0] == "run" or result.returncode == 0, output
     assert outcome in output, output
     return output
+
+
+def _steppy(project: Path, *args: str) -> str:
+    result = subprocess.run(
+        [sys.executable, "-m", "steppy", *args],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result.stdout + result.stderr
 
 
 def _captures(project: Path, name: str) -> dict[str, Png]:
@@ -295,6 +316,58 @@ def test_an_unmasked_image_of_an_earlier_run_is_never_this_runs(project, now):
         assert variant["failure_screenshot"] is None
     # A test this run did not run: its image is left where it is, and published nowhere.
     assert other.exists()
+
+
+@pytest.mark.parametrize("now", ["passes", "dies in setup", "fails again"])
+def test_step_screenshots_of_an_earlier_run_are_published_by_none_but_it(project, now):
+    """The case the mask exists for: taken before it was declared, published after."""
+    config = project / "config.yaml"
+    masked = config.read_text(encoding="utf-8")
+    config.write_text(masked.replace("""- '[data-testid="project"]'""", "- '.none'"), encoding="utf-8")
+    front = "tags: [user-guide-editor]\nguide: {enabled: true}"
+    guide_text = _OPEN + "- guide-text:\n    en: Open it.\n"
+    _run(project, "shots", front, guide_text, "1 passed")
+    (before,) = _captures(project, "shots").values()
+    assert _masked(before) == set()  # taken with nothing covered
+    files = sorted((project / "output" / "screenshots" / "shots").iterdir())
+    bytes_before = [f.read_bytes() for f in files]
+    _steppy(project, "guide", "--tag", "user-guide-editor", "--locale", "en")
+    guides = {f: f.read_bytes() for f in (project / "output" / "guides").rglob("*.html")}
+    assert guides
+
+    config.write_text(masked, encoding="utf-8")
+    (project / "seed").mkdir()
+    (project / "seed" / "broken.py").write_text("raise SystemExit(3)", encoding="utf-8")
+    extra, steps, outcome = {
+        "passes": ("", guide_text, "1 passed"),
+        "dies in setup": ("\nseed: broken", guide_text, "1 error"),
+        "fails again": ("", guide_text + _FAILS, "1 failed"),
+    }[now]
+    _run(project, "shots", front + extra, steps, outcome, shots=())
+
+    # In no report, and said once.
+    site = project / "output" / "report"
+    published = [Png(p) for p in (site / "assets").rglob("*.png")]
+    assert all("project" in _masked(png) for png in published)
+    assert len(published) == (1 if now == "fails again" else 0)  # the masked failure screenshot
+    assert "no step screenshots" in (site / "index.html").read_text(encoding="utf-8")
+    # In no bundle, with the guides that show it.
+    output = _steppy(project, "bundle", "create", "-o", "b.tar.gz", "--format", "gz")
+    assert "left out 1 step screenshot(s) this run did not take" in " ".join(output.split())
+    with tarfile.open(project / "b.tar.gz", "r:gz") as tar:
+        names = tar.getnames()
+    assert not [n for n in names if "/screenshots/shots/" in n or "/guides/" in n]
+    # Still on disk, byte for byte, and the guides build the same from them.
+    assert [f.read_bytes() for f in files] == bytes_before
+    _steppy(project, "guide", "--tag", "user-guide-editor", "--locale", "en")
+    assert {f: f.read_bytes() for f in guides} == guides
+
+    # Taking them again publishes them, masked.
+    _run(project, "shots", front, guide_text, "1 passed")
+    assert _masked(_captures(project, "shots")["step-01"]) == {"project"}
+    _steppy(project, "report", "--screenshots", "all", "--force")
+    published = [Png(p) for p in (site / "assets").rglob("step-*.png")]
+    assert [_masked(png) for png in published] == [{"project"}]
 
 
 def test_a_crashed_page_yields_no_failure_image_and_a_reason(project):

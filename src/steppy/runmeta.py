@@ -25,6 +25,7 @@ dimensions. So every run records them (``--bundle`` only did before 0.9.1).
 
 from __future__ import annotations
 
+import calendar
 import json
 import re
 import shutil
@@ -64,6 +65,16 @@ RUN_SIDECAR_VERSION = 1
 def new_run_id() -> str:
     """Sortable unique id for one run: ``20260806T101500Z-a1b2c3``."""
     return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + uuid.uuid4().hex[:6]
+
+
+def run_started_at(run_id: str) -> Optional[float]:
+    """When the run started, read off its id (epoch seconds); ``None`` for a foreign id."""
+    if not _RUN_ID.match(run_id):
+        return None
+    try:
+        return float(calendar.timegm(time.strptime(run_id[:16], "%Y%m%dT%H%M%SZ")))
+    except ValueError:
+        return None
 
 
 def bundle_dirs(project_root: Path, run_id: str) -> tuple[Path, Path]:

@@ -1,7 +1,10 @@
 # Build context for the worker image (see Dockerfile). The image build only
-# needs: pyproject.toml, hatch_build.py, src/, templates/, skills/,
-# CHANGELOG.md. Everything else is excluded to keep `docker build` fast and
-# to keep local secrets/state from being sent to the Docker daemon.
+# needs: pyproject.toml and the files it names (hatch_build.py, README.md,
+# LICENSE, NOTICE), src/, templates/, skills/, CHANGELOG.md. Never list one of
+# those here: the build fails without it, or installs a package without its
+# licence (guard: tests/test_parallel_worker_image.py). Everything else is
+# excluded to keep `docker build` fast and to keep local secrets/state from
+# being sent to the Docker daemon.
 
 # VCS / editor
 .git/
@@ -47,7 +50,6 @@ steppy-config.schema.json
 docker-compose*.yml
 Dockerfile
 .dockerignore
-README.md
 SECURITY.md
 CONTRIBUTING.md
 NEW_COMMANDS.md

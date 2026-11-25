@@ -30,11 +30,17 @@ WORKDIR /steppy/project
 # (hatch_build.py, wired in pyproject.toml) regenerates the bundled
 # src/steppy/{templates,skills} + src/steppy/CHANGELOG.md from the canonical
 # repo-root templates/, skills/, and CHANGELOG.md at build time — so ALL of
-# those inputs must be in the context, not just pyproject + src. Omitting
-# hatch_build.py makes `pip install` fail before the wheel build even starts
-# ("Build script does not exist: hatch_build.py").
+# those inputs must be in the context, not just pyproject + src. So must every
+# file pyproject.toml names: a missing hatch_build.py or README.md (`readme`)
+# makes `pip install` fail before the wheel build even starts, and a missing
+# LICENSE or NOTICE (`license-files`) drops the licence from the installed
+# package without a word. `.dockerignore` must let all of them through (guard:
+# tests/test_parallel_worker_image.py).
 COPY pyproject.toml /tmp/steppy/pyproject.toml
 COPY hatch_build.py /tmp/steppy/hatch_build.py
+COPY README.md /tmp/steppy/README.md
+COPY LICENSE /tmp/steppy/LICENSE
+COPY NOTICE /tmp/steppy/NOTICE
 COPY src /tmp/steppy/src
 COPY templates /tmp/steppy/templates
 COPY skills /tmp/steppy/skills

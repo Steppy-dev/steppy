@@ -153,6 +153,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now has one, "default".
 - **Coverage records bundled under another run id** than the bundle's own are merged
   into its report. They were left out before.
+- **`steppy run --workers N` could not build its worker image from a source
+  checkout.** `pyproject.toml` names `README.md`, which the `Dockerfile` did not
+  copy and `.dockerignore` excluded, so the image's `pip install` stopped with
+  "Readme file does not exist: README.md". Since 0.3.0; a pip-installed Steppy
+  builds another image and was not affected. The licence files were left out too,
+  without an error: the package in the image now has `LICENSE` and `NOTICE`.
 - **The GitHub Actions workflows run on `ubuntu-24.04`**: the one
   `steppy init --ci` writes and the default `runs-on` of the reusable
   `steppy-e2e.yml`. `ubuntu-latest` is now Ubuntu 26.04, where the Playwright

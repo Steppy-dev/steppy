@@ -159,6 +159,17 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Steppy pins (1.60) cannot install Chromium, so the browser step failed before
   any test ran. A workflow that already passes its own `runs-on` is unchanged;
   `steppy update` refreshes an unedited `steppy.yml`.
+- **`--retries` recorded a retried test as `rerun`.** The first attempt was taken
+  as the test's end, so a test that passed on its retry was reported as not
+  passing, in the report, the bundle and the upload, and one that failed every
+  time lost its failure text and its step. Each attempt is now recorded, a
+  retried one as failed (or as an error, in setup or teardown) with its text, and
+  the last one is the test's outcome: the manifest says `passed`, and
+  `report.json`'s `attempt_outcomes` says `["failed", "passed"]`. A test that
+  passed on a retry keeps the text of the failure it recovered from. In the live
+  progress of `--workers N` it counts once, as its last attempt ended.
+  **Run `steppy generate`**: the recorder is in `tests/e2e/`. A run retried by an
+  older suite still reads `rerun`, with a warning that says so.
 
 ### Security
 - **A hostile results bundle could make `steppy report` write and read files

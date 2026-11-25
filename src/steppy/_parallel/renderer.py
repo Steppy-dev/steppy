@@ -229,8 +229,9 @@ class MilestoneRenderer:
                 "interrupted": "yellow",
                 "worker_died": "red",
             }.get(rec.outcome, "white")
+            attempt = f", attempt {rec.attempt}" if rec.attempt > 1 else ""
             self._line(
-                f"{worker_id} {outcome_label} {_short_nodeid(rec.nodeid)} ({_fmt_elapsed(duration)})",
+                f"{worker_id} {outcome_label} {_short_nodeid(rec.nodeid)} ({_fmt_elapsed(duration)}{attempt})",
                 snap,
                 style=color,
             )

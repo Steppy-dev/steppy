@@ -1114,7 +1114,7 @@ a fresh CI checkout has none and those endpoints would count against you.
 
 ## Results bundles (opt-in)
 
-A **results bundle** is one run's artifacts in a single portable file: a `.tar.zst` (or `.tar.gz`) holding your `output/` tree **exactly as Steppy wrote it** — no path rewriting — plus three generated members.
+A **results bundle** is one run's artifacts in a single portable file: a `.tar.zst` (or `.tar.gz`) holding the run's files from your `output/` tree **exactly as Steppy wrote them** — no path rewriting — plus three generated members.
 
 ```
 manifest.json          what this run was, what it produced, sha256 of every file

@@ -104,6 +104,9 @@ class ReportCapabilities(_Wire):
     coverage: str = "none"
     #: ``all`` | ``failed`` | ``none`` — which captures were copied into the site.
     screenshots: str = "none"
+    #: Whether the run took step screenshots at all, whatever the policy above.
+    #: ``None`` in a report made before this was known (0.10).
+    step_screenshots: Optional[bool] = None
     #: False when assert *strength* had to be guessed (a detached bundle carries no
     #: ``scenarios/*.md``, so every covered node would read "weak").
     strength_reliable: bool = True

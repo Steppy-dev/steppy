@@ -383,6 +383,18 @@
           "title": "Screenshots",
           "type": "string"
         },
+        "step_screenshots": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Screenshots"
+        },
         "step_timeline": {
           "default": false,
           "title": "Step Timeline",

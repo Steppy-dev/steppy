@@ -392,6 +392,9 @@ def plan_bundle(
         junit_xml=junit_xml,
         events=events,
         extra_warnings=warnings,
+        # A step capture on disk is the run's only when its records say so. With
+        # no record of any run, nothing can say it, and every one is kept.
+        captures=_results.captures_from_events(events_dir) if sidecar is not None or events else None,
     )
 
     return BundlePlan(

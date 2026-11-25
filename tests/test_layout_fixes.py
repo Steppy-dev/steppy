@@ -760,6 +760,7 @@ class TestSidecarViewportFromPage:
             "_screenshot_folder": lambda scenario: tmp_path,
             "_offset_for_full_page": lambda page: (0, 0),
             "_screenshot_mask_kwargs": lambda page: {},
+            "_record_captures": lambda *paths: None,
             "_get_viewport_for_layout": lambda layout: {"width": 390, "height": 844},
             "_get_scale_factor_for_layout": lambda layout: 1,
         }

@@ -204,10 +204,12 @@ def create(
 ) -> None:
     """Package a run's output/ tree into a results bundle.
 
-    The archive holds output/ exactly as steppy wrote it — no path rewriting —
-    so unpacking it gives a tree `steppy guide` and `steppy build` consume
-    unchanged. Alongside it sit a manifest.json describing every file, a merged
-    junit.xml, and the run's per-test event records.
+    The archive holds the run's files exactly as steppy wrote them — no path
+    rewriting — so unpacking it gives a tree `steppy guide` and `steppy build`
+    consume unchanged. Alongside sit a manifest.json describing every file, a
+    merged junit.xml, and the run's per-test event records. What an earlier run
+    left in output/ (its step screenshots, and the failure screenshots, traces
+    and videos of tests this run did not run) is left out, with a warning.
 
     Run your scenarios with `steppy run` first: it records the event records
     and JUnit XML the bundle reads, and where the run came from (commit,

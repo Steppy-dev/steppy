@@ -297,6 +297,9 @@ def build_model(
             attempts=any_attempts,
             coverage=coverage.tier,
             screenshots=screenshots_policy,
+            # The manifest lists only the captures the run took, so an empty list
+            # says it took none, where an empty step could also be the policy's.
+            step_screenshots=any(f.kind == "screenshot" for f in manifest.files),
             strength_reliable=coverage.tier != "records",
         ),
         scenarios=scenarios,

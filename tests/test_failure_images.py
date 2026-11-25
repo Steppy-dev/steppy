@@ -1,10 +1,11 @@
-"""Failure screenshots never outlive the run that took them (spec I7).
+"""Failure screenshots, traces and videos never outlive the run that took them (spec I7).
 
-``output/screenshots/_failures/`` is not cleared between runs, and everything
-that reads it joins an image to a test by name. So an image left by an earlier
-run, possibly taken before the project declared its masks, used to be shown,
-bundled and uploaded as the current run's, whenever the test now passed or died
-before its body.
+``output/screenshots/_failures/``, ``output/traces/`` and ``output/videos/`` are
+not cleared between runs, and everything that reads them joins a file to a test
+by name. So a file left by an earlier run, possibly an image taken before the
+project declared its masks, used to be shown, bundled and uploaded as the
+current run's, whenever the test now passed or died before its body.
+(Step screenshots do outlive their run: ``tests/test_run_captures.py``.)
 
 Two halves, each pinned here:
 
@@ -114,7 +115,7 @@ class _Suite:
             return {}
         return {p.name: p.read_text(encoding="utf-8") for p in sorted(self.failures.iterdir()) if p.is_file()}
 
-    def run(self, cases: str, *select: str, reruns: bool = False) -> str:
+    def run(self, cases: str, *select: str, reruns: bool = False, **extra_env: str) -> str:
         args = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--browser", "chromium"]
         if reruns:
             args += ["-p", "rerun_once"]
@@ -122,7 +123,7 @@ class _Suite:
         result = subprocess.run(
             [*args, *(select or ["tests/e2e/test_demo.py::test_demo"])],
             cwd=self.root,
-            env={**env, "CASES": cases, "PYTHONPATH": str(self.root), "PYTHONIOENCODING": "utf-8"},
+            env={**env, "CASES": cases, "PYTHONPATH": str(self.root), "PYTHONIOENCODING": "utf-8", **extra_env},
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -134,7 +135,7 @@ class _Suite:
 
 @pytest.fixture
 def suite(tmp_path):
-    def make(config: str = "") -> _Suite:
+    def make(config: str = "", module: str = _MODULE) -> _Suite:
         root = tmp_path / "project"
         e2e = root / "tests" / "e2e"
         e2e.mkdir(parents=True)
@@ -149,7 +150,8 @@ def suite(tmp_path):
             e2e.parent / "__init__.py": "",
             e2e / "__init__.py": "",
             e2e / "conftest.py": generator.generate_conftest([parse_scenario_file(scenario)]),
-            e2e / "test_demo.py": textwrap.dedent(_MODULE),
+            e2e / "_steppy_events.py": (ROOT / "templates" / "_steppy_events.py").read_text(encoding="utf-8"),
+            e2e / "test_demo.py": textwrap.dedent(module),
             root / "rerun_once.py": _RERUN_PLUGIN,
         }.items():
             name.write_text(text, encoding="utf-8")
@@ -262,6 +264,75 @@ def test_an_image_that_cannot_be_removed_is_printed_and_fails_no_test(suite):
     assert "an earlier failure screenshot could not be removed" in output
 
 
+# ── Traces and videos ────────────────────────────────────────────────────────
+
+
+def _recordings(demo) -> set[str]:
+    folders = (demo.root / "output" / "traces", demo.root / "output" / "videos")
+    return {f.name for folder in folders if folder.is_dir() for f in folder.iterdir()}
+
+
+def _plant_recordings(demo, *names: str) -> None:
+    for name in names:
+        folder = demo.root / "output" / ("traces" if name.endswith(".zip") else "videos")
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_text("an earlier run", encoding="utf-8")
+
+
+@pytest.mark.parametrize("case, outcome", [("pass", "1 passed"), ("setup", "1 error"), ("fail", "1 failed")])
+def test_a_tests_earlier_traces_and_videos_go_whatever_happens_now(suite, case, outcome):
+    """A run without `--trace` takes none, and an earlier one is not its own."""
+    demo = suite()
+    _plant_recordings(
+        demo,
+        f"{_DEMO}__editor_page.zip",
+        f"{_DEMO}__old_role_page.zip",
+        f"{_DEMO}__editor_page_noauth.webm",
+        f"{_DEMO}.zip",  # the name before 0.9.1
+        f"{_DEMO}.webm",
+    )
+    assert outcome in demo.run(case)
+    assert _recordings(demo) == set()
+
+
+def test_the_recordings_of_other_tests_stay(suite):
+    demo = suite()
+    others = {
+        "tests_e2e_test_demo.py__test_demo__tour(default-default)__editor_page.zip",
+        "tests_e2e_test_demo.py__test_demo(fr-mobile)__editor_page.webm",
+        "tests_e2e_test_other.py__test_other(default-default).zip",
+        "d41d8cd98f00b204e9800998ecf8427e.webm",  # Playwright's own, being recorded
+    }
+    _plant_recordings(demo, *others)
+    demo.run("pass")
+    assert _recordings(demo) == others
+
+
+def test_a_retry_that_passes_keeps_the_failed_attempts_recordings(suite):
+    """Cleared once per process: a trace saved by the first attempt is this run's."""
+    demo = suite()
+    module = demo.root / "tests" / "e2e" / "test_demo.py"
+    module.write_text(
+        module.read_text(encoding="utf-8").replace(
+            '    assert CASES_DONE[-1] == "pass"\n',
+            '    Path("output/traces").mkdir(parents=True, exist_ok=True)\n'
+            f'    Path("output/traces/{_DEMO}__editor_page.zip").write_text(CASES_DONE[-1])\n'
+            '    assert CASES_DONE[-1] == "pass"\n',
+            1,
+        ),
+        encoding="utf-8",
+    )
+    assert "1 passed" in demo.run("fail,pass", reruns=True)
+    assert _recordings(demo) == {f"{_DEMO}__editor_page.zip"}
+
+
+def test_a_recording_that_cannot_be_removed_is_named_for_what_it_is(suite):
+    demo = suite()
+    (demo.root / "output" / "traces" / f"{_DEMO}__editor_page.zip").mkdir(parents=True)
+    output = demo.run("pass")
+    assert "1 passed" in output and "an earlier trace could not be removed" in output
+
+
 # ── Retries ──────────────────────────────────────────────────────────────────
 
 
@@ -326,8 +397,20 @@ def test_an_image_of_a_test_this_run_did_not_run_stays_out_of_the_bundle(tmp_pat
     assert (folder / _STALE).is_file()  # left out, not deleted: it is not this run's
 
 
+def test_a_trace_or_video_of_a_test_this_run_did_not_run_stays_out_too(tmp_path):
+    root = build_project(tmp_path)
+    for folder, name in (("traces", _STALE.replace(".png", ".zip")), ("videos", "0123456789abcdef.webm")):
+        (root / "output" / folder / name).write_text("unmasked", encoding="utf-8")
+    manifest = _plan(root).assembly.manifest
+    kept = {Path(f.path).name for f in manifest.files if f.kind in ("trace", "video")}
+    assert kept == {f"{SANITISED}.zip", f"{SANITISED}.webm"} | {
+        f"{SANITISED}__reviewer_page{suffix}" for suffix in (".zip", ".webm")
+    }
+    assert "left out 2 trace(s) or video(s) of tests this run did not run" in manifest.warnings
+
+
 def test_nothing_is_said_when_nothing_is_left_out(tmp_path):
-    assert not [w for w in _plan(build_project(tmp_path)).assembly.manifest.warnings if "failure screenshot" in w]
+    assert not [w for w in _plan(build_project(tmp_path)).assembly.manifest.warnings if "left out" in w]
 
 
 def test_a_run_that_recorded_no_test_keeps_every_image(tmp_path):

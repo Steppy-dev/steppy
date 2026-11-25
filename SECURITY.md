@@ -175,10 +175,11 @@ says why.
 **An image does not outlive its run.** Before its setup, each test removes the
 failure screenshots its earlier runs left, so a test that now passes, is skipped or
 dies in setup has none, and one that fails again has the new one. A retry in the
-same process (`--retries`) keeps the image of the attempt that failed. A bundle, a
-report and an upload leave out the failure screenshots of tests the run did not run
-(they stay on disk, and a warning counts them). An image that cannot be removed, on
-Windows when another program holds it, is named in the test's output.
+same process (`--retries`) keeps the image of the attempt that failed. Its traces
+and videos go the same way. A bundle, a report and an upload leave out all three for
+tests the run did not run (they stay on disk, and a warning counts them). A file
+that cannot be removed, on Windows when another program holds it, is named in the
+test's output.
 
 Up to 0.9.2, failure screenshots ignored `screenshot.mask`, and stayed until the
 same test failed again. The fix is in the
@@ -200,10 +201,12 @@ ignore.
   on, and turns nothing off. Leave them out of what you share:
   `steppy bundle create --no-traces --no-videos`.
 - **A step screenshot taken before the mask.** A mask acts as the picture is taken.
-  Step screenshots stay on disk between runs, because guides are built from them, and
-  the report, bundle or upload of a later run carries them until
-  `steppy run --screenshots` or `--guide` takes them again. After adding a mask, take
-  them again, or delete `output/screenshots/`.
+  Step screenshots stay on disk between runs, because guides are built from them: a
+  report, a bundle and an upload carry only those their own run took, but `steppy
+  guide` and `steppy build` publish whatever is on disk, and so does an artifact step
+  that uploads `output/` whole. After adding a mask, take them again
+  (`steppy run --screenshots` or `--guide`), or delete `output/screenshots/` and the
+  guides built from it.
 - **What a selector does not match.** A mask that matches nothing is not an error,
   and a renamed test-id silently stops being masked. Look at the captures after
   changing the app, and prefer a `data-testid` to a positional selector (the
@@ -221,8 +224,10 @@ ignore.
 screenshot, the failure logs, and (unless excluded) Playwright traces and videos.
 Masking is applied at capture time, so a bundle's screenshots inherit it, the
 failure ones included, as long as the tests were generated with the masks in place.
-Its traces, videos and text do not. The aggregation itself is the thing to think
-about:
+Its traces, videos and text do not. It holds what its run left: the step screenshots
+the run recorded taking, and of earlier runs no failure screenshot, trace or video,
+and no guide built before the run or from screenshots it did not take. The
+aggregation itself is the thing to think about:
 
 - **A bundle is as sensitive as the screenshots in it.** One file, easy to attach
   to a ticket or forward. Treat it like the `output/` directory it contains.

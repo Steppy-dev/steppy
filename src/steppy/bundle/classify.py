@@ -84,6 +84,14 @@ _COVERAGE_RECORD_RE = re.compile(r"^(?P<fixture>.+)__(?P<locale>[^-]*)-(?P<layou
 
 _GUIDE_TEXT_EXT = {".html": KIND_GUIDE_HTML, ".md": KIND_GUIDE_MD}
 
+#: What ``steppy guide`` writes under the guides root: pages that show step
+#: captures, and the PDFs and videos that hold their pixels.
+GUIDE_KINDS = frozenset({KIND_GUIDE_HTML, KIND_GUIDE_MD, KIND_GUIDE_ASSET, KIND_INTERACTIVE_MANIFEST})
+
+#: A step capture and its sidecar, or an image a project's own code put beside
+#: them. Anything else under the screenshots root is the project's and ships.
+_CAPTURE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp", ".json"})
+
 
 @dataclass(frozen=True)
 class ClassifyContext:
@@ -97,6 +105,10 @@ class ClassifyContext:
     #: ``sanitise_nodeid(nodeid)`` → ``(nodeid, scenario, locale, layout)``, for
     #: the artifacts named after a nodeid. Built by :func:`nodeid_index`.
     nodeid_index: dict = field(default_factory=dict)
+    #: ``(manifest path, sha256)`` of each step capture the run recorded taking,
+    #: or ``None`` when no run was recorded at all: nothing then says whose the
+    #: captures on disk are, and the report is rebuilt from them.
+    captures: Optional[frozenset] = None
     #: Directory names under ``output/`` for each root, so a project that
     #: relocated one via ``config.output`` (screenshots, guides) or
     #: ``coverage.records_dir`` still classifies. Filled by
@@ -248,12 +260,42 @@ def is_failure_screenshot(rel: Path, ctx: ClassifyContext) -> bool:
     return rel.parts[:2] == (ctx.screenshots_dirname, FAILURES_DIRNAME)
 
 
+def _is_an_earlier_runs(scenario: Optional[str], ctx: ClassifyContext) -> bool:
+    """Whether a file named after a test that resolved to ``scenario`` is an earlier run's.
+
+    ``None`` means no test of this run wrote it, so another run did: nothing can
+    show it as this run's, and it may predate the masks. A run that recorded no
+    test keeps every such file, because nothing says whose they are.
+    """
+    return scenario is None and bool(ctx.nodeid_index)
+
+
+def is_recording(rel: Path) -> bool:
+    """Whether ``rel`` is a Playwright trace or video of a test."""
+    return rel.parts[:1] in (("traces",), ("videos",))
+
+
+def is_step_capture(rel: Path, ctx: ClassifyContext) -> bool:
+    """Whether ``rel`` is a step capture, its sidecar, or an image kept beside them.
+
+    By place and suffix rather than by kind: an image a ``custom`` step saved
+    under another name shows the same pages, and is no more this run's.
+    """
+    return (
+        rel.parts[:1] == (ctx.screenshots_dirname,)
+        and not is_failure_screenshot(rel, ctx)
+        and rel.suffix.lower() in _CAPTURE_SUFFIXES
+    )
+
+
 def classify(rel: Path, ctx: ClassifyContext) -> Optional[BundleFile]:
     """Classify one path relative to ``output/``.
 
     Returns a :class:`BundleFile` with ``path``/``sha256``/``size`` left blank
     for the caller to fill (it is the one doing I/O), or ``None`` when the file
-    belongs to a different run and must be skipped entirely.
+    belongs to a different run and must be skipped entirely. A step capture is
+    decided by the caller instead (:func:`is_step_capture`): whose it is depends
+    on its bytes.
     """
     parts = rel.parts
     if not parts:
@@ -263,10 +305,7 @@ def classify(rel: Path, ctx: ClassifyContext) -> Optional[BundleFile]:
     if root == ctx.screenshots_dirname:
         if is_failure_screenshot(rel, ctx):
             scenario, locale, layout = _attribute_nodeid(Path(parts[-1]).stem, ctx)
-            if scenario is None and ctx.nodeid_index:
-                # No test of this run wrote it, so an earlier run did. Nothing
-                # can show it as this run's, and it may predate the masks. A run
-                # that recorded no test keeps every image: nothing says whose.
+            if _is_an_earlier_runs(scenario, ctx):
                 return None
             return BundleFile(
                 path="",
@@ -303,13 +342,12 @@ def classify(rel: Path, ctx: ClassifyContext) -> Optional[BundleFile]:
             return BundleFile(path="", kind=KIND_WORKER_LOG, sha256="", size=0)
         return BundleFile(path="", kind=KIND_FAILURE_LOG, sha256="", size=0, scenario=parts[1])
 
-    if root == "traces":
+    if is_recording(rel):
+        kind = KIND_TRACE if root == "traces" else KIND_VIDEO
         scenario, locale, layout = _attribute_nodeid(Path(parts[-1]).stem, ctx)
-        return BundleFile(path="", kind=KIND_TRACE, sha256="", size=0, scenario=scenario, locale=locale, layout=layout)
-
-    if root == "videos":
-        scenario, locale, layout = _attribute_nodeid(Path(parts[-1]).stem, ctx)
-        return BundleFile(path="", kind=KIND_VIDEO, sha256="", size=0, scenario=scenario, locale=locale, layout=layout)
+        if _is_an_earlier_runs(scenario, ctx):
+            return None
+        return BundleFile(path="", kind=kind, sha256="", size=0, scenario=scenario, locale=locale, layout=layout)
 
     if root == ctx.reports_dirname:
         return BundleFile(path="", kind=KIND_REPORT, sha256="", size=0)

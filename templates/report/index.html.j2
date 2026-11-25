@@ -66,6 +66,13 @@
         </div>
         {% endif %}
 
+        {% if report.totals.tests and report.capabilities.step_screenshots is false %}
+        <div class="steppy-notice">
+            This run took <strong>no step screenshots</strong>. <code>steppy run --screenshots</code>
+            takes them.
+        </div>
+        {% endif %}
+
         {% if not report.totals.tests %}
         <div class="steppy-notice">
             This run recorded <strong>no test outcomes</strong>. The scenarios below were

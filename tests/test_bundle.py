@@ -46,6 +46,30 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
+def capture_rows(root: Path, *files: Path) -> list[dict]:
+    """The ``capture`` records the run's conftest writes for ``files``."""
+    return [
+        {
+            "v": 1,
+            "kind": "capture",
+            "ts": 1.2,
+            "nodeid": NODEID,
+            "scenario": "order-lifecycle",
+            "locale": "fr",
+            "layout": "mobile",
+            "path": f.relative_to(root).as_posix(),
+            "sha256": hashlib.sha256(f.read_bytes()).hexdigest(),
+        }
+        for f in files
+    ]
+
+
+def step_captures(root: Path) -> list[Path]:
+    """Every step capture and sidecar on disk, the failure screenshots aside."""
+    shots = root / "output" / "screenshots"
+    return sorted(f for f in shots.rglob("step-*") if f.is_file())
+
+
 def build_project(tmp_path: Path) -> Path:
     """A project root whose output/ exercises every classification branch.
 
@@ -171,6 +195,8 @@ def build_project(tmp_path: Path) -> Path:
                     "layout": "mobile",
                     "tail_b64": "Ym9vbQ==",
                 },
+                # This run took every capture on disk, so it carries them all.
+                *capture_rows(root, *step_captures(root)),
             )
         )
         + "\n",
@@ -544,6 +570,9 @@ def test_config_output_paths_are_followed(project: Path):
 
     out = project / "output"
     shutil.move(str(out / "screenshots"), str(out / "shots"))
+    # The run that captured there recorded its files there.
+    events = out / "events" / RUN_ID / "order-lifecycle__fr-mobile.jsonl"
+    _write(events, events.read_text(encoding="utf-8").replace("output/screenshots/", "output/shots/"))
     shutil.move(str(out / "guides"), str(out / "books"))
     (project / "config.yaml").write_text(
         CONFIG + "output:\n  screenshots_dir: ./output/shots\n  guides_dir: ./output/books\n",

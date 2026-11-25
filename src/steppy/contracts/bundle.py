@@ -3,8 +3,10 @@
 A bundle is a ``.tar.zst`` (or ``.tar.gz``) of a subset of a run's ``output/``
 tree **exactly as steppy writes it** — no path rewriting, so an unpacked bundle
 feeds ``steppy guide`` and ``steppy build`` unchanged, and a laptop, a CI runner
-and a remote agent produce identical structures by construction — plus three
-generated members at the archive root::
+and a remote agent produce identical structures by construction. The subset is the
+run's: a step capture is in it when the run recorded taking it (a ``capture`` event
+with its path and digest), whatever else is on disk. Plus three generated members
+at the archive root::
 
     manifest.json                 this contract
     junit.xml                     merged pytest --junitxml (belt and braces)

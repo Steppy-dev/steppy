@@ -34,7 +34,9 @@ The JSONL sink encodes the SAME vocabulary — same ``kind`` names, same
 ``outcome`` values — so the two are two encodings of one grammar rather than two
 grammars. Four kinds never appear in it (``scenario-start``, ``scenario-end``,
 ``worker-done``, ``warning``): a single pytest process cannot know them; they
-belong to the worker and the coordinator.
+belong to the worker and the coordinator. Three appear only in it, written by
+the generated conftest: ``step-start``, ``step-end`` and ``capture`` (the
+``path`` and ``sha256`` of a step capture this run took).
 """
 
 from __future__ import annotations

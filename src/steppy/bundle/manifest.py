@@ -93,6 +93,7 @@ def walk_candidates(
     *,
     exclude_kinds: frozenset[str] = frozenset(),
     skip_rel: frozenset[str] = frozenset(),
+    run_started: Optional[float] = None,
 ) -> tuple[list[Candidate], list[str]]:
     """Classify and hash everything under ``output_dir``.
 
@@ -100,10 +101,17 @@ def walk_candidates(
     unclassified file becomes ``kind="other"`` and still ships. Dropping a file
     silently is a far worse failure than carrying one nobody labelled, and the
     contract explicitly allows unknown kinds.
+
+    What an earlier run left is the exception, and it is never silent: a step
+    capture the run did not record taking, a failure screenshot, trace or video
+    of a test it did not run, and the guides that show such captures
+    (:func:`_drop_earlier_guides`). Each kind left out is one warning with a
+    count.
     """
     candidates: list[Candidate] = []
     warnings: list[str] = []
-    earlier_failures = 0
+    earlier_failures = earlier_recordings = 0
+    earlier_captures: list[Optional[str]] = []
 
     for path in sorted(output_dir.rglob("*")):
         if path.is_dir():
@@ -125,6 +133,7 @@ def walk_candidates(
         entry = _classify.classify(rel, ctx)
         if entry is None:
             earlier_failures += _classify.is_failure_screenshot(rel, ctx)
+            earlier_recordings += _classify.is_recording(rel)
             continue
         if entry.kind in exclude_kinds:
             continue
@@ -143,16 +152,61 @@ def walk_candidates(
             warnings.append(f"skipped unreadable {rel_posix}: {e}")
             continue
 
+        name = f"output/{rel_posix}"
+        if ctx.captures is not None and _classify.is_step_capture(rel, ctx) and (name, digest) not in ctx.captures:
+            # Sidecars travel with their image: only the images are counted.
+            if path.suffix.lower() != ".json":
+                earlier_captures.append(entry.scenario)
+            continue
+
         candidates.append(
             Candidate(
-                entry=entry.model_copy(update={"path": f"output/{rel_posix}", "sha256": digest, "size": size}),
+                entry=entry.model_copy(update={"path": name, "sha256": digest, "size": size}),
                 source=path,
             )
         )
 
+    earlier_guides = 0
+    if ctx.captures is not None:
+        candidates, earlier_guides = _drop_earlier_guides(candidates, earlier_captures, run_started)
+
+    if earlier_captures:
+        warnings.append(f"left out {len(earlier_captures)} step screenshot(s) this run did not take")
+    if earlier_guides:
+        warnings.append(
+            f"left out {earlier_guides} guide file(s) built before this run or from screenshots it did not take"
+        )
     if earlier_failures:
         warnings.append(f"left out {earlier_failures} failure screenshot(s) of tests this run did not run")
+    if earlier_recordings:
+        warnings.append(f"left out {earlier_recordings} trace(s) or video(s) of tests this run did not run")
     return candidates, warnings
+
+
+def _drop_earlier_guides(
+    candidates: list[Candidate], earlier_captures: list[Optional[str]], run_started: Optional[float]
+) -> tuple[list[Candidate], int]:
+    """Leave out the guides that show captures of an earlier run.
+
+    A page under the guides root points at the captures by path, so without them
+    it is broken; a PDF or a video holds their pixels, masked or not. A guide
+    stays when it was built since the run started, and the run took every capture
+    of its scenario that is on disk. A file that names no scenario (a handbook,
+    a PDF, a video) stays only when every capture on disk is the run's.
+
+    Returns the candidates kept and how many were left out.
+    """
+    scenarios = {scenario for scenario in earlier_captures if scenario}
+    kept = []
+    for candidate in candidates:
+        entry = candidate.entry
+        if entry.kind in _classify.GUIDE_KINDS:
+            shows_earlier = entry.scenario in scenarios if entry.scenario else bool(earlier_captures)
+            built_before = run_started is not None and candidate.source.stat().st_mtime < run_started
+            if shows_earlier or built_before:
+                continue
+        kept.append(candidate)
+    return kept, len(candidates) - len(kept)
 
 
 def apply_size_budget(candidates: list[Candidate], max_size: int) -> tuple[list[Candidate], bool, list[str]]:
@@ -214,13 +268,20 @@ def build(
     junit_xml: Optional[bytes] = None,
     events: Optional[list[tuple[str, Path]]] = None,
     extra_warnings: Optional[list[str]] = None,
+    captures: Optional[frozenset] = None,
 ) -> Assembly:
-    """Assemble the manifest and the list of files to archive."""
+    """Assemble the manifest and the list of files to archive.
+
+    ``captures`` is what the run recorded taking
+    (:func:`~steppy.bundle.results.captures_from_events`), or ``None`` when no
+    run was recorded: every capture on disk is then kept.
+    """
     ctx = _classify.ClassifyContext(
         run_id=run_id,
         locales=locales,
         layouts=layouts,
         nodeid_index=_classify.nodeid_index(tests),
+        captures=captures,
         screenshots_dirname=screenshots_dirname,
         coverage_dirname=coverage_dirname,
         guides_dirname=guides_dirname,
@@ -229,7 +290,7 @@ def build(
 
     # The two generated members are archived at the root, not under output/, so
     # their source directories are skipped in the walk.
-    from ..runmeta import EVENTS_SUBDIR, JUNIT_SUBDIR, REPORT_SUBDIR, RUN_SIDECAR_NAME
+    from ..runmeta import EVENTS_SUBDIR, JUNIT_SUBDIR, REPORT_SUBDIR, RUN_SIDECAR_NAME, run_started_at
 
     candidates, warnings = walk_candidates(
         output_dir,
@@ -241,7 +302,13 @@ def build(
         # rendered site *contains copies of* the screenshots this bundle already
         # carries, so archiving it would roughly double the payload for nothing.
         skip_rel=frozenset({EVENTS_SUBDIR, JUNIT_SUBDIR, RUN_SIDECAR_NAME, BUNDLES_SUBDIR, REPORT_SUBDIR}),
+        run_started=run_started_at(run_id),
     )
+    if not captures and _spec_from_sidecar(sidecar).screenshots and any("step screenshot(s)" in w for w in warnings):
+        warnings.append(
+            "this run was asked for screenshots and recorded none: its conftest.py was generated by a Steppy older "
+            "than 0.10 (run `steppy generate`), or no step that ran takes one"
+        )
     warnings.extend(extra_warnings or [])
 
     candidates, truncated, budget_warnings = apply_size_budget(candidates, max_size)

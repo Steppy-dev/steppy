@@ -149,9 +149,11 @@ steppy coverage report
 #     them in both roles' failure captures, a control box untouched, and no image
 #     when the masked capture cannot be taken (bad selector, crashed page). An
 #     unmasked image an earlier run left is gone, whether the test now passes, dies
-#     in setup or fails again, from the folder and from the report.
+#     in setup or fails again, from the folder and from the report. The step
+#     screenshots of an earlier run stay on disk, the guides built from them are
+#     the same before and after, and no report, bundle or upload carries them.
 STEPPY_IT=1 python -m pytest tests/integration/test_screenshot_mask_it.py -q
-# Expect: 9 passed in under 2 min.
+# Expect: 12 passed in under 3 min.
 ```
 
 ```bash

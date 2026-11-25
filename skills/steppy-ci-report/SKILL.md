@@ -319,9 +319,16 @@ scenario's front matter or on a step; the grammar is in `steppy-scenario-author`
   and all its steps. When the masked capture cannot be taken there is **no image** for that
   failure, on purpose, and the job log says why:
   `screenshot: not saved, the masked capture failed: …`. Fix the selector it names.
-- **A failure screenshot is always this run's**: a test removes its earlier ones before
-  its setup, and those of tests the run did not run are left out
-  (`left out N failure screenshot(s) of tests this run did not run`).
+- **Everything published is this run's.** A test removes its earlier failure screenshots,
+  traces and videos before its setup, and those of tests the run did not run are left out.
+  A step screenshot is published only when the run recorded taking it: a run without
+  `--screenshots` publishes none, whatever is on disk, and its report says so once. So is a
+  guide only when it was built since the run started, from captures the run took. Each kind
+  left out is one warning with a count (`left out 12 step screenshot(s) this run did not
+  take`), in the report, the bundle and the upload alike; nothing is deleted.
+  **Two things put captures back**: take them in that run (`steppy run --screenshots` or
+  `--guide`), and after upgrading, `steppy generate` (a `conftest.py` older than 0.10
+  records none). A CI artifact step that uploads `output/` whole still uploads everything.
 - **Traces and videos are never masked.** The CI templates run with `--trace`, so a project
   with masks gets a one-line warning on every run, and the traces of failed tests land in the
   `output/` artifact showing what the masks cover. Drop `--trace`, or keep that artifact
@@ -592,10 +599,11 @@ steppy bundle verify <file>   # re-hash every member against it
 ```
 
 A run does not create the bundle; it records what a bundle needs. `create` then
-packages `output/` **exactly as Steppy wrote it** — no path rewriting — plus a generated
-`manifest.json`, a merged `junit.xml`, the event JSONL, and `coverage/gaps.json` when the
-run has one. Unpacking yields a tree that `steppy report`, `steppy guide` and
-`steppy build` all consume unchanged.
+packages the run's files **exactly as Steppy wrote them** — no path rewriting — plus a
+generated `manifest.json`, a merged `junit.xml`, the event JSONL, and `coverage/gaps.json`
+when the run has one. Unpacking yields a tree that `steppy report`, `steppy guide` and
+`steppy build` all consume unchanged; to build guides from one, bundle a run that took the
+screenshots (`--guide` or `--screenshots`), since a bundle leaves out an earlier run's.
 
 Useful with no server involved: a self-describing archive to attach to a CI job, so a
 failed run is one download rather than a scavenger hunt. `--no-videos` / `--no-traces` /

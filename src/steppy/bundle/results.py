@@ -322,6 +322,23 @@ def parse_event_lines(texts) -> tuple[list[dict], list[str]]:
     return records, warnings
 
 
+def captures_from_events(events_dir: Path) -> frozenset[tuple[str, str]]:
+    """``{(manifest path, sha256)}`` of every step capture the run recorded taking.
+
+    The digest is part of the identity: a file the run took and something else
+    (a ``steppy rerun``, a bare ``pytest``) overwrote since is not the run's any
+    more. Empty for a run made before captures were recorded.
+    """
+    records, _ = parse_event_lines(read_event_texts(events_dir))
+    return frozenset(
+        (event["path"], event["sha256"])
+        for event in records
+        if event.get("kind") == "capture"
+        and isinstance(event.get("path"), str)
+        and isinstance(event.get("sha256"), str)
+    )
+
+
 def read_event_texts(events_dir: Path) -> list[tuple[str, str]]:
     """``(filename, text)`` for every JSONL under *events_dir*, sorted."""
     return [(path.name, path.read_text(encoding="utf-8", errors="replace")) for path in read_event_files(events_dir)]

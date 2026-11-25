@@ -137,16 +137,12 @@ class _Run:
         tail = base64.b64decode(test.fail_tail_b64).decode() if test.fail_tail_b64 else ""
         return test, tail, warnings
 
-    def bus(self, exit_code: int, *, as_printed: bool = False):
-        """The run on the coordinator's bus, with what a CI log shows of it.
-
-        ``as_printed`` feeds pytest's lines whole: its progress letter can precede
-        an event on one line, which the bus then does not read as an event.
-        """
+    def bus(self, exit_code: int):
+        """The run on the coordinator's bus, with what a CI log shows of it."""
         bus, buffer = EventBus(), io.StringIO()
         MilestoneRenderer(bus=bus, console=Console(file=buffer, width=200, no_color=True), total_scenarios=1)
         bus.feed_line("w1", "STEPPY-EVT::scenario-start::order-lifecycle::w1::1.0")
-        for line in self.stdout.splitlines() if as_printed else re.findall("STEPPY-EVT::.*", self.stdout):
+        for line in self.stdout.splitlines():
             bus.feed_line("w1", line)
         bus.feed_line("w1", f"STEPPY-EVT::scenario-end::order-lifecycle::w1::{exit_code}::1000")
         return bus.snapshot(), buffer.getvalue()
@@ -289,11 +285,10 @@ def test_a_test_that_passes_at_once_is_not_affected(retried):
 def test_a_retried_test_counts_once_in_the_live_progress(retried, cases, exit_code, outcome):
     run = retried(cases)
     assert "::rerun::" not in run.stdout  # the plugin's own word is not in the grammar
-    for as_printed in (False, True):
-        snap, _ = run.bus(exit_code, as_printed=as_printed)
-        assert {k: n for k, n in snap.counts.items() if n} == {outcome: 1}
-        (record,) = snap.tests
-        assert (record.outcome, record.attempt) == (outcome, len(cases.split(",")))
+    snap, _ = run.bus(exit_code)
+    assert {k: n for k, n in snap.counts.items() if n} == {outcome: 1}
+    (record,) = snap.tests
+    assert (record.outcome, record.attempt) == (outcome, len(cases.split(",")))
 
 
 def test_the_failure_of_a_test_that_passed_on_retry_is_not_listed(retried):

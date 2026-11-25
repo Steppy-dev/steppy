@@ -2,11 +2,11 @@
 
 The coordinator's log tailer pushes every line from each worker
 container's stdout (``docker compose logs -f``) into
-:meth:`EventBus.feed_line`. Lines starting with ``STEPPY-EVT::`` are
-parsed into typed events that update an internal state model; every
-other line falls through to a :class:`RawLogChannel` that either prints
-it with the ``[wN]`` prefix (``--verbose``) or writes it only to disk
-for post-mortem.
+:meth:`EventBus.feed_line`. A line is parsed into a typed event from
+where ``STEPPY-EVT::`` starts in it, and updates an internal state model;
+what pytest wrote before it, and every other line, falls through to a
+:class:`RawLogChannel` that either prints it with the ``[wN]`` prefix
+(``--verbose``) or writes it only to disk for post-mortem.
 
 The state model is the single source of truth for the live renderer:
 per-worker current scenario / current test, aggregate pass/fail counts,
@@ -124,18 +124,24 @@ class EventBus:
     def feed_line(self, worker_id: str, line: str) -> None:
         """Called by the log tailer for every line received from ``worker_id``."""
         line = line.rstrip("\r\n")
-        if not line.startswith(_EVT_PREFIX):
+        # pytest leaves its line open after a progress letter (``.``, ``F``) or a
+        # test's name, and writes a test's letter before our ``test-end`` hook
+        # runs, so an event often starts in the middle of a line.
+        before, prefix, body = line.partition(_EVT_PREFIX)
+        if not prefix:
             if self._raw_sink is not None:
                 self._raw_sink(worker_id, line)
             return
         try:
-            kind = self._parse_and_apply(worker_id, line[len(_EVT_PREFIX) :])
+            kind = self._parse_and_apply(worker_id, body)
         except Exception:
             # Malformed event — fall through to the raw channel so it's
             # visible somewhere instead of silently dropped.
             if self._raw_sink is not None:
                 self._raw_sink(worker_id, line)
             return
+        if before and self._raw_sink is not None:
+            self._raw_sink(worker_id, before)
         if self._subscribers:
             snap = self.snapshot()
             for sub in list(self._subscribers):
@@ -249,11 +255,10 @@ class EventBus:
                 #      arrives — we have to fabricate a record from scratch.
                 #
                 #   2. ``test-start`` arrived (the renderer shows the running
-                #      test name) but ``test-end`` never did — observed when
-                #      pytest's stdout capture intercepts the call-phase
-                #      ``pytest_runtest_logreport`` hook, or when buffering
-                #      delays the line past container teardown. In this case
-                #      a TestRecord exists but its ``outcome`` is None.
+                #      test name) but ``test-end`` never did — pytest died
+                #      inside the test, or buffering delayed the line past
+                #      container teardown. In this case a TestRecord exists
+                #      but its ``outcome`` is None.
                 #
                 # Handle both: assign a synthetic outcome to every incomplete
                 # record for this scenario, and create a fresh one only when

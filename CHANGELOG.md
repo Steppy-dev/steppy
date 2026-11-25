@@ -170,6 +170,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   progress of `--workers N` it counts once, as its last attempt ended.
   **Run `steppy generate`**: the recorder is in `tests/e2e/`. A run retried by an
   older suite still reads `rerun`, with a warning that says so.
+- **`--workers N` showed no test's own outcome in its live progress.** pytest writes
+  a progress letter before a test's `test-end` event, on the same line, so the
+  event was taken for log output. Every test of a scenario then got the outcome of
+  the scenario's exit code: one failing variant marked its passing ones failed, in
+  the progress and in the summary's test counts, and a CI log had no line per
+  test. The exit code, the report and the bundle were not affected.
 
 ### Security
 - **A hostile results bundle could make `steppy report` write and read files

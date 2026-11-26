@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-28
+
 ### Added
 - **`steppy run --upload`** sends the run to Steppy Cloud once the tests are
   done, failed or not, and prints the run's URL. It reads `STEPPY_API_KEY` (the
@@ -84,6 +86,11 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unstyled, and an old page still renders but not in the new design. The
   `steppy-template` skill lists the tokens, the classes and the new partials
   (`_topbar`, `_icons`, `_shot`, `_variant`, `_links`, `fonts/`).
+- **The package's license metadata names every license its files carry**:
+  `Apache-2.0 AND BSD-3-Clause AND MIT AND OFL-1.1` (Steppy, then Lit and Zod in the
+  player bundles, then the report's fonts), and the wheel's `.dist-info/licenses/`
+  holds each text: `LICENSE`, `NOTICE`, the bundles' `THIRD_PARTY_LICENSES.txt` and
+  both fonts' OFL texts. Steppy itself is still Apache-2.0.
 - **`steppy record` writes the masks it finds into the draft's front matter**
   (`mask:`) instead of printing a `screenshot.mask` block to paste.
 - **`steppy bundle upload` speaks the new protocol**: it builds the run's
@@ -1444,7 +1451,8 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Steppy-dev/steppy/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/Steppy-dev/steppy/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Steppy-dev/steppy/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Steppy-dev/steppy/compare/v0.8.1...v0.9.0

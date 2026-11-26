@@ -375,7 +375,7 @@ privately through GitHub's private vulnerability reporting: the repository's
 visible only to you and the maintainers.
 
 Include what you can of: the affected command or config block, the Steppy version
-(`pip show steppy`), a minimal reproduction, and the impact you expect.
+(`pip show steppy-dev`), a minimal reproduction, and the impact you expect.
 
 What to expect:
 

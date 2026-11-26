@@ -2,12 +2,21 @@
 # `steppy` on PyPI is an unrelated project. The import package and the command
 # stay `steppy`; `steppy.DISTRIBUTION` must match this name.
 name = "steppy-dev"
-version = "0.9.2"
+version = "0.10.0"
 description = "Generate Playwright pytest suites from Markdown scenarios, and turn their screenshots into multi-locale user guides"
 readme = "README.md"
 # PEP 639 SPDX expression; needs hatchling>=1.27 (pinned in [build-system]).
-license = "Apache-2.0"
-license-files = ["LICENSE", "NOTICE"]
+# Steppy is Apache-2.0; the wheel also ships the player bundles' Lit (BSD-3-Clause)
+# and Zod (MIT), and the run report's two fonts (OFL-1.1). NOTICE says which is
+# which; every text listed here lands in the wheel's .dist-info/licenses/.
+license = "Apache-2.0 AND BSD-3-Clause AND MIT AND OFL-1.1"
+license-files = [
+    "LICENSE",
+    "NOTICE",
+    "src/steppy/_player_bundle/THIRD_PARTY_LICENSES.txt",
+    "templates/report/fonts/bricolage-grotesque-OFL.txt",
+    "templates/report/fonts/jetbrains-mono-OFL.txt",
+]
 requires-python = ">=3.12"
 keywords = ["playwright", "pytest", "e2e", "testing", "code-generation", "markdown", "user-guide", "screenshots"]
 classifiers = [

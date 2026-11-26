@@ -23,6 +23,7 @@ from typing import Optional
 
 from rich.console import Console, Group
 from rich.live import Live
+from rich.markup import escape
 from rich.table import Table
 from rich.text import Text
 
@@ -152,10 +153,15 @@ class LiveProgressRenderer:
             elapsed = now - (ws.current_test_started_at or now)
             stalled = elapsed > _STALLED_THRESHOLD_S
             status = "[yellow dim]stalled[/yellow dim]" if stalled else "[green]running[/green]"
-            return status, ws.current_scenario or "-", _short_nodeid(ws.current_test), _fmt_elapsed(elapsed)
+            return (
+                status,
+                escape(ws.current_scenario or "-"),
+                escape(_short_nodeid(ws.current_test)),
+                _fmt_elapsed(elapsed),
+            )
         if ws.current_scenario is not None:
             elapsed = now - (ws.scenario_started_at or now)
-            return "[cyan]setup[/cyan]", ws.current_scenario, "(awaiting test-start)", _fmt_elapsed(elapsed)
+            return "[cyan]setup[/cyan]", escape(ws.current_scenario), "(awaiting test-start)", _fmt_elapsed(elapsed)
         return "[dim]idle[/dim]", "", "", ""
 
 
@@ -336,7 +342,7 @@ def render_summary(
         if project_root is not None:
             note_dir = project_root / "output" / "failures"
             console.print(
-                f"[dim]These artifacts persist after the run; tmp dir is cleaned up. ({note_dir})[/dim]",
+                f"[dim]These artifacts persist after the run; tmp dir is cleaned up. ({escape(str(note_dir))})[/dim]",
                 soft_wrap=True,
             )
 
@@ -351,28 +357,22 @@ def render_summary(
         for row in failure_rows:
             elide = row.slug in exemplars
             console.print(
-                f"  [red]✗[/red] [bold]{row.slug}[/bold]  "
-                f"[dim]{row.worker_id} · exit={row.exit_code} · {_fmt_elapsed(row.duration_s)}[/dim]"
+                f"  [red]✗[/red] [bold]{escape(row.slug)}[/bold]  "
+                f"[dim]{escape(row.worker_id)} · exit={row.exit_code} · {_fmt_elapsed(row.duration_s)}[/dim]"
                 + ("  [dim](cause shown above)[/dim]" if elide else "")
             )
             if not elide:
                 for nodeid, tail in row.fail_tails:
-                    console.print(f"      [dim]{_short_nodeid(nodeid)}[/dim]")
+                    console.print(f"      [dim]{escape(_short_nodeid(nodeid))}[/dim]", highlight=False)
                     for line in tail.splitlines():
                         console.print(f"        {line}", highlight=False, markup=False)
             artifacts_dir = project_root / "output" / "failures" / row.slug if project_root is not None else None
             if artifacts_dir is not None:
-                console.print(f"      [cyan]artifacts:[/cyan] [bold]{artifacts_dir}[/bold]", soft_wrap=True)
-                pytest_log = artifacts_dir / "pytest.log"
-                summary_txt = artifacts_dir / "summary.txt"
-                if pytest_log.exists():
-                    console.print(f"        [dim]pytest log:[/dim] {pytest_log}", soft_wrap=True)
-                if summary_txt.exists():
-                    console.print(f"        [dim]summary:   [/dim] {summary_txt}", soft_wrap=True)
+                _print_artifacts(console, artifacts_dir, indent="      ")
             else:
                 stack_log = tmp_dir / f"{row.worker_id}-stack.log" if tmp_dir is not None else None
                 if stack_log is not None:
-                    console.print(f"      [dim]full log: {stack_log}[/dim]", soft_wrap=True)
+                    console.print(f"      [dim]full log: {escape(str(stack_log))}[/dim]", soft_wrap=True)
             console.print()
 
     # Orphan block.
@@ -381,16 +381,23 @@ def render_summary(
         console.rule("[bold yellow]Orphaned (worker died mid-scenario)[/bold yellow]")
         for wid, slugs in orphans.items():
             for slug in slugs:
-                console.print(f"  [yellow]⚠[/yellow] {wid}: [bold]{slug}[/bold]")
+                console.print(f"  [yellow]⚠[/yellow] {escape(wid)}: [bold]{escape(slug)}[/bold]")
                 if project_root is not None:
-                    artifacts_dir = project_root / "output" / "failures" / slug
-                    console.print(f"      [cyan]artifacts:[/cyan] [bold]{artifacts_dir}[/bold]", soft_wrap=True)
-                    pytest_log = artifacts_dir / "pytest.log"
-                    summary_txt = artifacts_dir / "summary.txt"
-                    if pytest_log.exists():
-                        console.print(f"        [dim]pytest log:[/dim] {pytest_log}", soft_wrap=True)
-                    if summary_txt.exists():
-                        console.print(f"        [dim]summary:   [/dim] {summary_txt}", soft_wrap=True)
+                    _print_artifacts(console, project_root / "output" / "failures" / slug, indent="      ")
+
+
+def _print_artifacts(console: Console, artifacts_dir, *, indent: str) -> None:
+    """Point at a scenario's persisted failure artifacts.
+
+    A path is escaped like every other value printed through markup: a folder
+    named ``[x]`` is otherwise read as a tag and vanishes from the line."""
+    console.print(f"{indent}[cyan]artifacts:[/cyan] [bold]{escape(str(artifacts_dir))}[/bold]", soft_wrap=True)
+    pytest_log = artifacts_dir / "pytest.log"
+    summary_txt = artifacts_dir / "summary.txt"
+    if pytest_log.exists():
+        console.print(f"{indent}  [dim]pytest log:[/dim] {escape(str(pytest_log))}", soft_wrap=True)
+    if summary_txt.exists():
+        console.print(f"{indent}  [dim]summary:   [/dim] {escape(str(summary_txt))}", soft_wrap=True)
 
 
 def _render_flaky_block(console: Console, verdict) -> None:
@@ -406,7 +413,7 @@ def _render_flaky_block(console: Console, verdict) -> None:
     for slug in verdict.flaky:
         attempts = verdict.attempts.get(slug)
         suffix = f"  [dim]passed on attempt {attempts}[/dim]" if attempts else ""
-        console.print(f"  [yellow]~[/yellow] [bold]{slug}[/bold]{suffix}")
+        console.print(f"  [yellow]~[/yellow] [bold]{escape(slug)}[/bold]{suffix}")
     console.print(
         "  [dim]These did not fail the build. Rank repeat offenders with: [bold]steppy flaky[/bold][/dim]",
         soft_wrap=True,
@@ -434,12 +441,12 @@ def _render_failure_causes(console: Console, failure_rows: list[_SummaryRow]) ->
     exemplars: set[str] = set()
     for group in groups:
         console.print(
-            f"  [red]×{group.count}[/red] [bold]{group.headline}[/bold]  [dim]({group.fingerprint})[/dim]",
+            f"  [red]×{group.count}[/red] [bold]{escape(group.headline)}[/bold]  [dim]({group.fingerprint})[/dim]",
             highlight=False,
         )
         slugs = group.slugs
         shown = ", ".join(slugs[:6]) + (f", +{len(slugs) - 6} more" if len(slugs) > 6 else "")
-        console.print(f"      [dim]{shown}[/dim]", soft_wrap=True)
+        console.print(f"      [dim]{escape(shown)}[/dim]", soft_wrap=True)
         exemplars.update(slugs[1:])  # keep the first scenario's full tail below
     if total > len(groups):
         console.print("  [dim]Repeat occurrences are elided below; --verbose prints every tail.[/dim]")

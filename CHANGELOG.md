@@ -182,6 +182,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the scenario's exit code: one failing variant marked its passing ones failed, in
   the progress and in the summary's test counts, and a CI log had no line per
   test. The exit code, the report and the bundle were not affected.
+- **The summary of `--workers N` dropped a test's variant.** A node id such as
+  `test_checkout[fr-mobile]` was printed through Rich markup, which read the
+  brackets as a style and left `test_checkout`, so two failing variants of one
+  scenario looked the same. A cause's headline lost its locator the same way
+  (`[data-testid=save]`), and so did a path or a name with brackets, in the
+  summary and in the live table. Everything is printed as written now.
 
 ### Security
 - **A hostile results bundle could make `steppy report` write and read files

@@ -1,0 +1,228 @@
+{# One variant: its heading, the walk through the failing variants, its steps and what
+   the failure left. Rendered on the index (the first failing variant) and, for every
+   variant, on its scenario's page.
+
+   variant_card(v, root, large)
+     large=false  the run page's rows: small screenshots, the failure beside the steps;
+     large=true   a scenario page's: framed screenshots, the failure under its step.
+
+   Every URL below is the report's own, relative, and prefixed with ``root``.
+#}
+{% from "report/_icons.html.j2" import icon, chip %}
+{% from "report/_shot.html.j2" import thumb, framed %}
+
+{% macro copy_link(href, label) -%}
+<a class="steppy-copy-link" href="{{ href }}" title="{{ label }}" aria-label="{{ label }}">{{ icon('link', size=14) }}</a>
+{%- endmacro %}
+
+{% macro hide_target() -%}
+{# No script: the stylesheet reads the box's state. Where it cannot (no :has()), the
+   control is not shown, so nothing on the page does nothing. #}
+<label class="steppy-hide-target"><input type="checkbox" autocomplete="off"><span>Hide target</span></label>
+{%- endmacro %}
+
+{% macro walk(v, root) -%}
+<div class="steppy-walk">
+    <span class="steppy-walk-count">{{ v.counter }}</span>
+    <span class="steppy-walk-buttons">
+        {{ caller() if caller else '' }}
+        {% if v.previous %}
+        <a class="steppy-button" href="{{ root }}{{ v.previous }}">{{ icon('left') }}<span>Previous failing</span></a>
+        {% else %}
+        <span class="steppy-button" role="link" aria-disabled="true">{{ icon('left') }}<span>Previous failing</span></span>
+        {% endif %}
+        {% if v.next %}
+        <a class="steppy-button" href="{{ root }}{{ v.next }}"><span>Next failing</span>{{ icon('right') }}</a>
+        {% else %}
+        <span class="steppy-button" role="link" aria-disabled="true"><span>Next failing</span>{{ icon('right') }}</span>
+        {% endif %}
+    </span>
+</div>
+{%- endmacro %}
+
+{% macro facts(step) -%}
+<span class="steppy-step-facts">
+    {% if step.action %}<code class="steppy-step-action">{{ step.action }}</code>{% endif %}
+    {% if step.recorded %}
+    <span>+{{ step.offset_ms | duration }}</span>
+    <span>{% if step.duration_ms is not none %}took {{ step.duration_ms | duration }}{% else %}never finished{% endif %}</span>
+    {% endif %}
+</span>
+{%- endmacro %}
+
+{% macro tail(v) -%}
+{% if v.fail_tail %}
+<div class="steppy-tail-block">
+    <span class="steppy-label-strong">Last log lines</span>
+    <pre class="steppy-tail">{{ v.fail_tail }}</pre>
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro cause_line(v, root) -%}
+{% if v.kind == 'f' %}
+<p class="steppy-small steppy-muted steppy-why">
+    {% if v.failed_step is not none %}
+    {# ``{%- ... -%}`` throughout: trim_blocks eats the newline after a block tag but
+       lstrip_blocks only strips before one, so a tag at end of line leaves the next
+       line's indentation in the middle of a sentence. #}
+    <span>Failed at step {{ v.failed_step }}{%- if v.failed_step_title %}, {{ v.failed_step_title }}{% endif %}.</span>
+    {% elif v.stopped_at is none %}
+    <span>No step was in flight when this test died: it failed in fixture setup or teardown, or between
+    steps. Blaming the last step reached would point at working code.</span>
+    {% endif %}
+    {% if v.cause %}
+    <a href="{{ root }}index.html#{{ v.cause }}">Cause {{ v.fingerprint }}</a>
+    {% endif %}
+</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro small_step(v, s, root) -%}
+<li class="steppy-step" id="{{ s.anchor }}" data-status="{{ s.status }}">
+    <span class="steppy-step-icon">{{ icon(s.status, 'Failed' if s.kind == 'f' else 'Passed') }}</span>
+    <span class="steppy-step-num">{{ s.n }}</span>
+    <span class="steppy-step-body">
+        <span class="steppy-step-title">
+            <span>{{ s.title or 'Step %d' % s.n }}</span>
+            {% if s.kind == 'f' %}<span class="steppy-tag steppy-tag--fail">failed here</span>{% endif %}
+            {{ copy_link(root ~ s.href, 'Link to step %d of %s%s' % (s.n, v.ref.scenario, v.where)) }}
+        </span>
+        {% if s.action %}<code class="steppy-step-action">{{ s.action }}</code>{% endif %}
+    </span>
+    <span class="steppy-step-shot">
+        {% if s.thumb %}{{ thumb(s.thumb, root, 'Open the screenshot of step %d in a new tab' % s.n) }}{% endif %}
+    </span>
+</li>
+{%- endmacro %}
+
+{% macro large_step(v, s, root) -%}
+{% set sizes = {'phone': (94, 206), 'tablet': (148, 206), 'desktop': (238, 148)} %}
+<li class="steppy-step steppy-step--large" {% if not v.extra %}id="{{ s.anchor }}" {% endif %}data-status="{{ s.status }}" data-frame="{{ v.frame }}">
+    <span class="steppy-step-badge"><span class="steppy-sr">Step </span>{{ s.n }}</span>
+    <div class="steppy-step-body">
+        <div class="steppy-step-title">
+            <h4>{{ s.title or 'Step %d' % s.n }}</h4>
+            {% if not v.extra %}{{ copy_link(root ~ s.href, 'Link to step %d of %s%s' % (s.n, v.ref.scenario, v.where)) }}{% endif %}
+        </div>
+        {{ facts(s) }}
+        {% if s.kind == 'f' %}
+        {{ chip('failed', 'Failed here') }}
+        {% else %}
+        <span class="steppy-step-outcome">{{ icon('passed', size=14) }}<span>Passed</span></span>
+        {% endif %}
+    </div>
+    {% set frames = s.shots %}
+    {% set at_failure = v.failure_shot if s.kind == 'f' and v.failure_shot and v.failure_shot.url not in (frames | map(attribute='url') | list) else none %}
+    {% if frames or at_failure %}
+    <div class="steppy-frames">
+        {% for shot in frames %}
+        <figure class="steppy-frame">
+            {{ framed(shot, root, 'Open the screenshot of step %d in a new tab' % s.n, sizes[v.frame][0], sizes[v.frame][1]) }}
+            {% if shot.caption %}<figcaption>{{ shot.caption }}</figcaption>{% endif %}
+        </figure>
+        {% endfor %}
+        {% if at_failure %}
+        <figure class="steppy-frame">
+            {{ framed(at_failure, root, 'Open the screenshot at the failure in a new tab', sizes[v.frame][0], sizes[v.frame][1]) }}
+            <figcaption>At the failure</figcaption>
+        </figure>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% if s.kind == 'f' %}
+    <div class="steppy-step-error">{{ tail(v) }}{{ cause_line(v, root) }}</div>
+    {% endif %}
+</li>
+{%- endmacro %}
+
+{% macro leftovers(v) -%}
+{% if v.traces or v.videos %}
+<p class="steppy-small steppy-muted">
+    {% if v.traces %}
+    {{ "Traces" if v.traces | length > 1 else "Trace" }} in the run at
+    {% for path in v.traces %}<code>{{ path }}</code>{{ ", " if not loop.last }}{% endfor %}
+    (open with <code>playwright show-trace</code>).
+    {% endif %}
+    {% if v.videos %}
+    {{ "Videos" if v.videos | length > 1 else "Video" }} at
+    {% for path in v.videos %}<code>{{ path }}</code>{{ ", " if not loop.last }}{% endfor %}.
+    {% endif %}
+</p>
+{% endif %}
+{%- endmacro %}
+
+{% macro variant_card(v, root, large=false) -%}
+{% set aside = not large and ((v.kind == 'f' and (v.failure_shot or v.fail_tail)) or v.kind == 'k') %}
+<section class="steppy-variant steppy-report-section" {% if not v.extra %}id="{{ v.anchor }}" {% endif %}aria-label="{{ v.ref.scenario }}{{ v.where }}" data-outcome="{{ v.status }}">
+    <div class="steppy-variant-head">
+        <div class="steppy-variant-name">
+            {% if large %}
+            <h3>{{ v.label }}{% if not v.extra %}{{ copy_link(root ~ v.href, 'Link to %s%s' % (v.ref.scenario, v.where)) }}{% endif %}</h3>
+            {% else %}
+            <h2><a class="steppy-mono" href="{{ root }}{{ v.scenario_href }}">{{ v.ref.scenario }}</a>{{ v.where }}{{ copy_link(root ~ v.href, 'Link to %s%s' % (v.ref.scenario, v.where)) }}</h2>
+            {% endif %}
+            <span class="steppy-label steppy-muted">Attempts: {{ v.attempts }}{% if v.duration_ms is not none %} · {{ v.duration_ms | duration }}{% endif %}</span>
+        </div>
+        {{ chip(v.status if v.kind == 'f' else {'k': 'flaky', 'p': 'passed', 's': 'skipped'}[v.kind], v.status_word) }}
+    </div>
+    {% if large %}
+    {{ walk(v, root) }}
+    {% else %}
+    {% call walk(v, root) %}{% if v.has_thumb_marks %}{{ hide_target() }}{% endif %}{% endcall %}
+    {% endif %}
+    {% if large and v.kind == 'k' %}
+    <p class="steppy-notice" data-tone="flaky">{{ icon('flaky') }}<span>{{ v.flaky_note }}</span></p>
+    {% endif %}
+    {% if large and v.kind == 'f' and v.stopped_at is none %}
+    {{ cause_line(v, root) }}
+    {{ tail(v) }}
+    {% if v.failure_shot %}
+    <div class="steppy-frames">
+        <figure class="steppy-frame" data-frame="{{ v.frame }}">
+            {{ framed(v.failure_shot, root, 'Open the screenshot at the failure in a new tab', 238, 206) }}
+            <figcaption>At the failure</figcaption>
+        </figure>
+    </div>
+    {% endif %}
+    {% endif %}
+    <div class="steppy-variant-body"{% if aside %} data-aside{% endif %}>
+        <div class="steppy-variant-steps">
+            {% if v.steps %}
+            <ol class="steppy-steps" aria-label="Steps">
+                {# Step numbers are the SCENARIO's and are sparse — a step skipped by
+                   only-in:/layouts: emits nothing. Rendered as-is, never renumbered,
+                   so "step 7" means step 7 of the markdown. #}
+                {% for s in v.steps %}
+                {{ large_step(v, s, root) if large else small_step(v, s, root) }}
+                {% endfor %}
+            </ol>
+            {% if v.stopped_at is not none %}
+            <p class="steppy-small steppy-muted steppy-steps-end">The run stopped at step {{ v.stopped_at }}.</p>
+            {% endif %}
+            {% else %}
+            <p class="steppy-small steppy-muted">No step was recorded for this variant.</p>
+            {% endif %}
+        </div>
+        {% if aside %}
+        <div class="steppy-variant-aside">
+            {% if v.kind == 'f' %}
+            {% if v.failure_shot %}
+            <figure class="steppy-failure">
+                <figcaption class="steppy-label-strong">At the failure</figcaption>
+                {{ thumb(v.failure_shot, root, 'Open the screenshot at the failure in a new tab', 'steppy-failure-shot') }}
+            </figure>
+            {% endif %}
+            {{ tail(v) }}
+            {{ cause_line(v, root) }}
+            {% else %}
+            <p class="steppy-notice" data-tone="flaky">{{ icon('flaky') }}<span>{{ v.flaky_note }}</span></p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% if not large and v.kind == 'f' and not aside %}{{ cause_line(v, root) }}{% endif %}
+    {{ leftovers(v) }}
+    {% if large %}<p class="steppy-nodeid">{{ v.nodeid }}</p>{% endif %}
+</section>
+{%- endmacro %}

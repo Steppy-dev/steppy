@@ -1,0 +1,110 @@
+{# The report's links (spec V3): #<scenario>, #<scenario>/<locale>/<layout> and
+   #<scenario>/<locale>/<layout>/step-<n>, the same as Steppy Cloud's.
+
+   A scenario's page needs no script for them: each element's id is the fragment. This
+   one does the two things a page cannot do alone. On the index it sends the fragment
+   to the scenario's page. On that page it answers a link the run cannot honour with
+   the closest thing there is, and says so. Two segments are never a link: an anchor
+   such as #cause/<fingerprint> is the browser's own business.
+
+   No eval, no handler attribute, and the fragment only ever lands after a '#' of a
+   relative address this report wrote. #}
+    <script type="application/json" id="ui/links">{{ links | tojson }}</script>
+    <script>
+(function () {
+    'use strict';
+    var config = JSON.parse(document.getElementById('ui/links').textContent);
+    var STEP = /^step-([1-9][0-9]{0,5})$/;
+
+    function decode(text) {
+        try { return decodeURIComponent(text); } catch (error) { return ''; }
+    }
+    function encode(text) {
+        return encodeURI(text).replace(/\//g, '%2F');
+    }
+    function parse(raw) {
+        var parts = raw.split('/').map(decode);
+        if (parts.indexOf('') >= 0) return null;
+        if (parts.length === 1) return { scenario: parts[0] };
+        if (parts.length !== 3 && parts.length !== 4) return null;
+        var step = parts.length === 4 ? STEP.exec(parts[3]) : null;
+        if (parts.length === 4 && !step) return null;
+        return { scenario: parts[0], locale: parts[1], layout: parts[2], step: step ? step[1] : '' };
+    }
+    function fragment(link, withStep) {
+        if (link.locale === undefined) return encode(link.scenario);
+        var parts = [link.scenario, link.locale, link.layout].map(encode);
+        if (withStep && link.step) parts.push('step-' + link.step);
+        return parts.join('/');
+    }
+    function name(link) {
+        return [link.scenario, link.locale, link.layout].filter(function (part) {
+            return part && part !== '-';
+        }).join(' · ');
+    }
+
+    var asked = null;
+    function say(words, before) {
+        var notice = document.getElementById('ui/link-notice');
+        if (!notice) return;
+        notice.hidden = !words;
+        notice.lastElementChild.textContent = words;
+        if (!words) return;
+        if (before) before.parentNode.insertBefore(notice, before);
+        notice.scrollIntoView();
+    }
+    function instead() {
+        return config.shown ? ' Showing ' + config.shown + ' instead.' : '';
+    }
+    function missing(link) {
+        return 'This link names ' + name(link) + ', which this run does not have.' + instead();
+    }
+    function ready(then) {
+        if (document.readyState !== 'loading') then();
+        else document.addEventListener('DOMContentLoaded', then);
+    }
+
+    function onIndex(raw) {
+        var link = parse(raw);
+        if (link && Object.prototype.hasOwnProperty.call(config.scenarios, link.scenario)) {
+            location.replace(config.scenarios[link.scenario] + '#' + raw);
+            return;
+        }
+        ready(function () {
+            if (document.getElementById(raw)) say('');
+            else say(link ? missing(link) : 'This link names nothing this run has.' + instead());
+        });
+    }
+
+    function onScenario(raw) {
+        var link = parse(raw);
+        if (link && link.scenario !== config.scenario) {
+            location.replace(config.index + '#' + raw);
+            return;
+        }
+        ready(function () {
+            if (raw !== asked) return;
+            if (document.getElementById(raw)) { say(''); return; }
+            var exact = link && document.getElementById(fragment(link, true));
+            if (exact) { say(''); exact.scrollIntoView(); return; }
+            var variant = link && link.locale !== undefined && document.getElementById(fragment(link, false));
+            if (variant) {
+                say('This link names step ' + link.step + ' of ' + name(link) + ', which this run does not have.', variant);
+                return;
+            }
+            var first = config.first && document.getElementById(config.first);
+            say(link ? missing(link) : 'This link names nothing this run has.' + instead(), first);
+        });
+    }
+
+    function follow() {
+        var raw = location.hash.slice(1);
+        asked = raw;
+        if (!raw) ready(function () { say(''); });
+        else if (config.page === 'index') onIndex(raw);
+        else onScenario(raw);
+    }
+    window.addEventListener('hashchange', follow);
+    follow();
+})();
+    </script>

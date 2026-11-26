@@ -65,7 +65,16 @@ def scenario_from_nodeid(nodeid: str) -> Optional[str]:
 def read_event_files(events_dir: Path) -> list[Path]:
     if not events_dir.is_dir():
         return []
-    return sorted(p for p in events_dir.glob("*.jsonl") if p.is_file())
+    return sorted(p for p in events_dir.glob("*.jsonl") if p.is_file() and not p.is_symlink())
+
+
+def linked_files(directory: Path, output_dir: Path) -> list[str]:
+    """One warning per symlink among a run's records: none of them is followed."""
+    if not directory.is_dir():
+        return []
+    return [
+        f"skipped symlink {p.relative_to(output_dir).as_posix()}" for p in sorted(directory.iterdir()) if p.is_symlink()
+    ]
 
 
 def tests_from_events(events_dir: Path) -> tuple[list[BundleTest], list[str]]:
@@ -453,7 +462,7 @@ def _junit_nodeid(testcase: ET.Element) -> str:
 def read_junit_files(junit_dir: Path) -> list[Path]:
     if not junit_dir.is_dir():
         return []
-    return sorted(p for p in junit_dir.glob("*.xml") if p.is_file())
+    return sorted(p for p in junit_dir.glob("*.xml") if p.is_file() and not p.is_symlink())
 
 
 def tests_from_junit(junit_dir: Path) -> tuple[list[BundleTest], list[str]]:

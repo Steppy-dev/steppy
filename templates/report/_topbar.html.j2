@@ -1,0 +1,10 @@
+{# The bar every page of the report opens with: the mark, and the pages there are. #}
+<header class="steppy-topbar">
+    <a class="steppy-brand" href="{{ root }}index.html">{% include "report/_mark.html.j2" %}<span>Steppy</span></a>
+    <nav class="steppy-topnav" aria-label="Report">
+        <a href="{{ root }}index.html"{% if here == 'run' %} aria-current="page"{% endif %}>Run report</a>
+        {% if report.coverage.tier != 'none' %}
+        <a href="{{ root }}coverage.html"{% if here == 'coverage' %} aria-current="page"{% endif %}>Coverage</a>
+        {% endif %}
+    </nav>
+</header>

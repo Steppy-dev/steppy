@@ -154,6 +154,15 @@ steppy coverage report
 #     the same before and after, and no report, bundle or upload carries them.
 STEPPY_IT=1 python -m pytest tests/integration/test_screenshot_mask_it.py -q
 # Expect: 12 passed in under 3 min.
+
+# 8d. The run report's pages in a real browser (no Docker — needs Playwright
+#     Chromium). Runs generate → run --screenshots → report once, then opens the
+#     site from file://: the links with and without JavaScript, every fragment the
+#     run cannot honour, the click hotspot's place (in boxes, then in pixels),
+#     "Hide target" with no script, both themes, 1280 and 375 px without sideways
+#     scroll, the keyboard, the fonts, and no request beyond the report's files.
+STEPPY_IT=1 python -m pytest tests/integration/test_report_design_it.py -q
+# Expect: 75 passed in under 1 min.
 ```
 
 ```bash

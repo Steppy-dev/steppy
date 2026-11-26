@@ -364,6 +364,36 @@
       "title": "ReportBadge",
       "type": "object"
     },
+    "ReportBox": {
+      "additionalProperties": true,
+      "description": "One target box, in CSS pixels of the captured image.",
+      "properties": {
+        "height": {
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "x": {
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "title": "ReportBox",
+      "type": "object"
+    },
     "ReportCapabilities": {
       "additionalProperties": true,
       "description": "What this report could and could not know. See the module docstring.",
@@ -407,6 +437,53 @@
         }
       },
       "title": "ReportCapabilities",
+      "type": "object"
+    },
+    "ReportCapture": {
+      "additionalProperties": true,
+      "description": "One of a step's captures, with the click hotspot its sidecar recorded.\n\nThe boxes are in CSS pixels of the image: place them in percent of the image's\nown size divided by ``device_scale_factor``, never of ``viewport`` (a full-page\ncapture is taller). A ``fill-form`` has one box per field. No sidecar, no\ntarget, or one that cannot be read, gives no box: never an error.",
+      "properties": {
+        "boxes": {
+          "items": {
+            "$ref": "#/$defs/ReportBox"
+          },
+          "title": "Boxes",
+          "type": "array"
+        },
+        "device_scale_factor": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Device pixels per CSS pixel of the image. None when no sidecar was read.",
+          "title": "Device Scale Factor"
+        },
+        "url": {
+          "description": "The same reference as in the step's screenshots, at the same position.",
+          "title": "Url",
+          "type": "string"
+        },
+        "viewport": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReportViewport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "ReportCapture",
       "type": "object"
     },
     "ReportCoverage": {
@@ -659,6 +736,13 @@
           "title": "Action",
           "type": "string"
         },
+        "captures": {
+          "items": {
+            "$ref": "#/$defs/ReportCapture"
+          },
+          "title": "Captures",
+          "type": "array"
+        },
         "duration_ms": {
           "anyOf": [
             {
@@ -906,6 +990,26 @@
         "nodeid"
       ],
       "title": "ReportVariant",
+      "type": "object"
+    },
+    "ReportViewport": {
+      "additionalProperties": true,
+      "description": "The size of the page the capture was taken in, in CSS pixels.",
+      "properties": {
+        "height": {
+          "title": "Height",
+          "type": "number"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "title": "ReportViewport",
       "type": "object"
     }
   },

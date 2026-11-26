@@ -11,12 +11,15 @@ glance, under-merging puts them back to scrolling.
 
 from __future__ import annotations
 
+import pytest
+
 from steppy._parallel.fingerprint import (
     FailureGroup,
     fingerprint,
     group_failures,
     headline,
     normalize_tail,
+    without_paths,
 )
 
 
@@ -102,6 +105,126 @@ def test_headline_handles_no_detail():
 
 def test_headline_truncates():
     assert headline("AssertionError: " + "x" * 500, max_len=40).endswith("…")
+
+
+# What the two runners really leave: 15 lines of pytest's report.
+ASSERT_TAIL = r"""        _steppy_end_step(2)
+
+        # ── Step 3: Check the message ──────────────────────────────────
+        _steppy_mark_step(3, 'Check the message', 'assert')
+        if not SKIP_ASSERTS:
+>           expect(customer_page.locator('[data-testid="toast"]')).not_to_contain_text('failed', timeout=1500)
+E           AssertionError: Locator expected not to contain text 'failed'
+E           Actual value: Export failed: 500
+E           Call log:
+E             - Expect "to_contain_text" with timeout 1500ms
+E             - waiting for locator("[data-testid=\"toast\"]")
+E               15 × locator resolved to <div class="toast" data-testid="toast">Export failed: 500</div>
+
+tests\e2e\test_invoice-export.py:41: AssertionError"""
+
+TIMEOUT_TAIL = r"""E             - attempting click action
+E               2 × waiting for element to be visible, enabled and stable
+E                 - element is not visible
+E               - retrying click action
+E                 - waiting 500ms
+
+D:\work\agent\proj\.venv\Lib\site-packages\playwright\_impl\_connection.py:559: TimeoutError"""
+
+SHORT_TAIL = r"""tests/e2e/test_pay.py:22: in test_pay
+    customer_page.click('[data-testid="pay"]')
+/home/runner/work/shop/.venv/lib/python3.12/site-packages/playwright/_impl/_connection.py:559: in send
+    raise rewrite_error(error)
+E   playwright._impl._errors.TimeoutError: Page.click: Timeout 1500ms exceeded.
+E   Call log:
+E     - waiting for locator("[data-testid=\"pay\"]")"""
+
+
+@pytest.mark.parametrize(
+    "tail,expected",
+    [
+        (ASSERT_TAIL, "AssertionError: Locator expected not to contain text 'failed'"),
+        (TIMEOUT_TAIL, "TimeoutError: element is not visible"),
+        (SHORT_TAIL, "TimeoutError: Page.click: Timeout 1500ms exceeded."),
+        ("E       assert 1 == 2\nE        +  where 1 = f()\n\ntests/e2e/test_x.py:4: AssertionError", "assert 1 == 2"),
+        ("E   AssertionError\n\ntests/e2e/test_x.py:4: AssertionError", "AssertionError"),
+        ("E   EOFError", "EOFError"),
+        ("E   KeyError: 'total'", "KeyError: 'total'"),
+        ("Failed: Timeout >10.0s", "Failed: Timeout >10.0s"),
+        (
+            "E   AssertionError: Locator expected to be visible\nE   Actual value: None\nE   Error: element(s) not found",
+            "AssertionError: Locator expected to be visible",
+        ),
+        (
+            "E   KeyError: 'a'\n\nDuring handling of the above exception, another exception occurred:\n\n"
+            "E   helpers.ShopError: the cart is empty",
+            "ShopError: the cart is empty",
+        ),
+        ("x = 1\nplain words at the end", "plain words at the end"),
+    ],
+    ids=[
+        "assert",
+        "timeout",
+        "short",
+        "bare-assert",
+        "bare-type",
+        "eof",
+        "key",
+        "failed",
+        "detail",
+        "chained",
+        "words",
+    ],
+)
+def test_headline_says_what_broke(tail, expected):
+    assert headline(tail) == expected
+
+
+@pytest.mark.parametrize(
+    "tail", ["_steppy_mark_step(3, 'x', 'assert')", "# ── Step 3: an assert ──\n_steppy_end_step(2)"]
+)
+def test_headline_is_never_a_line_steppy_generated(tail):
+    assert headline(tail) == "(no failure detail captured)"
+
+
+@pytest.mark.parametrize(
+    "line,expected",
+    [
+        (r"cannot open C:\Users\ana\proj\logo.png", "cannot open logo.png"),
+        (r"cannot open 'C:\\Users\\Ana Reyes\\proj\\logo.png'", "cannot open 'logo.png'"),
+        ("cannot open C:/Users/ana/logo.png now", "cannot open logo.png now"),
+        (r"cannot open \\server\share\dir\logo.png", "cannot open logo.png"),
+        ("cannot open '/home/ana/proj/logo.png'", "cannot open 'logo.png'"),
+        ("cannot open /data/ci/agent/fixtures", "cannot open fixtures"),
+        ("cannot open '/srv-custom/ci/agent/fixtures'", "cannot open 'fixtures'"),
+        ("at /weird/mount/x.py line 3", "at x.py line 3"),
+        ("cwd=/home/ana/proj", "cwd=proj"),
+        ("broke: file:///D:/a/b/page.html", "broke: page.html"),
+        ("broke: file:///home/ana/page.html", "broke: page.html"),
+        # Not paths of the machine.
+        ("Page URL expected to be '/checkout/done'", "Page URL expected to be '/checkout/done'"),
+        ("net::ERR at http://localhost:4200/app/login", "net::ERR at http://localhost:4200/app/login"),
+        ("waiting for locator('xpath=/html/body/div')", "waiting for locator('xpath=/html/body/div')"),
+        ("expected 1/2/3 and a/b", "expected 1/2/3 and a/b"),
+        ("waiting for locator('img') in /home/ana/app/page.html", "waiting for locator('img') in page.html"),
+        ("tests/e2e/test_x.py broke", "tests/e2e/test_x.py broke"),
+        (r"tests\e2e\test_x.py broke", r"tests\e2e\test_x.py broke"),
+        ("no path at all", "no path at all"),
+    ],
+)
+def test_absolute_paths_are_reduced_to_their_last_part(line, expected):
+    assert without_paths(line) == expected
+
+
+@pytest.mark.parametrize("tail", [ASSERT_TAIL, TIMEOUT_TAIL, SHORT_TAIL])
+def test_a_headline_has_no_absolute_path(tail):
+    for text in (tail, f"E   OSError: {tail.splitlines()[-1]}"):
+        assert not any(mark in headline(text) for mark in (":\\", "/home/", "site-packages"))
+
+
+def test_the_headline_takes_no_part_in_grouping():
+    """The ids are pinned: a report of an older run keeps its links to its causes."""
+    assert [fingerprint(t) for t in (ASSERT_TAIL, TIMEOUT_TAIL, SHORT_TAIL)] == ["b8fafb55", "d03e04a7", "a2945558"]
 
 
 # ── grouping ────────────────────────────────────────────────────────────────

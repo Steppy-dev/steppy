@@ -26,6 +26,7 @@ from ..contracts.report import (
     ReportArtifactGroup,
     ReportArtifacts,
     ReportCapabilities,
+    ReportCapture,
     ReportCoverage,
     ReportFailureCause,
     ReportFailureOccurrence,
@@ -162,6 +163,7 @@ def build_model(
     attempts: Optional[dict] = None,
     coverage: Optional[ReportCoverage] = None,
     assets: Optional[dict] = None,
+    hotspots: Optional[dict] = None,
     screenshots_policy: str = "none",
     steppy_version: str = "",
     extra_warnings: Optional[list[str]] = None,
@@ -171,7 +173,9 @@ def build_model(
     ``attempts`` is ``{nodeid: [TestAttempt]}`` from
     ``bundle.results.steps_from_records``; ``assets`` maps a manifest path to the
     site-relative URL it was copied to (absent ⇒ not copied, which is a policy
-    outcome rather than an error).
+    outcome rather than an error). ``hotspots`` maps a screenshot's manifest path to
+    what its sidecar recorded (:func:`steppy.report.hotspots.read`); absent means no
+    box to draw.
     """
     attempts = attempts or {}
     assets = assets or {}
@@ -195,6 +199,7 @@ def build_model(
     for test in tests:
         by_scenario.setdefault(test.scenario, []).append(test)
 
+    captures = _index_captures(manifest, assets, hotspots or {})
     failure_shots = _index_failure_screenshots(manifest, assets)
     failure_logs = _index_by_scenario(manifest, "failure_log")
     traces = _index_paths(manifest, "trace")
@@ -219,7 +224,7 @@ def build_model(
             if len(runs) > 1:
                 any_attempts = True
             last = runs[-1] if runs else None
-            steps = _steps_for(last, test, assets, manifest)
+            steps = _steps_for(last, captures.get((test.scenario, test.locale, test.layout), {}))
             if steps:
                 any_steps = True
 
@@ -323,14 +328,14 @@ def _observed_dimensions(tests: list[BundleTest]) -> dict[str, list[str]]:
     return {"locales": locales, "layouts": layouts}
 
 
-def _steps_for(attempt, test: BundleTest, assets: dict, manifest: BundleManifest) -> list[ReportStep]:
+def _steps_for(attempt, captures: dict[int, list[ReportCapture]]) -> list[ReportStep]:
     """The timeline for one variant, with each step's captures attached."""
     if attempt is None:
         return []
-    shots = _index_step_screenshots(manifest, assets, test.scenario, test.locale, test.layout)
     steps = []
     for row in attempt.offsets():
-        steps.append(ReportStep(**row, screenshots=shots.get(row["step"], [])))
+        shots = captures.get(row["step"], [])
+        steps.append(ReportStep(**row, screenshots=[c.url for c in shots], captures=shots))
     return steps
 
 
@@ -343,24 +348,30 @@ def _step_title(steps: list[ReportStep], failed_step: Optional[int]) -> str:
     return ""
 
 
-def _index_step_screenshots(
-    manifest: BundleManifest, assets: dict, scenario: Optional[str], locale, layout
-) -> dict[int, list[str]]:
-    """``{step: [url, …]}`` for one variant, in frame order.
+def _index_captures(
+    manifest: BundleManifest, assets: dict, hotspots: dict
+) -> dict[tuple, dict[int, list[ReportCapture]]]:
+    """``{(scenario, locale, layout): {step: [capture, …]}}``, in frame order.
 
     Reads ``manifest.files[]`` attribution rather than parsing paths — that is what
-    ``bundle/classify.py`` recorded it for.
+    ``bundle/classify.py`` recorded it for. Each capture keeps the box of its own
+    sidecar, even when two byte-identical captures share one URL.
     """
-    out: dict[int, list[tuple[str, str]]] = {}
+    found: dict[tuple, dict[int, list[tuple]]] = {}
     for entry in manifest.files:
         if entry.kind != "screenshot" or entry.step is None:
             continue
-        if entry.scenario != scenario or entry.locale != locale or entry.layout != layout:
-            continue
         url = assets.get(entry.path)
-        if url:
-            out.setdefault(entry.step, []).append((entry.frame or "", url))
-    return {step: [url for _frame, url in sorted(frames)] for step, frames in out.items()}
+        if not url:
+            continue
+        hotspot = hotspots.get(entry.path)
+        capture = ReportCapture(url=url, **(hotspot.fields() if hotspot else {}))
+        by_step = found.setdefault((entry.scenario, entry.locale, entry.layout), {})
+        by_step.setdefault(entry.step, []).append((entry.frame or "", url, entry.path, capture))
+    return {
+        key: {step: [row[-1] for row in sorted(rows, key=lambda r: r[:-1])] for step, rows in by_step.items()}
+        for key, by_step in found.items()
+    }
 
 
 def _index_failure_screenshots(manifest: BundleManifest, assets: dict) -> dict[str, str]:

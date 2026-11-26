@@ -1170,7 +1170,7 @@ steppy run             # records per-test AND per-step events, every run
 steppy report          # → output/report/index.html, for the last run
 ```
 
-A self-contained static site for **one** run: outcomes, failure causes grouped so one broken selector across forty scenarios is one row instead of forty tracebacks, **the failing step named** with its timeline and the screenshot at that moment, and the coverage buckets. It also reads a `.tar.zst` bundle or an unpacked bundle directory, so a failure from CI is one download away from being readable.
+A self-contained static site for **one** run, in Steppy Cloud's design: the verdict, failure causes grouped so one broken selector across forty scenarios is one row instead of forty tracebacks, every scenario over its layouts, **the failing step named** with its steps and their screenshots (outlined where each step clicked or typed), and the coverage buckets. Every step has a link, `#<scenario>/<locale>/<layout>/step-<n>`. It also reads a `.tar.zst` bundle or an unpacked bundle directory, so a failure from CI is one download away from being readable.
 
 The part that matters for authoring: the per-step records every run writes are what make the report able to say *step 7 of `order-lifecycle` in nl/mobile*, rather than only *the test failed*. A run made with `STEPPY_STEP_EVENTS=0` (or by a Steppy older than 0.9.1 without `--bundle`) gives outcomes and no step detail, and the report says so rather than rendering an empty timeline.
 

@@ -1,141 +1,114 @@
 {# One scenario, one page: every (locale, layout) variant with its step timeline.
    This is where the report earns its keep over a JUnit report — the failing step
-   is named and shown, not inferred from a stack trace. Autoescape is ON. #}
+   is named and shown, not inferred from a stack trace. Every variant and every step
+   carries its link as its id, so a link works with no script. Autoescape is ON. #}
+{% from "report/_icons.html.j2" import icon, chip, sprite %}
+{% from "report/_variant.html.j2" import variant_card, hide_target %}
+{% set here = 'scenario' %}
 <!doctype html>
 <html lang="en">
 <head>
 {% include "report/_head.html.j2" %}
+{% include "report/_links.html.j2" %}
 </head>
 <body>
-    <header class="steppy-report-header">
-        <h1>{% include "report/_mark.html.j2" %}{{ scenario.slug }}</h1>
-        <p class="steppy-report-meta steppy-small">
-            <span><a href="{{ root }}index.html">&larr; All scenarios</a></span>
-            <span><span class="steppy-chip" data-outcome="{{ scenario.outcome }}">{{ scenario.outcome }}</span></span>
-            <span>{{ scenario.variants | length }} variant{{ '' if scenario.variants | length == 1 else 's' }}</span>
-            <span>{{ scenario.duration_ms_sum | duration }} test time</span>
-        </p>
-    </header>
+    {{ sprite() }}
+    {% include "report/_topbar.html.j2" %}
 
     <main class="steppy-report-main">
 
-        {% if not scenario.variants %}
-        <div class="steppy-notice">
+        <nav class="steppy-crumbs" aria-label="Breadcrumb">
+            <ol><li><a href="{{ root }}index.html">Run report</a></li><li aria-current="page">{{ page.slug }}</li></ol>
+        </nav>
+
+        <header class="steppy-scenario-head">
+            <div class="steppy-scenario-title">
+                <h1>{{ page.slug }}</h1>
+                {{ chip(page.status, page.word) }}
+            </div>
+            <p class="steppy-report-meta">
+                <span>As in <a href="{{ root }}index.html">{{ report.run.run_id }}</a>{% if view.header.branch %} on <span class="steppy-code">{{ view.header.branch }}</span>{% endif %}</span>
+                {% if page.variants %}<span>{{ page.duration_ms | duration }} of test time</span>{% endif %}
+            </p>
+        </header>
+
+        {% if not page.variants %}
+        <div class="steppy-notice" role="note">{{ icon('info') }}<span>
             No test outcome was recorded for this scenario. Its captures are on disk, but the run
             wrote down nothing about whether it passed. Run it with <code>steppy run</code>
             (a Steppy older than 0.9.1 needed <code>--bundle</code>).
-        </div>
+        </span></div>
         {% endif %}
 
-        {% if scenario.failure_log %}
-        <div class="steppy-notice">
+        {% if page.failure_log %}
+        <div class="steppy-notice" role="note">{{ icon('file') }}<span>
             A worker log for this scenario is in the run at
-            <code>{{ scenario.failure_log }}</code>. It is not copied into this site.
-        </div>
+            <code>{{ page.failure_log }}</code>. It is not copied into this site.
+        </span></div>
         {% endif %}
 
-        {% for variant in scenario.variants %}
-        <section class="steppy-variant">
-            <div class="steppy-variant-head">
-                <h3>{{ variant_label(variant) }}</h3>
-                <span class="steppy-chip" data-outcome="{{ variant.outcome }}">{{ variant.outcome }}</span>
-                {% if variant.duration_ms is not none %}
-                <span class="steppy-muted steppy-small">{{ variant.duration_ms | duration }}</span>
+        <p class="steppy-notice" role="status" id="ui/link-notice" hidden>{{ icon('info') }}<span></span></p>
+
+        {% if page.variants %}
+        {% set grid = page.variants | length > 1 or page.lines | length > 1 or page.columns | length > 1 %}
+        <div class="steppy-scenario"{% if grid %} data-grid{% endif %}>
+            <div class="steppy-scenario-side">
+                {% if grid %}
+                {% macro cell(c) %}
+                {% if c.href %}
+                <a class="steppy-cell" data-outcome="{{ c.status }}" href="{{ root }}{{ c.href }}"><span class="steppy-sr">{{ c.spoken }}</span>{% if c.layout %}<span class="steppy-cell-layout">{{ c.layout }} </span>{% endif %}{{ icon(c.status) }}<span class="steppy-cell-words">{{ c.word }}</span></a>
+                {% else %}
+                <span class="steppy-cell" data-outcome="{{ c.status }}"><span class="steppy-sr">{{ c.spoken }}</span>{% if c.layout %}<span class="steppy-cell-layout">{{ c.layout }} </span>{% endif %}{{ icon(c.status) }}<span class="steppy-cell-words">{{ c.word }}</span></span>
                 {% endif %}
-                {% if variant.attempts > 1 %}
-                {# Only ever visible for in-process pytest --reruns: the parallel
-                   retry pass runs a fresh process, which truncates the JSONL and
-                   takes attempt 1 with it. #}
-                <span class="steppy-chip" data-outcome="unknown">attempt {{ variant.attempts }} of {{ variant.attempts }}</span>
-                {% endif %}
-            </div>
-            <p class="steppy-nodeid">{{ variant.nodeid }}</p>
-
-            {% if variant.failed_step is not none %}
-            {# ``{%- ... -%}`` throughout: trim_blocks eats the newline after a block
-               tag but lstrip_blocks only strips before one, so a tag at end of line
-               leaves the next line's indentation in the middle of a sentence. #}
-            <p class="steppy-small">
-                <strong>Failed at step {{ variant.failed_step }}</strong>
-                {%- if variant.failed_step_title %} — {{ variant.failed_step_title }}{% endif %}.
-                {%- if variant.fingerprint %}
-                <a href="{{ root }}index.html#cause-{{ variant.fingerprint }}">cause {{ variant.fingerprint }}</a>
-                {%- endif %}
-            </p>
-            {% elif variant.outcome not in ('passed', 'skipped') %}
-            <p class="steppy-small steppy-muted">
-                No step was in flight when this test died — it failed in fixture setup or
-                teardown, or between steps. Blaming the last step reached would point at working
-                code.
-            </p>
-            {% endif %}
-
-            {% if variant.fail_tail %}
-            <pre class="steppy-tail">{{ variant.fail_tail }}</pre>
-            {% endif %}
-
-            {% if variant.failure_screenshot %}
-            <div class="steppy-shots">
-                <a href="{{ root }}{{ variant.failure_screenshot }}">
-                    <img src="{{ root }}{{ variant.failure_screenshot }}" alt="Page at the moment of failure" loading="lazy">
-                </a>
-            </div>
-            {% endif %}
-
-            {% if variant.steps %}
-            <ol class="steppy-steps">
-                {% for step in variant.steps %}
-                {# Step numbers are the SCENARIO's and are sparse — a step skipped
-                   by only-in:/layouts: emits nothing. Rendered as-is, never
-                   renumbered, so "step 7" means step 7 of the markdown. #}
-                <li class="steppy-step" data-status="{{ step.status }}">
-                    <span class="steppy-step-num">{{ '%02d' | format(step.step) }}</span>
-                    <div class="steppy-step-body">
-                        <div class="steppy-step-title">{{ step.title or '(untitled step)' }}</div>
-                        <div class="steppy-step-facts">
-                            <span class="steppy-step-action">{{ step.action }}</span>
-                            <span>+{{ step.offset_ms | duration }}</span>
-                            {% if step.duration_ms is not none %}
-                            <span>took {{ step.duration_ms | duration }}</span>
-                            {% else %}
-                            <span>never finished</span>
-                            {% endif %}
-                        </div>
-                        {% if step.screenshots %}
-                        <div class="steppy-shots">
-                            {% for url in step.screenshots %}
-                            <a href="{{ root }}{{ url }}"><img src="{{ root }}{{ url }}" alt="Step {{ step.step }}" loading="lazy"></a>
-                            {% endfor %}
+                {% endmacro %}
+                {% macro line(l) %}
+                <div class="steppy-line">
+                    <span class="steppy-line-locale">{{ l.locale }}</span>
+                    {% for c in l.cells %}{{ cell(c) }}{% endfor %}
+                </div>
+                {% endmacro %}
+                <section class="steppy-report-section steppy-variants-grid" aria-labelledby="ui/variants">
+                    <div class="steppy-grid-top">
+                        <h2 id="ui/variants">Variants in this run</h2>
+                        <p class="steppy-label steppy-muted"><span class="steppy-where">{{ page.where }}</span> · {{ page.size }}</p>
+                        <p class="steppy-counts">{% for count in page.counts %}{{ chip(count.status, count.words) }}{% endfor %}</p>
+                    </div>
+                    <div class="steppy-grid-rows" style="--n:{{ page.columns | length }}">
+                        {% if view.has_layouts %}
+                        <div class="steppy-grid-head" aria-hidden="true">
+                            <span></span>
+                            {% for column in page.columns %}<span>{% if column.icon %}{{ icon(column.icon) }}{% endif %}<span>{{ column.label }}</span></span>{% endfor %}
                         </div>
                         {% endif %}
+                        {% for l in page.lines %}{{ line(l) }}{% endfor %}
+                        {% if page.folded %}
+                        <details class="steppy-fold">
+                            <summary>{{ icon('chevron') }}{{ icon('passed', size=14) }}<span>{{ page.fold_label }}</span></summary>
+                            {% for l in page.folded %}{{ line(l) }}{% endfor %}
+                        </details>
+                        {% endif %}
                     </div>
-                </li>
+                </section>
+                {% endif %}
+            </div>
+            <section class="steppy-scenario-variants" aria-labelledby="ui/steps">
+                <div class="steppy-section-head">
+                    <h2 id="ui/steps">Steps</h2>
+                    {% if page.has_marks %}{{ hide_target() }}{% endif %}
+                </div>
+                {% for v in page.variants %}
+                {# What #<scenario> opens: its first failing variant, else its first. #}
+                {% if v.anchor == page.first and not v.extra %}<span class="steppy-anchor" id="{{ links.anchor }}"></span>{% endif %}
+                {{ variant_card(v, root, large=true) }}
                 {% endfor %}
-            </ol>
-            {% endif %}
-
-            {% set _traces = variant.trace_paths or ([variant.trace_path] if variant.trace_path else []) %}
-            {% set _videos = variant.video_paths or ([variant.video_path] if variant.video_path else []) %}
-            {% if _traces or _videos %}
-            <p class="steppy-small steppy-muted">
-                {% if _traces %}
-                {{ "Traces" if _traces | length > 1 else "Trace" }} in the run at
-                {% for path in _traces %}<code>{{ path }}</code>{{ ", " if not loop.last }}{% endfor %}
-                (open with <code>playwright show-trace</code>).
-                {% endif %}
-                {% if _videos %}
-                {{ "Videos" if _videos | length > 1 else "Video" }} at
-                {% for path in _videos %}<code>{{ path }}</code>{{ ", " if not loop.last }}{% endfor %}.
-                {% endif %}
-            </p>
-            {% endif %}
-        </section>
-        {% endfor %}
+            </section>
+        </div>
+        {% endif %}
 
     </main>
 
     <footer class="steppy-report-footer">
-        <p><a href="{{ root }}index.html">&larr; All scenarios</a></p>
+        <p><a href="{{ root }}index.html">Back to the run report</a></p>
     </footer>
 </body>
 </html>

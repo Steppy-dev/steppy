@@ -2,8 +2,9 @@
 
 The renderer, and nothing else. It knows about Jinja and about which files a site
 has; it computes nothing — every number, label and URL was decided in
-:mod:`steppy.report.model` and :mod:`steppy.report.assets`. That split is what
-lets a control plane consume the model without importing a template engine.
+:mod:`steppy.report.model`, :mod:`steppy.report.view` and
+:mod:`steppy.report.assets`. That split is what lets a control plane consume the
+model without importing a template engine.
 
 **Two rules this module has to keep.**
 
@@ -35,6 +36,17 @@ SCENARIOS_DIRNAME = "scenarios"
 REPORT_JSON = "report.json"
 BADGE_JSON = "badge.json"
 CSS_NAME = "report.css"
+
+#: The brand faces and their licences, copied into every site: a report opens from a
+#: file, or behind a firewall, with no font service in reach. The stylesheet falls
+#: back to the system's fonts, so a missing file is not an error.
+FONTS_DIRNAME = "fonts"
+FONT_FILES = (
+    "bricolage-grotesque-latin.woff2",
+    "bricolage-grotesque-OFL.txt",
+    "jetbrains-mono-latin.woff2",
+    "jetbrains-mono-OFL.txt",
+)
 
 #: Present for the same reason ``steppy build`` emits it: GitHub Pages runs Jekyll
 #: by default, which silently drops files and directories beginning with ``_`` —
@@ -99,6 +111,10 @@ def format_filesize(size) -> str:
     return f"{size:.1f} GiB"  # pragma: no cover - unreachable, the loop returns
 
 
+# The three functions below fed the pages before 0.10. They stay in the templates'
+# context so that a project's own copy of an older page still renders.
+
+
 def variant_label(variant: ReportVariant) -> str:
     """``fr / mobile``, ``fr``, or ``default`` — never an empty heading."""
     parts = [p for p in (variant.locale, variant.layout) if p]
@@ -153,12 +169,20 @@ def render_site(
     templates_dir: Optional[Path] = None,
     project_root: Optional[Path] = None,
     dry_run: bool = False,
+    sizes: Optional[dict[str, tuple[int, int]]] = None,
 ) -> RenderResult:
-    """Write every page, stylesheet and data file of the site."""
+    """Write every page, stylesheet, font and data file of the site.
+
+    ``sizes`` is ``{url: (width, height)}`` of the captures, in the images' own
+    pixels (:func:`steppy.report.assets.image_sizes`): what places a click hotspot
+    on its image. A capture without one shows without its outline.
+    """
     from .model import scenario_href
+    from .view import build_view
 
     env = make_env(templates_dir, project_root)
     result = RenderResult()
+    view = build_view(report, sizes=sizes)
 
     def write(rel: str, content: str) -> None:
         _write(site_dir / rel, content, result, dry_run, site_dir=site_dir)
@@ -168,6 +192,8 @@ def render_site(
         "index.html",
         env.get_template("report/index.html.j2").render(
             report=report,
+            view=view,
+            links=view.links(),
             title=title,
             page_title=title,
             root="",
@@ -178,7 +204,7 @@ def render_site(
     )
 
     scenario_template = env.get_template("report/scenario.html.j2")
-    for scenario in report.scenarios:
+    for scenario, page in zip(report.scenarios, view.scenarios):
         write(
             # ``scenario_href`` decides the link AND the filename — one definition,
             # and it sanitises, because a slug from a downloaded manifest decides a
@@ -187,6 +213,9 @@ def render_site(
             scenario_template.render(
                 report=report,
                 scenario=scenario,
+                view=view,
+                page=page,
+                links=view.scenario_links(page),
                 title=title,
                 page_title=f"{scenario.slug} — {title}",
                 # One level deep, so ``../`` is the site root.
@@ -199,6 +228,8 @@ def render_site(
         write(
             "coverage.html",
             env.get_template("report/coverage.html.j2").render(
+                report=report,
+                view=view,
                 coverage=_coverage_context(report),
                 bucket=_bucket_getter(report),
                 title=title,
@@ -211,11 +242,29 @@ def render_site(
     # Through the loader, so a project override at templates/report/report.css wins
     # by the same precedence rule as every other template.
     write(f"assets/{CSS_NAME}", env.get_template("report/report.css").render())
+    for name, source in _font_files(templates_dir, project_root):
+        _write_bytes(
+            site_dir / "assets" / FONTS_DIRNAME / name, source.read_bytes(), result, dry_run, site_dir=site_dir
+        )
 
     write(REPORT_JSON, report_bytes(report).decode("utf-8"))
     write(NOJEKYLL, "")
     write("robots.txt", _ROBOTS)
     return result
+
+
+def _font_files(templates_dir: Optional[Path], project_root: Optional[Path]) -> list[tuple[str, Path]]:
+    """``[(name, file)]``, each found by the templates' own precedence rule."""
+    from .._templating import template_search_paths
+
+    found = []
+    for name in FONT_FILES:
+        for root in template_search_paths(templates_dir, project_root):
+            candidate = root / "report" / FONTS_DIRNAME / name
+            if candidate.is_file():
+                found.append((name, candidate))
+                break
+    return found
 
 
 def _coverage_context(report: ReportModel):
@@ -271,7 +320,12 @@ def _badge_json(report: ReportModel) -> str:
 
 
 def _write(path: Path, content: str, result: RenderResult, dry_run: bool, *, site_dir: Path) -> None:
-    """Write *content*, recording what happened under its site-relative key.
+    """Write *content* as UTF-8, with the line ends it has, whatever the platform."""
+    _write_bytes(path, content.encode("utf-8", errors="replace"), result, dry_run, site_dir=site_dir)
+
+
+def _write_bytes(path: Path, data: bytes, result: RenderResult, dry_run: bool, *, site_dir: Path) -> None:
+    """Write *data*, recording what happened under its site-relative key.
 
     Same shape and vocabulary as ``build.BuildAssembler._write_file`` — including
     ``unchanged`` — so the CLI summary reads identically for both commands. The key
@@ -285,15 +339,15 @@ def _write(path: Path, content: str, result: RenderResult, dry_run: bool, *, sit
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         try:
-            if path.read_text(encoding="utf-8") == content:
+            if path.read_bytes() == data:
                 result.files[key] = "unchanged"
                 return
-        except (OSError, UnicodeDecodeError):
+        except OSError:
             pass
         result.files[key] = "updated"
     else:
         result.files[key] = "generated"
-    path.write_text(content, encoding="utf-8", newline="\n")
+    path.write_bytes(data)
 
 
 def _site_key(path: Path, site_dir: Path) -> str:

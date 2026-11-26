@@ -1,8 +1,8 @@
-/* Steppy run report.
+/* Steppy run report, in Steppy Cloud's design.
  *
- * Deliberately NOT templates/static/guides.css. That file is 641 lines of
- * guide-site chrome plus the @media print rules that ARE the PDF layout; a run
- * report inherits none of it and would only be at risk from changes to it.
+ * Deliberately NOT templates/static/guides.css. That file is guide-site chrome plus
+ * the @media print rules that ARE the PDF layout; a run report inherits none of it and
+ * would only be at risk from changes to it.
  *
  * This file is loaded through the Jinja loader (so a project can override it at
  * templates/report/report.css and get the same three-rung precedence as every
@@ -15,31 +15,78 @@
  *   2. The report's environment has autoescape ON, so a value interpolated here
  *      would come out HTML-escaped. Use CSS custom properties instead; there is
  *      nothing this file needs from Python.
- */
+ *
+ * Nothing here comes from a network: the two faces are files beside this one, under
+ * the SIL Open Font License (their texts are there too), and the system's fonts stand
+ * in where a browser does not load a font from a file. */
 
-/* Brand palette (Pin #15332A, Lichen #E4E9E1, Balise #D2561A, Granite #5B6B64).
- * Balise as-is is 4.0:1 on the light ground, below AA for link text, so links
- * use a deepened Balise in light mode and a lightened one in dark mode; the
- * unaltered Balise appears only in the mark, where 3:1 is the bar. The status
- * colours below are deliberately NOT brand colours: an orange that reads as
- * brand must never be mistaken for fail or warn. */
+@font-face {
+    font-family: "Bricolage Grotesque";
+    font-style: normal;
+    font-display: swap;
+    font-weight: 200 800;
+    src: url("fonts/bricolage-grotesque-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-display: swap;
+    font-weight: 100 800;
+    src: url("fonts/jetbrains-mono-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* The design tokens: a well-marked trail. Quiet Lichen ground, Pin ink, and one Balise
+ * marker that means "you are here" (focus, the linked step, the target on a
+ * screenshot). Balise is a graphic, never text: 4.1:1 on white. Links are ink with an
+ * underline. The statuses keep colours of their own, always with an icon and a word,
+ * so the brand's orange is never read as a warning and its green never as "passed". */
 :root {
-    --bg: #e4e9e1;
-    --surface: #fbfcfa;
+    color-scheme: light;
+
+    /* Surfaces */
+    --bg: #f6f8f4;
+    --surface: #ffffff;
+    --chrome: #edf1ea;
+    --highlight: #e1ede5;
     --border: #c9d3cb;
+    --border-strong: #859389;
+
+    /* Text */
     --text: #15332a;
-    --muted: #5b6b64;
-    --accent: #a8410e;
-    --brand-check: #d2561a;
-    --pass: #1a7f45;
+    --text-muted: #5b6b64;
+    --link: #15332a;
+
+    /* Graphics only */
+    --marker: #d2561a;
+    --logo-check: #d2561a;
+
+    /* Status: foreground and ground */
+    --pass: #16733f;
     --pass-bg: #e6f4ec;
     --fail: #c02b2b;
     --fail-bg: #fdeaea;
-    --warn: #9a6200;
-    --warn-bg: #fdf3e0;
-    --neutral-bg: #dce3da;
-    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-    --radius: 8px;
+    --flaky: #9a6200;
+    --flaky-bg: #fdf3e0;
+    --neutral: #5b6b64;
+    --neutral-bg: #e4e9e1;
+
+    /* Type */
+    --font-sans: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    /* Shape */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+
+    /* Motion */
+    --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+    --dur-base: 200ms;
+
+    --content-max: 1152px;
 }
 
 /* The dark palette, defined once and applied from two places.
@@ -58,344 +105,801 @@
  * other theme's ground. */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
+        color-scheme: dark;
         --bg: #0e231c;
         --surface: #15332a;
+        --chrome: #1a3d32;
+        --highlight: #22493c;
         --border: #2b4a40;
+        --border-strong: #6b8c7f;
         --text: #e4e9e1;
-        --muted: #a9b5ac;
-        --accent: #f09a6a;
+        --text-muted: #a9b5ac;
+        --link: #e4e9e1;
+        --marker: #f09a6a;
         --pass: #58c98a;
         --pass-bg: #16301f;
         --fail: #ff8a8a;
         --fail-bg: #3a1c1c;
-        --warn: #e0b055;
-        --warn-bg: #33280f;
+        --flaky: #e0b055;
+        --flaky-bg: #33280f;
+        --neutral: #a9b5ac;
         --neutral-bg: #1f3d33;
     }
 }
 
 :root[data-theme="dark"] {
+    color-scheme: dark;
     --bg: #0e231c;
     --surface: #15332a;
+    --chrome: #1a3d32;
+    --highlight: #22493c;
     --border: #2b4a40;
+    --border-strong: #6b8c7f;
     --text: #e4e9e1;
-    --muted: #a9b5ac;
-    --accent: #f09a6a;
+    --text-muted: #a9b5ac;
+    --link: #e4e9e1;
+    --marker: #f09a6a;
     --pass: #58c98a;
     --pass-bg: #16301f;
     --fail: #ff8a8a;
     --fail-bg: #3a1c1c;
-    --warn: #e0b055;
-    --warn-bg: #33280f;
+    --flaky: #e0b055;
+    --flaky-bg: #33280f;
+    --neutral: #a9b5ac;
     --neutral-bg: #1f3d33;
 }
 
-* { box-sizing: border-box; }
+/* ── ground ────────────────────────────────────────────────────────────── */
+
+*, ::before, ::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
 body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font: 400 15px/24px var(--font-sans);
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--accent); }
+h1, h2, h3, h4, p, ul, ol, figure, pre, fieldset { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+fieldset { border: 0; min-width: 0; }
+summary { cursor: pointer; list-style: none; }
+summary::-webkit-details-marker { display: none; }
 
-/* A report is a lot of links — every scenario name, every slug under a failure
- * cause. Keyboard focus needs to be visible against either ground, so it is
- * drawn from the token set like everything else. */
-:where(a, button, summary):focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 3px;
+/* Ink, underlined in the control border; 2px on hover. The underline is what tells a
+ * link apart (WCAG 1.4.1), so a link in running text keeps it. */
+a {
+    color: var(--link);
+    text-decoration: underline;
+    text-decoration-color: var(--border-strong);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
 }
 
-.steppy-report-header {
+a:hover { text-decoration-color: currentColor; text-decoration-thickness: 2px; }
+
+/* The marker ring on everything interactive. */
+:focus-visible { outline: 2px solid var(--marker); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+code, pre, .steppy-mono, .steppy-code { font-family: var(--font-mono); }
+code { font-size: .93em; }
+.steppy-code { font-size: 12px; line-height: 16px; color: var(--text); overflow-wrap: anywhere; }
+
+.steppy-muted { color: var(--text-muted); }
+.steppy-small { font-size: 14px; line-height: 20px; }
+.steppy-label { font-size: 13px; line-height: 18px; }
+.steppy-label-strong { font-size: 13px; line-height: 18px; font-weight: 600; }
+.steppy-caption { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-muted); }
+.steppy-strong { font-weight: 500; }
+
+/* For a screen reader only. */
+.steppy-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.steppy-sprite { position: absolute; width: 0; height: 0; }
+
+.steppy-icon {
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: -2px;
+}
+
+.steppy-icon--passed { color: var(--pass); }
+.steppy-icon--failed,
+.steppy-icon--error,
+.steppy-icon--interrupted,
+.steppy-icon--worker_died { color: var(--fail); }
+.steppy-icon--flaky { color: var(--flaky); }
+.steppy-icon--skipped,
+.steppy-icon--not_run,
+.steppy-icon--unknown { color: var(--neutral); }
+
+/* ── shell ─────────────────────────────────────────────────────────────── */
+
+.steppy-topbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 24px;
+    min-height: 56px;
+    padding: 8px 24px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
-    padding: 18px 24px;
 }
 
-.steppy-report-header h1 {
-    display: flex;
+.steppy-brand {
+    display: inline-flex;
     align-items: center;
-    gap: 10px;
-    margin: 0 0 4px;
-    font-size: 20px;
+    gap: 9px;
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
 }
 
 /* The steppy mark: brackets in the text colour, the check in Balise. Drawn
  * inline (not an <img>) so the brackets follow the theme without a second file. */
-.steppy-mark {
-    flex: none;
-    width: 28px;
-    height: 28px;
+.steppy-mark { flex: none; width: 28px; height: 28px; }
+.steppy-mark .steppy-mark-brackets { stroke: var(--text); }
+.steppy-mark .steppy-mark-check { stroke: var(--logo-check); }
+
+.steppy-topnav { display: flex; gap: 4px; }
+
+.steppy-topnav a {
+    position: relative;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-decoration: none;
 }
 
-.steppy-mark .steppy-mark-brackets { stroke: var(--text); }
-.steppy-mark .steppy-mark-check { stroke: var(--brand-check); }
+.steppy-topnav a:hover { background: var(--chrome); color: var(--text); }
+.steppy-topnav a[aria-current] { color: var(--text); }
+
+/* You are here. */
+.steppy-topnav a[aria-current]::after {
+    content: "";
+    position: absolute;
+    inset: auto 12px 2px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--marker);
+}
 
 .steppy-report-main {
-    max-width: 1080px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: var(--content-max);
     margin: 0 auto;
     padding: 24px;
 }
 
 .steppy-report-section {
+    min-width: 0;
+    padding: 24px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px 20px;
-    margin-bottom: 20px;
+    border-radius: var(--radius-lg);
 }
 
-.steppy-report-section > h2 {
-    margin: 0 0 12px;
-    font-size: 16px;
+.steppy-section-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
 }
+
+.steppy-report-main h2 { font-size: 22px; line-height: 30px; font-weight: 600; }
+.steppy-report-main h3 { font-size: 18px; line-height: 26px; font-weight: 600; }
+
+.steppy-report-footer {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: 0 24px 32px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.steppy-report-footer p + p { margin-top: 4px; }
+
+.steppy-crumbs ol { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 13px; line-height: 18px; color: var(--text-muted); }
+.steppy-crumbs li + li::before { content: "/"; margin-right: 6px; }
+.steppy-crumbs a { color: var(--text-muted); }
+.steppy-crumbs [aria-current] { color: var(--text); overflow-wrap: anywhere; }
+
+/* ── the run ───────────────────────────────────────────────────────────── */
+
+.steppy-report-header { display: flex; flex-direction: column; gap: 14px; }
+.steppy-report-header h1 { font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text-muted); overflow-wrap: anywhere; }
+.steppy-report-header h1 .steppy-mono { font-size: 13px; font-weight: 400; }
+
+.steppy-verdict {
+    margin-top: -8px;
+    font-size: 36px;
+    line-height: 44px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+}
+
+.steppy-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.steppy-counts-of { font-size: 14px; line-height: 20px; color: var(--text-muted); }
 
 .steppy-report-meta {
     display: flex;
     flex-wrap: wrap;
     gap: 6px 18px;
-    margin: 0;
-    color: var(--muted);
     font-size: 13px;
+    line-height: 18px;
+    color: var(--text-muted);
 }
 
-.steppy-report-meta div { display: flex; gap: 6px; }
-.steppy-report-meta dt { font-weight: 600; }
-.steppy-report-meta dd { margin: 0; }
+.steppy-report-meta > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; }
+.steppy-report-meta > span > .steppy-sr { position: absolute; }
 
-/* ── outcome chips ─────────────────────────────────────────────────────── */
-
+/* A status: an icon and a word on its tint. */
 .steppy-chip {
-    display: inline-block;
-    padding: 1px 8px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 600;
-    background: var(--neutral-bg);
-    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px 3px 7px;
+    border-radius: var(--radius-sm);
+    background: var(--fail-bg);
+    color: var(--fail);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
+.steppy-chip .steppy-icon { color: inherit; }
 .steppy-chip[data-outcome="passed"] { background: var(--pass-bg); color: var(--pass); }
-.steppy-chip[data-outcome="skipped"] { background: var(--neutral-bg); color: var(--muted); }
-.steppy-chip[data-outcome="failed"],
-.steppy-chip[data-outcome="error"],
-.steppy-chip[data-outcome="worker_died"] { background: var(--fail-bg); color: var(--fail); }
-.steppy-chip[data-outcome="interrupted"],
-.steppy-chip[data-outcome="unknown"] { background: var(--warn-bg); color: var(--warn); }
+.steppy-chip[data-outcome="flaky"] { background: var(--flaky-bg); color: var(--flaky); }
+.steppy-chip[data-outcome="skipped"],
+.steppy-chip[data-outcome="not_run"],
+.steppy-chip[data-outcome="unknown"] { background: var(--neutral-bg); color: var(--neutral); }
 
-.steppy-verdict {
-    font-size: 22px;
-    font-weight: 700;
+/* The quiet outlined tag: "PR #57", "staging", "failed here". Never a status. */
+.steppy-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
 }
-.steppy-verdict[data-outcome="passed"] { color: var(--pass); }
-.steppy-verdict[data-outcome="failed"],
-.steppy-verdict[data-outcome="error"],
-.steppy-verdict[data-outcome="worker_died"] { color: var(--fail); }
 
-.steppy-counts {
+.steppy-tag--fail { border-color: var(--fail); color: var(--text); }
+
+.steppy-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+a.steppy-button:hover { background: var(--chrome); }
+.steppy-button[aria-disabled] { border-color: var(--border); color: var(--text-muted); opacity: .7; }
+
+/* ── notices ───────────────────────────────────────────────────────────── */
+
+.steppy-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.steppy-notice[hidden] { display: none; }
+.steppy-notice > .steppy-icon { margin-top: 2px; color: var(--neutral); }
+.steppy-notice > .steppy-icon--flaky { color: var(--flaky); }
+.steppy-notice > :last-child { min-width: 0; overflow-wrap: anywhere; }
+.steppy-notice-title { font-weight: 600; }
+.steppy-notice ul { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; color: var(--text-muted); }
+#ui\/link-notice { scroll-margin-top: 20px; }
+
+/* ── failure causes ────────────────────────────────────────────────────── */
+
+.steppy-causes { display: flex; flex-direction: column; gap: 16px; }
+
+.steppy-cause {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px 28px;
+    align-items: start;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg);
+    scroll-margin-top: 20px;
+}
+
+.steppy-cause[data-shots] { grid-template-columns: minmax(0, 1fr) auto; }
+.steppy-cause:target { box-shadow: inset 3px 0 0 var(--marker); }
+
+.steppy-cause-text { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.steppy-report-main .steppy-cause-headline { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 22px; font-weight: 500; }
+.steppy-cause-headline .steppy-icon { margin-top: 3px; }
+.steppy-cause-headline code { font-size: 14px; overflow-wrap: anywhere; }
+.steppy-fingerprint { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); }
+
+.steppy-groups > li { border-top: 1px solid var(--border); }
+.steppy-groups > li:first-child { border-top: 0; }
+
+.steppy-group > summary {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    align-items: start;
+    padding: 10px 4px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.steppy-group > summary:hover, .steppy-fold > summary:hover { background: var(--chrome); }
+.steppy-group > summary .steppy-label { line-height: 20px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.steppy-group > summary .steppy-icon { margin-top: 2px; }
+
+.steppy-icon--chevron { color: var(--text); transition: transform var(--dur-base) var(--ease); }
+details[open] > summary .steppy-icon--chevron { transform: rotate(90deg); }
+
+.steppy-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 4px 12px 30px; }
+
+.steppy-variant-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    font-size: 13px;
+    line-height: 18px;
+    text-decoration: none;
+}
+
+.steppy-variant-chip:hover { border-color: var(--border-strong); }
+
+.steppy-more > summary {
+    display: inline-flex;
+    padding: 6px 10px;
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+}
+
+.steppy-more > summary:hover { background: var(--chrome); color: var(--text); }
+.steppy-more > .steppy-tail { margin-top: 8px; }
+
+.steppy-cause-shots { display: flex; flex-direction: column; gap: 8px; }
+.steppy-cause-shots > div { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+.steppy-cause-shot { display: flex; flex-direction: column; gap: 6px; }
+.steppy-cause-image { display: block; width: 140px; max-height: 320px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.steppy-cause-shots[data-count="1"] .steppy-cause-image { width: 180px; }
+
+pre.steppy-tail {
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    background: var(--chrome);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.steppy-tail-block { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+/* ── the matrix ────────────────────────────────────────────────────────── */
+
+.steppy-report-section.steppy-matrix { padding: 0; overflow: hidden; }
+.steppy-matrix-top { display: flex; flex-direction: column; gap: 12px; padding: 20px 20px 14px; }
+
+/* Two radio buttons, drawn as one control where the stylesheet can read them. Without
+ * that they stay what they are, and every scenario shows. */
+.steppy-segments { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.steppy-segments label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+@supports selector(:has(*)) {
+    .steppy-segments { align-self: flex-start; gap: 2px; padding: 2px; border-radius: 8px; background: var(--chrome); }
+    .steppy-segments label { position: relative; padding: 8px 12px; border-radius: 8px; color: var(--text-muted); font-weight: 500; }
+    .steppy-segments label:hover { color: var(--text); }
+    .steppy-segments label:has(:checked) { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border); }
+    .steppy-segments label:has(:focus-visible) { outline: 2px solid var(--marker); outline-offset: 2px; }
+    .steppy-segments input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .steppy-matrix:has([value="not"]:checked) [data-passing] { display: none; }
+    .steppy-matrix:has([value="all"]:checked) :is(.steppy-matrix-more, .steppy-matrix-passing) { display: none; }
+}
+
+@supports not selector(:has(*)) {
+    .steppy-segments, .steppy-matrix-more, .steppy-matrix-passing { display: none; }
+}
+
+/* Past the width a run's layouts fit in, the table scrolls inside itself, never the page. */
+.steppy-matrix-grid { position: relative; overflow-x: auto; }
+
+.steppy-matrix-head, .steppy-row > summary, .steppy-row-line, .steppy-lines .steppy-line {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) repeat(var(--n), minmax(84px, 120px));
+    min-width: calc(160px + var(--n) * 92px);
+    align-items: center;
+    gap: 4px 8px;
+    padding: 6px 20px 6px 12px;
+}
+
+.steppy-matrix-head { padding-block: 8px; border-top: 1px solid var(--border); font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-muted); }
+.steppy-matrix-head > span:first-child { padding-left: 40px; }
+.steppy-matrix-head > span + span { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; text-align: center; overflow-wrap: anywhere; }
+
+.steppy-row { border-top: 1px solid var(--border); }
+.steppy-row > summary, .steppy-row-line { min-height: 56px; }
+.steppy-row > summary:hover { background: var(--chrome); }
+.steppy-row > summary:focus-visible { outline-offset: -2px; }
+
+.steppy-row-name { display: flex; align-items: flex-start; gap: 8px; min-width: 0; padding-left: 8px; }
+.steppy-row-name > .steppy-icon { margin: 2px 8px 0 0; }
+.steppy-row-name > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.steppy-row-line .steppy-row-name { padding-left: 40px; }
+.steppy-row-slug { font-family: var(--font-mono); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.steppy-row-where { font-size: 13px; line-height: 18px; color: var(--text-muted); }
+
+.steppy-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+}
+
+a.steppy-cell:hover { border-color: var(--border-strong); background: var(--surface); }
+.steppy-cell[data-outcome="not_run"] { color: var(--text-muted); }
+.steppy-cell-layout { display: none; }
+
+.steppy-lines { padding: 6px 0 10px; border-top: 1px solid var(--border); background: var(--bg); }
+.steppy-lines .steppy-line { padding-block: 2px; }
+.steppy-lines .steppy-line-locale { padding-left: 40px; }
+.steppy-line-locale { font-family: var(--font-mono); font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.steppy-lines .steppy-cell { min-height: 36px; border-color: var(--border); background: var(--surface); }
+.steppy-lines-end { padding: 8px 20px 0 52px; font-size: 13px; line-height: 18px; }
+
+.steppy-fold > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 12px 2px 52px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 18px;
+}
+
+.steppy-matrix-empty { padding: 18px 20px; border-top: 1px solid var(--border); color: var(--text-muted); }
+.steppy-matrix-more { padding: 10px 12px; border-top: 1px solid var(--border); }
+.steppy-matrix-more label { display: inline-flex; padding: 6px 12px; border-radius: var(--radius-md); font-weight: 500; cursor: pointer; }
+.steppy-matrix-more label:hover { background: var(--chrome); }
+
+/* ── a variant and its steps ───────────────────────────────────────────── */
+
+.steppy-variant { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 20px; }
+.steppy-variant:target { box-shadow: inset 3px 0 0 var(--marker); }
+
+.steppy-variant-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.steppy-variant-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.steppy-report-main .steppy-variant-name h2,
+.steppy-report-main .steppy-variant-name h3 { font-size: 18px; line-height: 26px; font-weight: 600; overflow-wrap: anywhere; }
+.steppy-variant-name .steppy-mono { font-size: 16px; }
+
+.steppy-copy-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin: -3px 0 -3px 4px;
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    vertical-align: middle;
+}
+
+.steppy-copy-link:hover { background: var(--chrome); color: var(--text); }
+
+/* A step's link shows on hover and on focus, and always where there is no hover. */
+@media (hover: hover) {
+    .steppy-step .steppy-copy-link { opacity: 0; }
+    .steppy-step:hover .steppy-copy-link, .steppy-step:target .steppy-copy-link, .steppy-copy-link:focus-visible { opacity: 1; }
+}
+
+.steppy-walk {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px 20px;
-    align-items: baseline;
-    margin: 0 0 6px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 12px;
+    padding: 8px 8px 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    font-size: 14px;
+    line-height: 20px;
+    font-variant-numeric: tabular-nums;
 }
 
-/* ── tables ────────────────────────────────────────────────────────────── */
+.steppy-walk-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.steppy-variant-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.steppy-variant-body[data-aside] { grid-template-columns: minmax(0, 1fr) 280px; }
+.steppy-variant-steps { min-width: 0; }
+.steppy-variant-aside { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.steppy-steps-end { padding-top: 10px; border-top: 1px solid var(--border); }
+.steppy-why { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+
+.steppy-step {
+    display: grid;
+    grid-template-columns: 20px 24px minmax(0, 1fr) auto;
+    gap: 2px 10px;
+    align-items: start;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: 35vh;
+}
+
+.steppy-step:first-child { border-top: 0; }
+
+/* The step a link names: the selection's tint, and the marker on its edge. */
+.steppy-step:target { margin-inline: -8px; padding-inline: 8px; border-radius: var(--radius-md); background: var(--highlight); box-shadow: inset 3px 0 0 var(--marker); }
+
+.steppy-step-icon { padding-top: 2px; line-height: 16px; }
+.steppy-step-num { text-align: right; font-size: 13px; line-height: 20px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.steppy-step-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.steppy-step-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; line-height: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.steppy-step-action { font-size: 12px; line-height: 18px; color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* ── screenshots and click targets ─────────────────────────────────────── */
+
+/* Exactly the image's box, so an outline in percent of it stays on its target. */
+.steppy-shot { position: relative; display: block; }
+.steppy-shot img { display: block; width: 100%; height: auto; }
+.steppy-marks { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+
+/* Just outside the box (content-box, a negative margin), so it covers none of it. */
+.steppy-mark-box {
+    position: absolute;
+    box-sizing: content-box;
+    margin: -1px;
+    border: 1px solid var(--marker);
+    border-radius: 2px;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--marker) 28%, transparent);
+}
+
+.steppy-hide-target { display: none; align-items: center; gap: 6px; padding: 8px 6px; font-size: 13px; line-height: 18px; font-weight: 500; cursor: pointer; }
+.steppy-hide-target input { width: 16px; height: 16px; margin: 0; accent-color: var(--text); cursor: pointer; }
+
+@supports selector(:has(*)) {
+    .steppy-hide-target { display: inline-flex; }
+    body:has(.steppy-hide-target :checked) .steppy-marks { display: none; }
+}
+
+.steppy-thumb { display: block; width: 40px; max-height: 87px; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; }
+.steppy-failure { display: flex; flex-direction: column; gap: 8px; }
+.steppy-failure-shot { display: block; width: 220px; max-width: 100%; max-height: 480px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); }
+
+/* ── a scenario's page ─────────────────────────────────────────────────── */
+
+.steppy-scenario-head { display: flex; flex-direction: column; gap: 8px; }
+.steppy-scenario-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.steppy-scenario-title h1 { font-size: 28px; line-height: 36px; font-weight: 600; overflow-wrap: anywhere; }
+
+.steppy-scenario { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px 24px; align-items: start; }
+.steppy-scenario-side:empty { display: none; }
+.steppy-scenario-variants { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.steppy-scenario-variants > .steppy-section-head { min-height: 34px; }
+.steppy-report-main .steppy-scenario h2 { font-size: 18px; line-height: 26px; }
+.steppy-anchor { display: block; height: 0; margin-bottom: -20px; scroll-margin-top: 20px; }
+
+.steppy-report-section.steppy-variants-grid { padding: 0; overflow: hidden; }
+.steppy-grid-top { display: flex; flex-direction: column; gap: 6px; padding: 16px 20px 10px; }
+.steppy-where { font-weight: 500; color: var(--text); }
+.steppy-grid-rows { position: relative; padding: 4px 12px 12px; overflow-x: auto; }
+
+.steppy-grid-head, .steppy-grid-rows .steppy-line {
+    display: grid;
+    grid-template-columns: 76px repeat(var(--n), minmax(84px, 1fr));
+    min-width: calc(76px + var(--n) * 88px);
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+}
+
+.steppy-grid-head { padding-bottom: 6px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-muted); }
+.steppy-grid-head > span { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; text-align: center; overflow-wrap: anywhere; }
+.steppy-grid-rows .steppy-line-locale { padding-left: 8px; }
+.steppy-grid-rows .steppy-cell { min-height: 36px; gap: 4px; padding: 0 4px; white-space: nowrap; }
+.steppy-grid-rows .steppy-cell[data-outcome="passed"] { color: var(--pass); }
+.steppy-grid-rows .steppy-cell[data-outcome="failed"] { color: var(--fail); }
+.steppy-grid-rows .steppy-cell[data-outcome="flaky"] { color: var(--flaky); }
+.steppy-grid-rows .steppy-fold > summary { margin: 6px 0 2px; }
+
+@media (min-width: 1100px) {
+    .steppy-scenario[data-grid] { grid-template-columns: minmax(0, 1fr) 340px; }
+    .steppy-scenario[data-grid] .steppy-scenario-side { grid-column: 2; grid-row: 1; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .steppy-scenario[data-grid] .steppy-scenario-variants { grid-column: 1; grid-row: 1; }
+}
+
+.steppy-step--large { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 6px 16px; padding: 16px 0; scroll-margin-top: 20vh; }
+
+.steppy-step-badge {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--surface);
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.steppy-step[data-status="failed"] .steppy-step-badge { border-color: var(--fail); color: var(--fail); }
+.steppy-step--large .steppy-step-body { gap: 6px; padding-top: 2px; align-items: flex-start; }
+.steppy-step--large h4 { font-size: 15px; line-height: 24px; font-weight: 600; }
+.steppy-step-facts { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; line-height: 20px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.steppy-step-facts .steppy-step-action { font-size: 13px; line-height: 20px; }
+.steppy-step-outcome { display: inline-flex; align-items: center; gap: 6px; color: var(--pass); font-size: 13px; line-height: 18px; font-weight: 500; }
+.steppy-step-error { grid-column: 2; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+.steppy-frames { display: flex; flex-direction: column; gap: 10px; }
+.steppy-step--large > .steppy-frames { grid-column: 3; grid-row: 1 / span 2; }
+.steppy-frame { display: flex; flex-direction: column; gap: 6px; }
+.steppy-frame figcaption { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-muted); }
+.steppy-frame-link { display: block; border-radius: var(--radius-md); }
+
+/* The frame holds the whole image, scaled to fit and never above its own size. */
+.steppy-frame-box {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    width: 240px;
+    height: 150px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+}
+
+.steppy-frame-box img:not([width]) { width: auto; max-width: 100%; max-height: 206px; }
+[data-frame="phone"] .steppy-frame-box { width: 96px; height: 208px; }
+[data-frame="tablet"] .steppy-frame-box { width: 150px; height: 208px; }
+
+.steppy-nodeid { font-family: var(--font-mono); font-size: 12px; line-height: 16px; color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* ── coverage and tables ───────────────────────────────────────────────── */
+
+.steppy-block > * + * { margin-top: 12px; }
+
+.steppy-report-main .steppy-block > h3 { font-size: 15px; line-height: 24px; }
+
+.steppy-badge-line { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.steppy-pct { font-size: 28px; line-height: 36px; font-weight: 700; }
+
+.steppy-scroll { overflow-x: auto; }
 
 .steppy-report-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 14px;
+    line-height: 20px;
     /* Counts and sizes sit in columns and get compared down the column, so the
      * digits have to share a width. */
     font-variant-numeric: tabular-nums;
 }
 
 .steppy-report-table th,
-.steppy-report-table td {
-    text-align: left;
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-}
-
-.steppy-report-table th {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    color: var(--muted);
-}
-
+.steppy-report-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.steppy-report-table th { font-size: 12px; line-height: 16px; font-weight: 500; color: var(--text-muted); }
 .steppy-report-table tr:last-child td { border-bottom: 0; }
 
-.steppy-scroll {
-    overflow-x: auto;
+/* ── small screens ─────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+    .steppy-cause[data-shots], .steppy-variant-body[data-aside] { grid-template-columns: minmax(0, 1fr); }
 }
-
-/* ── failure causes ────────────────────────────────────────────────────── */
-
-.steppy-cause {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 12px 14px;
-    margin-bottom: 12px;
-}
-
-.steppy-cause-head {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: baseline;
-}
-
-.steppy-cause-count {
-    font-weight: 700;
-    color: var(--fail);
-}
-
-.steppy-cause-headline {
-    font-family: var(--mono);
-    font-size: 13px;
-    word-break: break-word;
-}
-
-.steppy-fingerprint {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-}
-
-pre.steppy-tail {
-    margin: 10px 0 0;
-    padding: 10px 12px;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow-x: auto;
-    font-family: var(--mono);
-    font-size: 12.5px;
-    line-height: 1.45;
-    white-space: pre;
-}
-
-/* ── steps ─────────────────────────────────────────────────────────────── */
-
-.steppy-steps { list-style: none; margin: 0; padding: 0; }
-
-.steppy-step {
-    display: flex;
-    gap: 12px;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-}
-
-.steppy-step:last-child { border-bottom: 0; }
-
-.steppy-step-num {
-    flex: 0 0 3.2em;
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--muted);
-}
-
-.steppy-step[data-status="running"] .steppy-step-num { color: var(--fail); font-weight: 700; }
-
-.steppy-step-body { flex: 1 1 auto; min-width: 0; }
-.steppy-step-title { font-weight: 600; }
-
-.steppy-step-facts {
-    color: var(--muted);
-    font-size: 12.5px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 14px;
-}
-
-.steppy-step-action { font-family: var(--mono); }
-
-.steppy-shots {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
-}
-
-/* width:auto + max-width:100% renders at min(intrinsic, container), which is the
- * same rule the guide stage uses: it respects a dense capture's real pixels and
- * never upscales a low-res one. */
-.steppy-shots img {
-    width: auto;
-    max-width: 100%;
-    max-height: 420px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-}
-
-.steppy-variant {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    margin-bottom: 16px;
-}
-
-.steppy-variant-head {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: baseline;
-    margin-bottom: 8px;
-}
-
-.steppy-variant-head h3 { margin: 0; font-size: 15px; }
-
-.steppy-nodeid {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--muted);
-    word-break: break-all;
-}
-
-/* ── notices ───────────────────────────────────────────────────────────── */
-
-.steppy-notice {
-    border-left: 3px solid var(--warn);
-    background: var(--warn-bg);
-    color: var(--warn);
-    padding: 10px 14px;
-    border-radius: 4px;
-    margin-bottom: 14px;
-    font-size: 13.5px;
-}
-
-.steppy-notice ul { margin: 6px 0 0; padding-left: 18px; }
-
-.steppy-muted { color: var(--muted); }
-.steppy-small { font-size: 13px; }
-
-.steppy-report-footer {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 0 24px 32px;
-    color: var(--muted);
-    font-size: 12.5px;
-}
-
-.steppy-badge-line {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: baseline;
-}
-
-.steppy-pct { font-size: 26px; font-weight: 700; }
 
 @media (max-width: 640px) {
-    .steppy-report-main { padding: 14px; }
-    .steppy-report-section { padding: 14px; }
+    .steppy-topbar { padding-inline: 16px; }
+    .steppy-report-main { padding: 16px; }
+    .steppy-report-footer { padding-inline: 16px; }
+    .steppy-report-section { padding: 16px; }
+    .steppy-cause { padding: 14px; }
+    .steppy-verdict { font-size: 28px; line-height: 36px; }
+    .steppy-scenario-title h1 { font-size: 22px; line-height: 30px; }
+    .steppy-matrix-top { padding-inline: 16px; }
+
+    /* The matrix: the name on its own line, then one cell per layout, each naming it. */
+    .steppy-matrix-head { display: none; }
+    .steppy-row > summary, .steppy-row-line { grid-template-columns: repeat(var(--n), minmax(60px, 1fr)); min-width: calc(24px + var(--n) * 66px); gap: 6px; padding: 10px 12px; }
+    .steppy-row-name { grid-column: 1 / -1; }
+    .steppy-row-line .steppy-row-name { padding-left: 8px; }
+    .steppy-row .steppy-cell { flex-direction: column; gap: 2px; min-height: 56px; padding: 4px 2px; border-color: var(--border); background: var(--surface); text-align: center; }
+    .steppy-row .steppy-cell-layout { display: block; order: 2; font-size: 11px; line-height: 14px; color: var(--text-muted); overflow-wrap: anywhere; }
+    .steppy-row .steppy-cell > .steppy-icon { order: -1; }
+    .steppy-lines .steppy-line { grid-template-columns: 56px repeat(var(--n), minmax(60px, 1fr)); min-width: calc(86px + var(--n) * 66px); gap: 6px; padding: 3px 12px; }
+    .steppy-lines .steppy-line-locale { padding-left: 0; }
+    .steppy-lines .steppy-cell { min-height: 48px; }
+    .steppy-lines-end, .steppy-matrix-more { padding-inline: 12px; }
+    .steppy-fold > summary { margin-left: 12px; }
+
+    .steppy-walk-buttons .steppy-hide-target { flex-basis: 100%; padding-inline: 0; }
+    .steppy-step { grid-template-columns: 20px 20px minmax(0, 1fr); }
+    .steppy-step-shot { grid-column: 3; }
+    .steppy-step--large { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 6px 12px; padding: 14px 0; }
+    .steppy-step-error { grid-column: 2 / -1; }
+    .steppy-step--large[data-frame="desktop"] > .steppy-frames { grid-column: 2 / -1; grid-row: auto; }
+    .steppy-frame-box { max-width: 100%; }
+}
+
+/* ── less motion ───────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+    :root { --dur-base: 0ms; }
+    *, ::before, ::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
 }

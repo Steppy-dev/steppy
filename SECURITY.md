@@ -246,6 +246,31 @@ aggregation itself is the thing to think about:
   pytest and Playwright. If a test surfaces a value in an error — a filled field in
   a call log, an API response in an assertion — it lands in the bundle unredacted.
   Masks cover pixels, not tracebacks.
+- **A published report shows it.** `steppy report` prints the last lines of each
+  failing test (`fail_tail`, at most 15) on its pages and in `report.json`, and an
+  upload sends them: values from an error, and the absolute paths of the machine that
+  ran the tests (a user name, a checkout). A cause's headline holds no such path; the
+  log lines below it are verbatim, on purpose. Read them before making a report of a
+  failing run public, or publish the passing runs only.
+
+### Reading a bundle somebody else made
+
+A bundle may come from anywhere: a fork's CI, an attachment. Steppy treats what it
+holds as data. `steppy report` escapes its text and links only `http(s)` addresses; it
+never follows a manifest path out of the bundle (`..`, absolute, a drive, an UNC path,
+a link), whether it reads an archive or an unpacked directory, and lists the entries it
+refused in the report's warnings. `steppy bundle inspect`, `verify` and `upload` read an
+archive's members by name and extract nothing. What Steppy cannot decide for you:
+
+- **Unpacking is your tool's job.** Extract with one that refuses paths and links that
+  leave the directory (a current `tar`, Python's `filter="data"`), or let
+  `steppy report <archive>` read it without unpacking.
+- **An unpacked bundle used as a project is trusted like one.** `steppy guide` and
+  `steppy build` read the captures under `output/` as they find them, links included,
+  and `config.yaml`, scenarios and seeds are code you run. Do not run them in a
+  directory you would not run code from.
+- **A report you did not make the run for shows that run's content.** Look at it before
+  publishing it under your name.
 
 ## In-app tours
 

@@ -51,8 +51,39 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   scenario without a mask generates the same test file as before.
 - **`steppy run` and `steppy rerun` warn when a mask is declared and a trace or a
   video is on**: Playwright can mask neither. Nothing is turned off.
+- **Links into a run report**: `#<scenario>`, `#<scenario>/<locale>/<layout>` and
+  `#<scenario>/<locale>/<layout>/step-<n>` (`-` for no locale or no layout), the
+  same fragment as in Steppy Cloud. Every variant and every step has a link to
+  copy. They are plain anchors on a scenario's page and work there without
+  JavaScript. On the index a small inline script sends them to that page, and a
+  link the run cannot honour opens the closest thing it has and says so. A failure
+  cause has an anchor too, `#cause/<fingerprint>`.
+- **Click targets on the report's screenshots**: each capture is outlined where
+  its step clicked or typed, read from the run's own sidecars, one outline per
+  field of a form. "Hide target" removes them, with no script. A missing,
+  oversized or malformed sidecar only means no outline.
+- **`report.json`'s steps carry `captures`**, one per screenshot in the same
+  order: `url`, `viewport`, `device_scale_factor` and `boxes`, in CSS pixels of
+  the image (additive, `steppy_report: 1` unchanged).
+- **The report's header** shows the branch a pull or merge request targets, the
+  environment, the commit a CI really tested, uncommitted changes, and the CI job,
+  a link only when its recorded address is http or https.
 
 ### Changed
+- **The run report is in Steppy Cloud's design**, in the same order: the run and
+  its verdict, warnings, "Why it failed" with the first screenshots of each cause,
+  every scenario over its layouts (a row opens into its locales), then the first
+  failing variant with its steps; "Previous failing" and "Next failing" walk the
+  others. Scenarios go failing, flaky, passed, skipped, then not run, and a variant
+  that passed on a retry reads as flaky. Each scenario keeps its page, with a table
+  of its variants. Bricolage Grotesque and JetBrains Mono travel with the report
+  (two woff2 files and their OFL texts, 126 KB), and nothing is fetched from a
+  network. Screenshots open in a new tab.
+  **If your project overrides `templates/report/*`, redo it**: the stylesheet's
+  tokens and most class names changed, so an old `report.css` leaves the new pages
+  unstyled, and an old page still renders but not in the new design. The
+  `steppy-template` skill lists the tokens, the classes and the new partials
+  (`_topbar`, `_icons`, `_shot`, `_variant`, `_links`, `fonts/`).
 - **`steppy record` writes the masks it finds into the draft's front matter**
   (`mask:`) instead of printing a `screenshot.mask` block to paste.
 - **`steppy bundle upload` speaks the new protocol**: it builds the run's
@@ -105,6 +136,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with it.
 
 ### Fixed
+- **A failure cause's headline says what broke.** It could be a line of the
+  generated test (`_steppy_mark_step(3, …)`) or the absolute path of a file on the
+  machine that ran the tests, which a published report then showed. It is now the
+  error and its message (`AssertionError: Locator expected not to contain text
+  'failed'`), and an absolute path in it, Windows or POSIX, is reduced to its last
+  part. The console summary of a parallel run uses the same line. Causes are grouped
+  as before, with the same fingerprints. The failure's last log lines stay verbatim.
+- **The report's links to a failure cause pointed nowhere** (`#cause-…` had no
+  element), and **each warning of the run was listed twice**, on the page and in
+  the site's `report.json`.
+- **The report's table could hide a failure.** Of two tests of one variant it
+  showed the first, so a scenario's passing test hid its tour replay's failure: a
+  cell now shows the worst of them. A variant that ran without the run's layout or
+  locale (one scenario declares `layouts:`, another does not) was in no column: it
+  now has one, "default".
+- **Coverage records bundled under another run id** than the bundle's own are merged
+  into its report. They were left out before.
 - **The GitHub Actions workflows run on `ubuntu-24.04`**: the one
   `steppy init --ci` writes and the default `runs-on` of the reusable
   `steppy-e2e.yml`. `ubuntu-latest` is now Ubuntu 26.04, where the Playwright
@@ -113,6 +161,27 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `steppy update` refreshes an unedited `steppy.yml`.
 
 ### Security
+- **A hostile results bundle could make `steppy report` write and read files
+  outside it.** In every release that has the command, and with nothing more than
+  rendering a bundle somebody else made:
+  - a coverage record's path in the manifest (`…/raw/../../…`) was **written to**
+    unchecked, from an archive as from an unpacked one;
+  - in an unpacked directory, any path in the manifest (`..`, absolute, another
+    drive, an UNC path, a symlink) was **read**, and a screenshot's copied into the
+    site;
+  - the manifest's run id named the directory coverage records were read from, and a
+    record's source-map digest and scenario id were joined to paths too.
+
+  A manifest path is now checked as text before the file system is touched (so an
+  UNC path never makes Windows sign in to its host), and must still be inside the
+  bundle once its links are followed. An entry that does not is never read: the
+  report says which ones it refused, and renders the rest. A `manifest.json` that
+  is itself a link out is an error. A run record (`output/.steppy-run.json`) or a
+  `--run-id` whose id is a path, and a record directory that links out of
+  `output/`, stop `steppy bundle create`, `steppy report` and the upload; symlinked
+  record files and Windows junctions in `output/` are skipped with a warning.
+  **If you rendered a bundle you did not make with an earlier version, upgrade, and
+  look at what that site holds before publishing it.**
 - **Failure screenshots ignored `screenshot.mask`.** The full-page capture of a
   failing test (`output/screenshots/_failures/`) was taken without the masks, in
   every version that has them, although `SECURITY.md` said every screenshot was

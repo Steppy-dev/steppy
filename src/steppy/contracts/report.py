@@ -112,6 +112,39 @@ class ReportCapabilities(_Wire):
     strength_reliable: bool = True
 
 
+class ReportBox(_Wire):
+    """One target box, in CSS pixels of the captured image."""
+
+    x: float
+    y: float
+    width: float
+    height: float
+
+
+class ReportViewport(_Wire):
+    """The size of the page the capture was taken in, in CSS pixels."""
+
+    width: float
+    height: float
+
+
+class ReportCapture(_Wire):
+    """One of a step's captures, with the click hotspot its sidecar recorded.
+
+    The boxes are in CSS pixels of the image: place them in percent of the image's
+    own size divided by ``device_scale_factor``, never of ``viewport`` (a full-page
+    capture is taller). A ``fill-form`` has one box per field. No sidecar, no
+    target, or one that cannot be read, gives no box: never an error.
+    """
+
+    url: str = Field(description="The same reference as in the step's screenshots, at the same position.")
+    viewport: Optional[ReportViewport] = None
+    device_scale_factor: Optional[float] = Field(
+        default=None, description="Device pixels per CSS pixel of the image. None when no sidecar was read."
+    )
+    boxes: list[ReportBox] = Field(default_factory=list)
+
+
 class ReportStep(_Wire):
     """One step of one attempt.
 
@@ -133,6 +166,9 @@ class ReportStep(_Wire):
     duration_ms: Optional[int] = None
     #: Site-relative URLs of the captures for this step, in frame order.
     screenshots: list[str] = Field(default_factory=list)
+    #: One per screenshot, in the same order, with the box each one's sidecar
+    #: recorded. Empty in a report made before 0.10.
+    captures: list[ReportCapture] = Field(default_factory=list)
 
 
 class ReportVariant(_Wire):

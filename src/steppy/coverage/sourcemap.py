@@ -20,6 +20,7 @@ node so the signal survives at bundle granularity.
 
 from __future__ import annotations
 
+import glob
 import gzip
 import json
 import posixpath
@@ -27,6 +28,8 @@ import re
 from bisect import bisect_right
 from pathlib import Path
 from urllib.parse import urlsplit
+
+from ..safe_paths import is_plain_name
 
 _B64 = {c: i for i, c in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")}
 _SCHEME_RE = re.compile(r"^[a-zA-Z][\w+.\-]*://")
@@ -183,8 +186,10 @@ def load_map_for_entry(
     """
     map_info = entry.get("map") or {}
     if map_info.get("kind") == "inline" and map_info.get("hash") and maps_dir is not None:
-        blob = Path(maps_dir) / f"{map_info['hash']}.json.gz"
-        if blob.is_file():
+        # Every name below is a record's own text: a digest, or a URL's last segment.
+        digest = map_info["hash"]
+        blob = Path(maps_dir) / f"{digest}.json.gz" if is_plain_name(digest) else None
+        if blob is not None and blob.is_file():
             try:
                 return json.loads(gzip.decompress(blob.read_bytes()).decode("utf-8"))
             except (OSError, ValueError):
@@ -210,7 +215,9 @@ def load_map_for_entry(
         if name in seen:
             continue
         seen.add(name)
-        matches = sorted(sourcemap_dir.rglob(name), key=lambda p: p.as_posix())
+        if not is_plain_name(name):
+            continue
+        matches = sorted(sourcemap_dir.rglob(glob.escape(name)), key=lambda p: p.as_posix())
         for match in matches:
             try:
                 return json.loads(match.read_text(encoding="utf-8"))

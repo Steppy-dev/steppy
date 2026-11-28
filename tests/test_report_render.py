@@ -7,6 +7,7 @@ these tests are what prove it stayed on.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -258,9 +259,51 @@ def test_an_unparametrised_run_gets_no_matrix_columns():
     assert matrix_columns(model) == []
 
 
-def test_a_cell_that_never_ran_renders_as_a_dash(tmp_path: Path):
+def test_a_cell_that_never_ran_says_so(tmp_path: Path):
     model = _model([_test(locale="fr", layout="mobile"), _test(locale="nl", layout="desktop")])
-    assert "&mdash;" in _read(_render(model, tmp_path), "index.html")
+    assert "not run" in _read(_render(model, tmp_path), "index.html")
+
+
+def test_a_run_with_no_outcome_never_says_not_run_or_passed(tmp_path: Path):
+    from steppy.contracts.bundle import BundleFile
+
+    shot = BundleFile(
+        path="output/screenshots/onboarding/step-01.png",
+        kind="screenshot",
+        sha256="0" * 64,
+        size=1,
+        scenario="onboarding",
+        step=1,
+    )
+    site = _render(_model(manifest_kw={"files": [shot]}), tmp_path)
+    for name, html in _pages(site).items():
+        assert "Unknown" in html, name
+        assert "Not run" not in html and "Every scenario passed" not in html, name
+
+
+def test_a_run_where_nothing_fails_shows_every_scenario(tmp_path: Path):
+    """The table opens on what does not pass. With nothing there, hiding every scenario
+    would leave a page with no way in."""
+    green = _read(_render(_model([_test()]), tmp_path / "a"), "index.html")
+    assert re.search(r'value="all"[^>]* checked', green)
+    red = _read(_render(_model([_test(outcome="failed")]), tmp_path / "b"), "index.html")
+    assert re.search(r'value="not"[^>]* checked', red)
+
+
+def test_the_page_is_in_the_clouds_order(tmp_path: Path):
+    model = _model([_test(outcome="failed", fail_tail_b64=_tail_b64("E boom"))], extra_warnings=["careful"])
+    html = _read(_render(model, tmp_path), "index.html")
+    places = [
+        html.index(text)
+        for text in (
+            'id="ui/run"',
+            "1 warning in this report",
+            "Why it failed",
+            'id="ui/scenarios"',
+            'class="steppy-variant ',
+        )
+    ]
+    assert places == sorted(places)
 
 
 # ── formatting filters ──────────────────────────────────────────────────────
@@ -297,6 +340,35 @@ def test_a_project_can_override_the_report_css(tmp_path: Path):
     (project / "templates" / "report" / "report.css").write_text("/* mine */\n", encoding="utf-8")
     site = _render(_model([_test()]), tmp_path, project_root=project)
     assert _read(site, "assets/report.css") == "/* mine */\n"
+
+
+def test_a_page_written_for_an_older_report_still_renders(tmp_path: Path):
+    """A project's own copy of a page from before 0.10 uses the old context. It has to
+    be redone to look right, but it must not break ``steppy report`` in CI."""
+    project = tmp_path / "proj"
+    (project / "templates" / "report").mkdir(parents=True)
+    (project / "templates" / "report" / "index.html.j2").write_text(
+        "{% for s in report.scenarios %}{{ s.slug }} {{ scenario_href(s.slug) }}"
+        "{% for c in matrix_columns %} {{ c.label }}={{ matrix_cell(s, c) }}{% endfor %}{% endfor %}\n",
+        encoding="utf-8",
+    )
+    (project / "templates" / "report" / "scenario.html.j2").write_text(
+        "{{ root }}{{ scenario.slug }}{% for v in scenario.variants %} {{ variant_label(v) }}{% endfor %}\n",
+        encoding="utf-8",
+    )
+    site = _render(_model([_test()]), tmp_path, project_root=project)
+    assert _read(site, "index.html").strip() == "order-lifecycle scenarios/order-lifecycle.html fr / mobile=passed"
+    assert _read(site, "scenarios/order-lifecycle.html").strip() == "../order-lifecycle fr / mobile"
+
+
+def test_a_project_can_override_a_font(tmp_path: Path):
+    project = tmp_path / "proj"
+    fonts = project / "templates" / "report" / "fonts"
+    fonts.mkdir(parents=True)
+    (fonts / "jetbrains-mono-latin.woff2").write_bytes(b"mine")
+    site = _render(_model([_test()]), tmp_path, project_root=project)
+    assert (site / "assets/fonts/jetbrains-mono-latin.woff2").read_bytes() == b"mine"
+    assert (site / "assets/fonts/bricolage-grotesque-latin.woff2").stat().st_size > 10_000
 
 
 def test_a_project_can_override_a_page(tmp_path: Path):
@@ -410,3 +482,217 @@ def test_a_file_where_the_site_should_go_is_refused(tmp_path: Path):
     target.write_text("not a directory", encoding="utf-8")
     with pytest.raises(ReportError, match="not a directory"):
         build_report(project_root=project, site_dir=target)
+
+
+# ── untrusted content ───────────────────────────────────────────────────────
+
+EVIL = "<img src=x onerror=alert(1)>\"'&"
+
+
+def _hostile_model():
+    """Every text a bundle carries, hostile."""
+    from steppy.bundle.results import steps_from_records
+    from steppy.contracts.bundle import BundleCi, BundleFile, BundleGit
+
+    run = RUN.model_copy(
+        update={
+            "run_id": EVIL,
+            "created_at": EVIL,
+            "steppy_version": EVIL,
+            "executor": EVIL,
+            "environment": EVIL,
+            "git": BundleGit(sha=EVIL, branch=EVIL, pr=3, base_branch=EVIL, tested_sha=EVIL, dirty=True),
+            "ci": BundleCi(provider=EVIL, url="javascript:alert(1)", repo=EVIL),
+        }
+    )
+    test = _test(
+        scenario=EVIL,
+        locale=EVIL,
+        layout=EVIL,
+        outcome="failed",
+        nodeid=EVIL,
+        failed_step=1,
+        fail_tail_b64=_tail_b64(EVIL),
+    )
+    odd = _test(scenario="other", outcome=EVIL, nodeid="n2", locale=EVIL, layout=EVIL)
+    key = {"scenario": EVIL, "locale": EVIL, "layout": EVIL, "sha256": "0" * 64, "size": 1}
+    files = [
+        BundleFile(path=EVIL, kind="trace", **key),
+        BundleFile(path=EVIL, kind="video", **key),
+        BundleFile(path=EVIL, kind="failure_log", **key),
+        BundleFile(path="x", kind=EVIL, sha256="0" * 64, size=1),
+    ]
+    events = [
+        {"kind": "test-start", "ts": 1.0, "nodeid": EVIL},
+        {"kind": "step-start", "ts": 1.0, "nodeid": EVIL, "step": 1, "title": EVIL, "action": EVIL},
+        {"kind": "test-end", "ts": 2.0, "nodeid": EVIL, "outcome": "failed", "duration_ms": 1000},
+    ]
+    return build_model(
+        manifest=BundleManifest(steppy_bundle=1, run=run, tests=[test, odd], files=files, warnings=[EVIL]),
+        source=ReportSourceInfo(kind=EVIL, label=EVIL),
+        attempts=steps_from_records(events),
+        coverage=ReportCoverage(tier="bundled", warnings=[EVIL]),
+        steppy_version=EVIL,
+    )
+
+
+def _pages(site: Path) -> dict[str, str]:
+    return {p.relative_to(site).as_posix(): p.read_text(encoding="utf-8") for p in site.rglob("*.html")}
+
+
+def test_nothing_a_bundle_holds_becomes_markup(tmp_path: Path):
+    for name, html in _pages(_render(_hostile_model(), tmp_path, title=EVIL)).items():
+        assert "<img src=x" not in html, name
+        assert "onerror=alert(1)>" not in html, name
+
+
+def test_an_address_that_is_not_http_is_text(tmp_path: Path):
+    pages = _pages(_render(_hostile_model(), tmp_path))
+    assert "javascript:alert(1)" in pages["index.html"]
+    for name, html in pages.items():
+        for address in re.findall(r'(?:href|src|action)="([^"]*)"', html):
+            assert not re.match(r"\s*(javascript|vbscript|data:text)", address, re.IGNORECASE), (name, address)
+
+
+def test_a_ci_address_is_a_link_that_gives_nothing_away(tmp_path: Path):
+    from steppy.contracts.bundle import BundleCi
+
+    run = RUN.model_copy(update={"ci": BundleCi(provider="gitlab-ci", url="https://gl.example/acme/-/jobs/7?a=1&b=2")})
+    model = build_model(
+        manifest=BundleManifest(steppy_bundle=1, run=run, tests=[_test()]), source=ReportSourceInfo(kind="tree")
+    )
+    html = _read(_render(model, tmp_path), "index.html")
+    assert 'href="https://gl.example/acme/-/jobs/7?a=1&amp;b=2" target="_blank" rel="noopener noreferrer"' in html
+    assert "GitLab job 7" in html
+
+
+def test_the_pages_run_no_handler_and_no_eval(tmp_path: Path):
+    for name, html in _pages(_render(_model([_test(outcome="failed")]), tmp_path)).items():
+        assert not re.search(r"<[^>]+\son[a-z]+\s*=", html), name
+        assert "eval(" not in html and "new Function" not in html and "innerHTML" not in html, name
+
+
+# ── a report is a folder of files, and the same one every time ──────────────
+
+
+def test_two_renders_of_one_run_are_the_same_bytes(tmp_path: Path):
+    from .test_report_hotspots import _captures
+    from .test_bundle import build_project
+
+    project = _captures(build_project(tmp_path))
+    sites = []
+    for name in ("one", "two"):
+        build_report(project_root=project, site_dir=tmp_path / name, screenshots="all")
+        root = tmp_path / name
+        sites.append({p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()})
+    assert sites[0] == sites[1]
+    assert len(sites[0]) > 10
+
+
+def test_a_warning_of_the_run_is_listed_once(tmp_path: Path):
+    """The source's warnings are the manifest's: handing both to the model doubled them."""
+    from .test_bundle import build_project
+
+    project = build_project(tmp_path)
+    (project / "output" / "screenshots" / "order-lifecycle" / "fr" / "mobile" / "step-01.png").write_text("changed")
+    result = build_report(project_root=project, site_dir=tmp_path / "site")
+    assert result.model.warnings
+    assert len(result.model.warnings) == len(set(result.model.warnings))
+
+
+def test_the_fonts_travel_with_their_licences(tmp_path: Path):
+    fonts = _render(_model([_test()]), tmp_path) / "assets" / "fonts"
+    for face in ("bricolage-grotesque", "jetbrains-mono"):
+        assert (fonts / f"{face}-latin.woff2").read_bytes()[:4] == b"wOF2"
+        licence = (fonts / f"{face}-OFL.txt").read_text(encoding="utf-8")
+        assert "SIL Open Font License, Version 1.1" in licence and licence.startswith("Copyright")
+    assert sum(p.stat().st_size for p in fonts.iterdir()) < 200_000
+
+
+def test_the_site_asks_the_network_for_nothing(tmp_path: Path):
+    site = _render(_model([_test(outcome="failed")], coverage=ReportCoverage(tier="bundled")), tmp_path)
+    css = _read(site, "assets/report.css")
+    assert "@import" not in css
+    for address in re.findall(r"url\(\s*[\"']?([^\"')]+)", css):
+        assert (site / "assets" / address).is_file(), address
+    for name, html in _pages(site).items():
+        for address in re.findall(r'(?:src|href)="([^"]+)"', html):
+            assert not re.match(r"(?:https?:)?//", address), (name, address)
+
+
+# ── the design ──────────────────────────────────────────────────────────────
+
+
+def _css() -> str:
+    root = Path(__file__).resolve().parents[1]
+    return (root / "templates" / "report" / "report.css").read_text(encoding="utf-8")
+
+
+def _tokens(css: str, selector: str) -> dict[str, str]:
+    block = css[css.index(selector) + len(selector) :]
+    block = block[: block.index("}")]
+    return dict(re.findall(r"(--[a-z-]+):\s*(#[0-9a-f]{6})", block))
+
+
+def _ratio(a: str, b: str) -> float:
+    def luminance(colour: str) -> float:
+        parts = [int(colour[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+        r, g, b = (c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in parts)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def test_the_stylesheet_holds_no_jinja_delimiter():
+    """It is parsed as a template: one would be a syntax error, in a comment too."""
+    assert not re.search(r"\{[{%#]", _css())
+
+
+def test_the_dark_palette_is_the_same_in_both_places():
+    css = _css()
+    media = _tokens(css, ':root:not([data-theme="light"]) {')
+    assert media and media == _tokens(css, ':root[data-theme="dark"] {')
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_text_meets_the_contrast_it_needs(scheme):
+    css = _css()
+    tokens = _tokens(css, ":root {")
+    if scheme == "dark":
+        tokens = {**tokens, **_tokens(css, ':root[data-theme="dark"] {')}
+    for ground in ("--bg", "--surface", "--chrome", "--highlight"):
+        assert _ratio(tokens["--text"], tokens[ground]) >= 4.5, ground
+    for ground in ("--bg", "--surface", "--chrome", "--highlight"):
+        assert _ratio(tokens["--text-muted"], tokens[ground]) >= 4.5, ground
+        assert _ratio(tokens["--pass"], tokens[ground]) >= 4.5, ground
+    assert _ratio(tokens["--fail"], tokens["--surface"]) >= 4.5
+    for status in ("--pass", "--fail", "--flaky", "--neutral"):
+        assert _ratio(tokens[status], tokens[f"{status}-bg"]) >= 4.5, status
+    # What is not text needs 3:1: the focus ring and a control's edge.
+    for graphic in ("--marker", "--border-strong"):
+        assert _ratio(tokens[graphic], tokens["--surface"]) >= 3, graphic
+
+
+def test_balise_is_never_text():
+    css = _css()
+    assert not re.search(r"(?<![a-z-])color:\s*var\(--(marker|logo-check)\)", css)
+    assert css.lower().count("#d2561a") == 2  # the two tokens, and nowhere else
+
+
+def test_a_page_skips_no_heading_level(tmp_path: Path):
+    from .test_report_links import parse_page
+
+    model = _model(
+        [_test(outcome="failed", fail_tail_b64=_tail_b64("E boom"))], coverage=ReportCoverage(tier="bundled")
+    )
+    site = _render(model, tmp_path)
+    for path in site.rglob("*.html"):
+        levels = parse_page(path).headings
+        assert levels[0] == 1 and levels.count(1) == 1, path.name
+        assert all(b - a <= 1 for a, b in zip(levels, levels[1:])), (path.name, levels)
+
+
+def test_hide_target_shows_only_where_there_is_one_to_hide(tmp_path: Path):
+    html = _read(_render(_model([_test(outcome="failed")]), tmp_path), "index.html")
+    assert "Hide target" not in html

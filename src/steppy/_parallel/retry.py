@@ -26,9 +26,9 @@ Mechanism — the cheap part is that there barely is one:
 Two things that look optional but are not:
 
 * A **fresh EventBus** per pass. ``EventBus._tests`` is keyed
-  ``(worker_id, nodeid)`` and ``test-start`` overwrites the record in place,
-  while ``_counts`` only ever increments — feeding a second attempt into the
-  same bus would both lose attempt 1's outcome and double-count the totals.
+  ``(worker_id, nodeid)`` and ``test-start`` overwrites the record in place, so
+  feeding a second pass into the same bus would lose attempt 1's outcome and
+  put the retries in the main pass's totals.
 * **Fresh log tailers.** ``docker compose logs -f`` is bound to the container
   that existed when it started; recreating ``steppy-worker`` orphans it.
 

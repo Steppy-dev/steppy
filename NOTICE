@@ -8,6 +8,11 @@ from packages/player/, which includes Lit (BSD-3-Clause, Copyright Google LLC)
 and Zod (MIT, Copyright Colin McDonnell). Their full license texts ship
 beside the bundles in src/steppy/_player_bundle/THIRD_PARTY_LICENSES.txt.
 
+The run report's fonts (templates/report/fonts/, copied into every report) are
+Bricolage Grotesque (Copyright 2022 The Bricolage Grotesque Project Authors) and
+JetBrains Mono (Copyright 2020 The JetBrains Mono Project Authors), as Latin
+subsets, both under the SIL Open Font License 1.1. Its text ships beside them.
+
 Steppy invokes, but does not bundle or link, the following tools as separate
 processes when the corresponding features are used: Playwright/Chromium
 (Apache-2.0), ffmpeg (LGPL/GPL, depending on the build) and Piper (GPL-3.0).

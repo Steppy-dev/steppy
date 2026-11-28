@@ -26,6 +26,10 @@ Module map:
 - ``model``    — the pure view-model builder. **No jinja2**, deliberately: this is
   the module a control plane imports, and it must not drag a renderer along.
 - ``assets``   — which captures travel, where they land, and how they dedupe.
+- ``hotspots`` — the click target each capture's sidecar recorded.
+- ``links``    — the link fragments, the same as Steppy Cloud's (spec V3).
+- ``words``    — the sentences: counts, places, verdicts. Pure, no template.
+- ``view``     — what the pages show, worded and ordered by the cloud's rules.
 - ``coverage_source`` — the four-tier coverage resolution and the badge number.
 - ``render``   — jinja2 → HTML, CSS, ``report.json``, ``badge.json``, robots.
 - ``build``    — orchestration, :class:`ReportError`, :class:`ReportResult`.

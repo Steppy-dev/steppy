@@ -214,11 +214,14 @@ def _from_records(source, project_root: Path, non_ui: Sequence[str], warnings: l
         warnings.append(f"coverage: records present but the coverage modules could not be loaded ({e})")
         return None, TIER_NONE
 
-    run_id = source.manifest.run.run_id
     with tempfile.TemporaryDirectory(prefix="steppy-report-cov-") as tmp:
         tmp_root = Path(tmp)
         records_dir = tmp_root / "coverage"
-        wanted = {entry.path: records_dir / _record_rel(entry.path) for entry in entries}
+        wanted = {entry.path: records_dir / rel for entry in entries if (rel := _record_rel(entry.path)) is not None}
+        if len(wanted) < len(entries):
+            warnings.append(
+                f"coverage: left out {len(entries) - len(wanted)} record(s) whose path is not one a run writes"
+            )
         try:
             _, fetch_warnings = source.fetch(into=wanted)
         except Exception as e:
@@ -238,7 +241,7 @@ def _from_records(source, project_root: Path, non_ui: Sequence[str], warnings: l
         settings = _relocated(settings, store_path=tmp_root / "map.db", records_dir=records_dir)
 
         try:
-            merge_run(settings, run_id)
+            merge_run(settings, _RECORDS_RUN)
             conn = open_store(settings.store_path)
             try:
                 patterns = tuple(non_ui) or settings.non_ui
@@ -263,15 +266,23 @@ def _relocated(settings, *, store_path: Path, records_dir: Path):
     return replace(settings, store_path=store_path, records_dir=records_dir)
 
 
-def _record_rel(manifest_path: str) -> Path:
-    """``output/coverage/raw/<run>/<scenario>/<file>`` → ``raw/<run>/<scenario>/<file>``.
+#: The run directory the records are laid out under, in the throwaway tree. Not the
+#: manifest's run id: that is somebody else's text, and here it would name a directory.
+_RECORDS_RUN = "run"
 
-    ``merge_run`` expects the ``raw/<run_id>/`` layout under its ``records_dir``,
-    so the tail from ``raw/`` onwards is what has to be reproduced. Falls back to
-    the basename if the path is not that shape, which keeps a malformed manifest
-    from escaping the temp directory.
+
+def _record_rel(manifest_path: str) -> Optional[Path]:
+    """``output/coverage/raw/<run>/<scenario>/<file>`` → ``raw/run/<scenario>/<file>``.
+
+    ``merge_run`` expects the ``raw/<run_id>/<scenario>/`` layout under its
+    ``records_dir``. The destination is built from two checked components and nothing
+    else, because the path comes from a manifest and this one is **written to**:
+    ``None`` for any other shape, a ``..`` and a drive included.
     """
-    parts = Path(manifest_path).parts
-    if "raw" in parts:
-        return Path(*parts[parts.index("raw") :])
-    return Path(Path(manifest_path).name)
+    from ..safe_paths import is_plain_name
+
+    parts = manifest_path.split("/")
+    tail = parts[parts.index("raw") + 1 :] if "raw" in parts else []
+    if len(tail) != 3 or not all(is_plain_name(part) for part in tail) or tail[1] == "_maps":
+        return None
+    return Path("raw", _RECORDS_RUN, tail[1], tail[2])

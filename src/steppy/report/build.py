@@ -72,8 +72,9 @@ def build_report(
     """Render one run to a self-contained static site."""
     from .. import __version__
     from ..coverage.gaps import SURFACES
-    from .assets import POLICIES, plan_assets
+    from .assets import POLICIES, image_sizes, plan_assets
     from .coverage_source import resolve_coverage
+    from .hotspots import read as read_hotspots
     from .model import build_model
     from .render import render_site
     from .source import ReportSourceError, open_source
@@ -118,15 +119,20 @@ def build_report(
     )
 
     attempts = _timeline(source)
+    hotspots = read_hotspots(source, plan.urls)
+    # Last, once everything was asked for: a link is refused when it is followed.
+    warnings.extend(source.refusals())
     model = build_model(
         manifest=source.manifest,
         source=ReportSourceInfo(kind=source.kind, label=source.label),
         attempts=attempts,
         coverage=coverage,
         assets=plan.urls,
+        hotspots=hotspots,
         screenshots_policy=screenshots,
         steppy_version=__version__,
-        extra_warnings=warnings,
+        # The source's own warnings are the manifest's, which build_model already carries.
+        extra_warnings=warnings[len(source.warnings) :],
     )
 
     rendered = render_site(
@@ -136,6 +142,7 @@ def build_report(
         templates_dir=templates_dir,
         project_root=project_root,
         dry_run=dry_run,
+        sizes=image_sizes(plan),
     )
     return ReportResult(
         site_dir=target,
@@ -158,19 +165,25 @@ def build_document(source, *, project_root: Path, non_ui: Sequence[str] = ()) ->
     """
     from .. import __version__
     from .coverage_source import resolve_coverage
+    from .hotspots import read as read_hotspots
     from .model import build_model
 
     # Every source's own warnings are the manifest's, which build_model already
     # carries, so nothing is passed twice.
     captures = {f.path: f.path for f in source.manifest.files if f.kind in _CAPTURE_KINDS}
+    attempts = _timeline(source)
+    coverage = resolve_coverage(source, project_root=project_root, non_ui=non_ui)
+    hotspots = read_hotspots(source, captures)
     return build_model(
         manifest=source.manifest,
         source=ReportSourceInfo(kind=source.kind, label=source.label),
-        attempts=_timeline(source),
-        coverage=resolve_coverage(source, project_root=project_root, non_ui=non_ui),
+        attempts=attempts,
+        coverage=coverage,
         assets=captures,
+        hotspots=hotspots,
         screenshots_policy="all",
         steppy_version=__version__,
+        extra_warnings=source.refusals(),
     )
 
 

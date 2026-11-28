@@ -112,8 +112,17 @@ def walk_candidates(
     warnings: list[str] = []
     earlier_failures = earlier_recordings = 0
     earlier_captures: list[Optional[str]] = []
+    junctions: list[Path] = []
 
     for path in sorted(output_dir.rglob("*")):
+        if path.is_junction():
+            # A Windows directory link, which the walk follows where it does not
+            # follow a symlink: what is behind it is not this tree's.
+            junctions.append(path)
+            warnings.append(f"skipped junction {path.relative_to(output_dir).as_posix()}")
+            continue
+        if any(path.is_relative_to(junction) for junction in junctions):
+            continue
         if path.is_dir():
             continue
         if path.is_symlink():

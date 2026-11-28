@@ -651,6 +651,12 @@ Every file you can drop into your project's `templates/` to change appearance. *
 | `angular/onboarding.component.ts.j2` | Onboarding landing component (bare classes, no CSS) | structure (host CSS styles it) |
 | `report/report.css` | **The run report's entire stylesheet** — a separate site, see below | **styling** |
 | `report/{index,scenario,coverage}.html.j2` | Run report pages (`steppy report`) | structure (styling via `report/report.css`) |
+| `report/_topbar.html.j2`, `report/_mark.html.j2` | The report's top bar and the mark in it | structure |
+| `report/_variant.html.j2` | One variant: heading, walk through the failing ones, steps, failure. Used by the index (small) and scenario pages (large) | structure |
+| `report/_shot.html.j2` | A screenshot and the outline of its click target | structure (`.steppy-shot`, `.steppy-mark-box`) |
+| `report/_icons.html.j2` | The report's icons (one SVG sprite per page) and the status chip | structure |
+| `report/_links.html.j2` | The link script and its data (`#<scenario>/<locale>/<layout>/step-<n>`) — no visual output | **not styling** |
+| `report/fonts/*` | The report's two fonts (woff2) and their OFL texts. Put your own files here under the same names to replace them | **styling** |
 | `report/_head.html.j2` | Shared report `<head>` (always `noindex`) — no visual output | **not styling** |
 | `static/cursor.js.j2`, `static/steppy-detect.js.j2`, `angular/{content,routes}.ts.j2`, `angular/gitignore.j2`, `guide.md.j2` | Cursor driver / reader detection / fragments / routes / nav data | **not styling** |
 
@@ -667,26 +673,63 @@ Every file you can drop into your project's `templates/` to change appearance. *
 *are* the PDF layout, none of which a report inherits. Override
 `templates/report/report.css` instead, and note that only the report pages are affected.
 
-It is token-driven, so branding it is usually a handful of custom properties on `:root`
-(the file also redefines them under `@media (prefers-color-scheme: dark)`):
+It is token-driven, so branding it is usually a handful of custom properties on `:root`.
+The file redefines the colours **twice** for the dark theme, under
+`@media (prefers-color-scheme: dark)` guarded on `:root:not([data-theme="light"])` and under
+`:root[data-theme="dark"]`: change both, or the two dark states differ.
 
 ```css
 :root {
-    --accent: #2f5fd0;      /* links */
-    --pass: #1a7f45;        /* passed chips + verdict */
-    --fail: #c02b2b;        /* failed chips, cause counts, the failing step number */
-    --warn: #9a6200;        /* notices: truncated, no timeline, unknown outcomes */
-    --surface: #ffffff;     /* cards */
-    --bg: #f7f7f8;
-    --border: #e3e3e7;
-    --radius: 8px;
+    --bg: #f6f8f4;          /* page ground */
+    --surface: #ffffff;     /* cards, top bar */
+    --chrome: #edf1ea;      /* log lines, hover, the segmented control */
+    --highlight: #e1ede5;   /* the step a link names */
+    --border: #c9d3cb;      /* decorative */
+    --border-strong: #859389; /* controls: 3:1 on --surface */
+    --text: #15332a;
+    --text-muted: #5b6b64;  /* 4.5:1 on --bg, --surface and --chrome */
+    --link: #15332a;        /* ink, told apart by its underline */
+    --marker: #d2561a;      /* focus, "you are here", the click target. Never text */
+    --pass: #16733f;   --pass-bg: #e6f4ec;
+    --fail: #c02b2b;   --fail-bg: #fdeaea;
+    --flaky: #9a6200;  --flaky-bg: #fdf3e0;
+    --neutral: #5b6b64; --neutral-bg: #e4e9e1;   /* skipped, not run, unknown */
+    --font-sans: "Bricolage Grotesque", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+    --content-max: 1152px;
 }
 ```
 
-Class prefixes: `.steppy-report-*` (header, main, section, meta, table),
-`.steppy-chip[data-outcome="passed|failed|error|skipped|…"]`, `.steppy-verdict`,
-`.steppy-cause*`, `.steppy-step*`, `.steppy-shots`, `.steppy-variant*`, `.steppy-notice`,
-`pre.steppy-tail`.
+Keep each status colour at 4.5:1 on its own `-bg`, and `--marker` at 3:1 on `--surface`.
+The fonts come from `assets/fonts/` beside the stylesheet: no CDN, a report opens from a
+file or behind a firewall.
+
+Class inventory (pages in order):
+
+| Part | Classes |
+|---|---|
+| Shell | `.steppy-topbar`, `.steppy-brand`, `.steppy-topnav`, `.steppy-report-main`, `.steppy-report-section` (a card), `.steppy-section-head`, `.steppy-crumbs`, `.steppy-report-footer` |
+| Run header | `.steppy-report-header`, `.steppy-verdict`, `.steppy-counts`, `.steppy-report-meta`, `.steppy-tag` |
+| Status | `.steppy-chip[data-outcome="passed\|failed\|error\|flaky\|skipped\|not_run\|unknown\|…"]`, `.steppy-icon--<status>` |
+| Notices | `.steppy-notice`, `.steppy-warnings` |
+| Failure causes | `.steppy-causes`, `.steppy-cause*`, `.steppy-group(s)`, `.steppy-variant-chip`, `.steppy-fingerprint`, `.steppy-more` |
+| Matrix | `.steppy-matrix*`, `.steppy-segments`, `.steppy-row*`, `.steppy-cell[data-outcome]`, `.steppy-lines`, `.steppy-line`, `.steppy-fold` |
+| Variant | `.steppy-variant*`, `.steppy-walk`, `.steppy-button`, `.steppy-copy-link`, `.steppy-hide-target` |
+| Steps | `.steppy-steps`, `.steppy-step[data-status]`, `.steppy-step--large` (scenario pages), `.steppy-step-*`, `pre.steppy-tail` |
+| Screenshots | `.steppy-shot`, `.steppy-marks`, `.steppy-mark-box`, `.steppy-thumb`, `.steppy-frame*`, `.steppy-failure*` |
+| Scenario page | `.steppy-scenario*`, `.steppy-variants-grid`, `.steppy-grid-*` |
+| Tables, coverage | `.steppy-report-table`, `.steppy-scroll`, `.steppy-badge-line`, `.steppy-pct` |
+
+> **Upgrading an override from before 0.10.** The report took Steppy Cloud's design. Tokens:
+> `--accent` is gone (links are `--link`, the marker is `--marker`), `--warn` is `--flaky`,
+> `--muted` is `--text-muted`, `--radius` is `--radius-lg`. `.steppy-shots`,
+> `.steppy-step-num`'s colour rules and the one-table matrix are gone. An old `report.css`
+> leaves the new pages unstyled, and an old page still renders (its variables are still
+> there) but not in the new design: start again from the bundled file. What a page must
+> keep: the `id` of each variant and step (they **are** the links), the `_links.html.j2`
+> include in `<head>`, and no `object-fit` on a screenshot with an outline (it is placed in
+> percent of the image's own box).
 
 > **Two gotchas, in the order they will bite you.**
 >
@@ -700,9 +743,9 @@ Class prefixes: `.steppy-report-*` (header, main, section, meta, table),
 >    custom properties; there is nothing this file needs from Python.
 >
 > Two things are not styling knobs at all: every page is hardcoded `noindex` (a run report
-> has no SEO value, and publishing one to Pages publishes its screenshots), and the images
-> use `width: auto; max-width: 100%` so a dense capture renders at its true pixels and a
-> low-res one is never upscaled — the same rule the guide stage uses.
+> has no SEO value, and publishing one to Pages publishes its screenshots), and a scenario
+> page's screenshots are fitted in their frame by a computed `width`, never above their own
+> size, because the outline of the click target needs a box that is exactly the image.
 
 ---
 

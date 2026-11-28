@@ -362,3 +362,95 @@ def test_summary_harvests_tails_from_retry_buses():
         retry_buses=[retry_bus],
     )
     assert "still broken" in buf.getvalue()
+
+
+# ── Values printed through Rich markup ──────────────────────────────────────
+
+
+def test_failures_keep_the_variant_of_a_test():
+    """A parametrised node id ends in brackets, ``[default-desktop]``, which Rich
+    reads as a style tag and drops: the line named the test without its variant,
+    so two failing variants of one scenario printed as the same line."""
+    console, buf = _capture_console()
+    bus = EventBus()
+    bus.feed_line("w1", "STEPPY-EVT::scenario-start::editor__mixed::w1::1.0")
+    for variant in ("default-desktop", "default-mobile"):
+        nodeid = f"tests/e2e/test_editor__mixed.py::test_editor__mixed[{variant}]"
+        b64 = base64.b64encode(f"AssertionError: {variant} broke".encode()).decode("ascii")
+        bus.feed_line("w1", f"STEPPY-EVT::test-start::{nodeid}::1.0")
+        bus.feed_line("w1", f"STEPPY-EVT::test-end::{nodeid}::failed::100")
+        bus.feed_line("w1", f"STEPPY-EVT::test-fail-tail::{nodeid}::{b64}")
+    render_summary(
+        console=console,
+        bus=bus,
+        scenario_results=[ScenarioResult("editor__mixed", "w1", 1, 1.0, 0.0, 1.0)],
+        orphans={},
+        tmp_dir=Path("/tmp/run"),
+    )
+    out = buf.getvalue()
+    failures_block = out[out.index("Failures") :]
+    assert "test_editor__mixed[default-desktop]" in failures_block
+    assert "test_editor__mixed[default-mobile]" in failures_block
+
+
+def test_a_cause_headline_keeps_its_selector():
+    """The headline is the error's own text, and a Playwright error names a
+    locator: ``[data-testid=save]`` must not be swallowed as markup."""
+    console, buf = _capture_console()
+    bus = _failed_bus(
+        "w1",
+        "save",
+        "tests/e2e/test_save.py::test_save",
+        "E   TimeoutError: waiting for locator('[data-testid=save]') to be visible",
+    )
+    render_summary(
+        console=console,
+        bus=bus,
+        scenario_results=[ScenarioResult("save", "w1", 1, 1.0, 0.0, 1.0)],
+        orphans={},
+        tmp_dir=Path("/tmp/run"),
+    )
+    out = buf.getvalue()
+    start = out.index("Failure causes")
+    causes_block = out[start : out.index("Failures", start)]
+    assert "[data-testid=save]" in causes_block
+
+
+def test_names_and_paths_with_brackets_survive_the_summary(tmp_path):
+    """Slugs, worker ids and paths are printed through markup too; a folder
+    called ``[ci]`` or a flaky scenario's name must reach the reader intact."""
+    console, buf = _capture_console()
+    root = tmp_path / "[ci]"
+    artifacts = root / "output" / "failures" / "broken"
+    artifacts.mkdir(parents=True)
+    (artifacts / "pytest.log").write_text("log", encoding="utf-8")
+    render_summary(
+        console=console,
+        bus=_failed_bus("w1", "broken", "tests/e2e/test_broken.py::test_broken[fr]", "ValueError: nope"),
+        scenario_results=[
+            ScenarioResult("broken", "w1", 1, 1.0, 0.0, 1.0),
+            ScenarioResult("wobbly", "w1", 0, 1.0, 0.0, 1.0),
+        ],
+        orphans={"w2": ["gone"]},
+        tmp_dir=Path("/tmp/run"),
+        project_root=root,
+        verdict=_Verdict(flaky=["wobbly"], failed=["broken"], attempts={"wobbly": 2}),
+    )
+    out = buf.getvalue()
+    assert "test_broken[fr]" in out
+    assert str(artifacts) in out
+    assert str(artifacts / "pytest.log") in out
+    assert str(root / "output" / "failures" / "gone") in out
+
+
+def test_the_live_table_keeps_the_variant_of_the_running_test():
+    """The live overlay's cells are markup as well."""
+    console, _ = _capture_console()
+    bus = EventBus()
+    bus.register_worker("w1")
+    bus.feed_line("w1", "STEPPY-EVT::scenario-start::editor__mixed::w1::1.0")
+    bus.feed_line("w1", "STEPPY-EVT::test-start::tests/e2e/test_editor__mixed.py::test_editor__mixed[fr-mobile]::1.0")
+    renderer = LiveProgressRenderer(bus=bus, console=console, total_scenarios=1)
+    with console.capture() as capture:
+        console.print(renderer._worker_table(bus.snapshot()))
+    assert "test_editor__mixed[fr-mobile]" in capture.get()

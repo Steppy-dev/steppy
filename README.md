@@ -1042,19 +1042,43 @@ steppy report ./unpacked-bundle -o public  # after tar -xf
 
 ### What it shows
 
+The pages follow Steppy Cloud's, in the same order, so a report opened from a file
+and the same run uploaded read alike:
+
+- **The run and its verdict**: "2 of 42 scenarios failing, 2 causes", the counts,
+  then where it came from: branch, pull or merge request and the branch it targets,
+  commit, environment, CI job.
 - **Failure causes, grouped.** One broken selector across forty scenarios reads as
   one row with a count, not forty tracebacks — the same normalisation the parallel
   console summary uses. The full tail is shown once per cause.
-- **The failing step, named.** `Failed at step 7 — Submit the order`, with the
-  step timeline around it (title, action, elapsed) and the captures for each step.
-  Step numbers are the scenario's own and stay sparse: a step skipped by
+- **Every scenario over its layouts**, failing first, then flaky, passed and
+  skipped, built from what actually ran — a flow deselected by a disjoint
+  frontmatter `layouts:` does not grow an empty column. A row opens into its
+  locales.
+- **The failing step, named.** `Failed at step 7, Submit the order`, with the
+  steps around it and their captures, each outlined where the step clicked or
+  typed. Step numbers are the scenario's own and stay sparse: a step skipped by
   `only-in:` or `layouts:` is a gap, never renumbered.
-- **A scenario × (locale, layout) matrix**, built from what actually ran — a flow
-  deselected by a disjoint frontmatter `layouts:` does not grow an empty column.
+- **A page per scenario**, with all its variants.
 - **Coverage buckets and the e2e-surface percentage**, when the run recorded them.
 - **`report.json`** — the same model, versioned (`steppy_report: 1`) and
   deterministic, so CI can diff two of them. Shape:
   [`contracts/report.schema.json`](contracts/report.schema.json).
+
+### Links
+
+Every scenario, variant and step has a link, the same one as in Steppy Cloud:
+
+```
+#<scenario>
+#<scenario>/<locale>/<layout>
+#<scenario>/<locale>/<layout>/step-<n>      # - for no locale or no layout
+```
+
+`index.html#checkout/fr/mobile/step-7` opens that step on the scenario's page.
+There the links are plain anchors and need no JavaScript; on the index a small
+inline script sends them over. A link to something the run does not have opens the
+closest thing it has and says so.
 
 ### Screenshots
 

@@ -21,13 +21,16 @@ There is no wordmark: next to the mark, set the name in text. Write it
 | Granite | `#5B6B64` | Secondary text |
 
 Balise is 4.0:1 on Lichen, under the 4.5:1 that small text needs, so it is
-never used for text as-is: the run report uses `#A8410E` for links on light
-grounds and `#F09A6A` on dark ones. Pass / fail / warn colours are kept apart
-from the brand palette, so orange is never read as a status.
+never used for text: in the run report it is the focus ring, the page you are on,
+the step a link names and the target on a screenshot (`#F09A6A` on dark grounds,
+where Balise itself is too faint). Links are Pin ink with an underline. Passed,
+failed and flaky have colours of their own, always with an icon and a word, so
+orange is never read as a status.
 
 ## Type
 
-Bricolage Grotesque for headings and text, JetBrains Mono for code.
+Bricolage Grotesque for headings and text, JetBrains Mono for code. The run
+report carries both as files (`templates/report/fonts/`, SIL Open Font License).
 
 The generated guide sites keep their neutral styling on purpose: they
 document the user's application, not Steppy.

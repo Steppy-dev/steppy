@@ -29,6 +29,10 @@ from ..contracts.bundle import BundleTest
 #: same size as an event-sourced one.
 FAIL_TAIL_LINES = 15
 
+#: How a suite generated before 0.10 recorded a test retried in its process: the
+#: first attempt ended ``rerun``, and no later attempt's end was recorded.
+_UNRECORDED_RERUN = "rerun"
+
 
 def _tail_b64(text: str, n: int = FAIL_TAIL_LINES) -> Optional[str]:
     if not text:
@@ -65,7 +69,16 @@ def scenario_from_nodeid(nodeid: str) -> Optional[str]:
 def read_event_files(events_dir: Path) -> list[Path]:
     if not events_dir.is_dir():
         return []
-    return sorted(p for p in events_dir.glob("*.jsonl") if p.is_file())
+    return sorted(p for p in events_dir.glob("*.jsonl") if p.is_file() and not p.is_symlink())
+
+
+def linked_files(directory: Path, output_dir: Path) -> list[str]:
+    """One warning per symlink among a run's records: none of them is followed."""
+    if not directory.is_dir():
+        return []
+    return [
+        f"skipped symlink {p.relative_to(output_dir).as_posix()}" for p in sorted(directory.iterdir()) if p.is_symlink()
+    ]
 
 
 def tests_from_events(events_dir: Path) -> tuple[list[BundleTest], list[str]]:
@@ -79,6 +92,7 @@ def tests_from_events(events_dir: Path) -> tuple[list[BundleTest], list[str]]:
     by_nodeid: dict[str, dict] = {}
     warnings: list[str] = []
     torn = 0
+    unrecorded = 0
 
     for path in read_event_files(events_dir):
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -107,20 +121,28 @@ def tests_from_events(events_dir: Path) -> tuple[list[BundleTest], list[str]]:
                     "duration_ms": None,
                     "fail_tail_b64": None,
                     "open_step": None,
+                    "earlier_tail_b64": None,
+                    "rerun": False,
                 },
             )
             kind = event.get("kind")
             if kind == "test-end":
-                # Last writer wins: a retry pass re-runs the same nodeid and its
-                # final attempt is the run's verdict, matching how the
-                # coordinator classifies a pass-on-retry.
+                # Last writer wins: a test retried in its process ends once per
+                # attempt, and its final attempt is the run's verdict, matching
+                # how the coordinator classifies a pass-on-retry.
                 row["outcome"] = event.get("outcome")
                 row["duration_ms"] = event.get("duration_ms")
+                row["rerun"] = row["rerun"] or row["outcome"] == _UNRECORDED_RERUN
             elif kind == "test-fail-tail" and event.get("phase") != "teardown":
                 row["fail_tail_b64"] = event.get("tail_b64")
             elif kind == "test-start":
                 # A rerun of the same nodeid starts over — otherwise an unclosed
-                # step from attempt 1 would be blamed for attempt 2's result.
+                # step or a tail from attempt 1 would be blamed for attempt 2's
+                # result, and its verdict would stand for an attempt that died.
+                row["earlier_tail_b64"] = row["fail_tail_b64"] or row["earlier_tail_b64"]
+                row["fail_tail_b64"] = None
+                row["outcome"] = None
+                row["duration_ms"] = None
                 row["open_step"] = None
             elif kind == "step-start":
                 row["open_step"] = event.get("step")
@@ -136,8 +158,20 @@ def tests_from_events(events_dir: Path) -> tuple[list[BundleTest], list[str]]:
 
     tests = []
     for row in by_nodeid.values():
+        # A test that started and never ended — the worker died mid-scenario, or
+        # the run was interrupted. "error" is the honest reading: it did not
+        # pass, and we cannot say it failed on its own merits.
         outcome = row["outcome"] or "error"
-        failed_step = _failed_step(row, outcome, warnings)
+        fail_tail_b64 = row["fail_tail_b64"]
+        if row["rerun"]:
+            outcome = _UNRECORDED_RERUN
+            failed_step = None
+            unrecorded += 1
+        else:
+            failed_step = _failed_step(row, outcome, warnings)
+            if outcome in ("passed", "skipped"):
+                # It ended well on a retry: show the failure it recovered from.
+                fail_tail_b64 = fail_tail_b64 or row["earlier_tail_b64"]
         tests.append(
             BundleTest(
                 nodeid=row["nodeid"],
@@ -145,14 +179,16 @@ def tests_from_events(events_dir: Path) -> tuple[list[BundleTest], list[str]]:
                 scenario=row["scenario"] or scenario_from_nodeid(row["nodeid"]),
                 locale=row["locale"],
                 layout=row["layout"],
-                # A test that started and never ended — the worker died mid-scenario,
-                # or the run was interrupted. "error" is the honest reading: it did
-                # not pass, and we cannot say it failed on its own merits.
                 outcome=outcome,
                 duration_ms=row["duration_ms"],
-                fail_tail_b64=row["fail_tail_b64"],
+                fail_tail_b64=fail_tail_b64,
                 failed_step=failed_step,
             )
+        )
+    if unrecorded:
+        warnings.append(
+            f"{unrecorded} test(s) were retried, but the generated suite is too old to record how the "
+            "retry ended — run `steppy generate`"
         )
     return tests, warnings
 
@@ -453,7 +489,7 @@ def _junit_nodeid(testcase: ET.Element) -> str:
 def read_junit_files(junit_dir: Path) -> list[Path]:
     if not junit_dir.is_dir():
         return []
-    return sorted(p for p in junit_dir.glob("*.xml") if p.is_file())
+    return sorted(p for p in junit_dir.glob("*.xml") if p.is_file() and not p.is_symlink())
 
 
 def tests_from_junit(junit_dir: Path) -> tuple[list[BundleTest], list[str]]:

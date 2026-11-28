@@ -81,3 +81,26 @@ def test_the_publishable_npm_packages_carry_the_license():
         assert manifest["publishConfig"]["access"] == "public"
     bundled = (_ROOT / "src" / "steppy" / "_player_bundle" / "THIRD_PARTY_LICENSES.txt").read_text(encoding="utf-8")
     assert (_ROOT / "packages" / "player" / "THIRD_PARTY_LICENSES.txt").read_text(encoding="utf-8") == bundled
+
+
+def test_the_wheel_names_every_license_text_it_ships():
+    """``license-files`` lists each license text the wheel carries, and each one
+    exists: hatchling skips a missing entry without a word, and a text shipped
+    but not listed is left out of the metadata's ``License-File`` lines."""
+    import tomllib
+
+    project = tomllib.loads((_ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    listed = project["license-files"]
+    for rel in listed:
+        assert (_ROOT / rel).is_file(), f"license-files names {rel}, which does not exist"
+    shipped = {
+        path.relative_to(_ROOT).as_posix()
+        for top in ("src/steppy", "templates", "skills")
+        for path in (_ROOT / top).rglob("*")
+        if path.is_file()
+        and re.search(r"(LICENSE|OFL|COPYING)", path.name)
+        and not path.is_relative_to(_ROOT / "src" / "steppy" / "templates")  # generated from templates/
+        and not path.is_relative_to(_ROOT / "src" / "steppy" / "skills")  # generated from skills/
+    }
+    assert shipped <= set(listed), f"license texts not in license-files: {sorted(shipped - set(listed))}"
+    assert project["license"] == "Apache-2.0 AND BSD-3-Clause AND MIT AND OFL-1.1"

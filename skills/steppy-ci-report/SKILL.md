@@ -73,7 +73,7 @@ ships, called by ref:
 ```yaml
 jobs:
   e2e:
-    uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.9.2
+    uses: Steppy-dev/steppy/.github/workflows/steppy-e2e.yml@v0.10.0
     with:
       compose-file: docker-compose.yml
     secrets:
@@ -235,9 +235,10 @@ Things worth knowing before wiring it in:
   them; leave them out of the reusable `steppy-e2e.yml` workflow, whose caller cannot
   interleave steps — a project that builds its app in CI promotes it to a composite
   action (see above).
-- **In the run report, a replay is a row of its own under its scenario.** When both fail in
+- **In the run report, a replay is a variant of its own on its scenario's page**, named
+  by its test under the steps. The table's cell shows the worse of the two. When both fail in
   the same variant they share the failure screenshot, so read them as one cause first. A
-  red replay under a *green* scenario is the tour, not the app.
+  red replay beside a *green* test of the scenario is the tour, not the app.
 
 ---
 
@@ -254,24 +255,51 @@ failure from a downloaded CI artifact sees exactly what CI saw.
 
 ### What the site contains
 
-- **`index.html`** — run identity (run id, commit, branch, PR, executor), the spec
-  dimensions, outcome counts, **failure causes grouped by cause**, a scenario ×
-  (locale, layout) outcome matrix, warnings, and a coverage card.
-- **`scenarios/<slug>.html`** — per (locale, layout) variant: outcome, duration, the
-  failing step **named**, the decoded failure tail, the step timeline (number, title,
-  action, elapsed) and the captures for each step.
+The pages are in Steppy Cloud's design and order, so a run reads the same from a file
+and once uploaded:
+
+- **`index.html`** — the run and its verdict ("2 of 42 scenarios failing, 2 causes"), its
+  counts, and where it came from (branch, PR or MR and the branch it targets, commit, the
+  commit a CI really tested, environment, CI job); warnings; **failure causes grouped by
+  cause**, with the first screenshots; every scenario over its layouts, failing first, then
+  flaky, passed, skipped and not run (a row opens into its locales); the first failing
+  variant with its steps; a coverage card.
+- **`scenarios/<slug>.html`** — a table of the scenario's variants, then each (locale,
+  layout) variant, failing first: outcome, attempts, duration, the steps (number, title,
+  action, elapsed) with their captures **outlined where the step clicked or typed**, the
+  failing step **named** with its failure tail.
 - **`coverage.html`** + **`badge.json`** — when the run recorded coverage.
 - **`report.json`** — the same model as a versioned wire contract
   (`steppy_report: 1`, shape at `contracts/report.schema.json`). Deterministic: no
   render-time clock, no absolute paths, so two renders of one run are byte-identical and
   CI can diff them.
 
+### Links into a report
+
+Every scenario, variant and step has a link, the same fragment as in Steppy Cloud, and an
+icon to copy it:
+
+| Link | Opens |
+|---|---|
+| `#checkout` | the scenario: its first failing variant, else its first |
+| `#checkout/fr/mobile` | one variant |
+| `#checkout/fr/mobile/step-7` | one step, by the scenario's own step number |
+| `#login/-/-/step-2` | the same, in a run with no locale and no layout |
+| `#cause/1a2b3c4d` | a failure cause, on the index (by its fingerprint) |
+
+On a scenario's page they are plain anchors (no JavaScript). `index.html#…` sends them to
+that page with a small inline script. When the run does not have what a link names, the
+closest thing opens and a line says so. **Paste a step's link in a ticket or a PR** rather
+than "it failed at step 7": published to Pages, it opens on the step.
+
 ### Failure causes are the feature
 
 The report groups failures by *normalised* failure text, biggest first — the same
 grouping the parallel console summary uses. One broken selector across forty scenarios
 is **one row with a count**, not forty tracebacks, and the full tail is shown once per
-cause. When a user says "the CI output is unreadable", this is the answer.
+cause. The row's headline is the error and its message, with no absolute path; the log
+lines are verbatim, machine paths included, so read them before publishing a failing run
+(`SECURITY.md`, "Results bundles"). When a user says "the CI output is unreadable", this is the answer.
 
 ### Flags worth knowing
 
@@ -304,6 +332,9 @@ same information for a machine:
 | "This run recorded no test outcomes" + verdict `unknown` | No run was recorded (an `output/` tree from a Steppy older than 0.9.1 run without `--bundle`), so there are no event records. The scenarios listed were reconstructed from captures on disk. **Not** `passed` — that would be a claim with no evidence. |
 | "Assert strength is not shown" | Coverage was rebuilt from a detached bundle's raw records, which carry no scenario markdown to count assert steps in. Every endpoint would otherwise read as weakly covered. |
 | "Truncated" | A `--max-size` budget dropped artifacts that belonged in the bundle. Screenshots and sidecars are never dropped. |
+| A screenshot with no outline | Its step has no target (`navigate`, `assert`), the element was not found, or its sidecar could not be read. Never an error. |
+| "refused N file(s) the manifest names by a path that may leave the bundle" | The bundle names files outside it (`..`, an absolute path, a link that leads out). None of them was read and the rest renders, but **`steppy bundle create` never writes such a path**: ask where this bundle came from before trusting or publishing it. |
+| A variant reads "Flaky" | Its attempts disagree: one failed and a later one passed. Flakiness across runs needs a history, which one run does not have. |
 
 Traces and videos are **named, not copied** — a Playwright trace needs
 `playwright show-trace` to open, so a link would be a dead end.

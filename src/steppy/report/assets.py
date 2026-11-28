@@ -27,11 +27,13 @@ where only a handful of steps differ per layout, that is most of the payload.
 from __future__ import annotations
 
 import re
+import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from ..contracts.bundle import BundleFile, BundleManifest
+from ..safe_paths import is_reserved
 
 #: Copy every step capture, only the ones belonging to a variant that did not
 #: pass, or none at all.
@@ -60,6 +62,9 @@ def sanitise(component: str) -> str:
     unzip on Windows is a bug someone else has to diagnose.
     """
     cleaned = _SAFE.sub("-", component or "").strip(".-")
+    if cleaned and is_reserved(cleaned):
+        # A device on Windows (``con``, ``nul.x``), which would be written nowhere.
+        cleaned = f"_{cleaned}"
     return cleaned or _UNSET
 
 
@@ -139,6 +144,33 @@ def plan_assets(
             "GitHub Pages caps a published site at 1 GB — consider --screenshots failed"
         )
     return plan
+
+
+def image_sizes(plan: AssetPlan) -> dict[str, tuple[int, int]]:
+    """``{url: (width, height)}`` of the captures the plan copied, in their own pixels.
+
+    What places a click hotspot: the outline is in percent of the image, and a static
+    page cannot measure one. Read from the copies, after the fetch.
+    """
+    sizes: dict[str, tuple[int, int]] = {}
+    for path, target in plan.into.items():
+        size = png_size(target)
+        if size is not None:
+            sizes[plan.urls[path]] = size
+    return sizes
+
+
+def png_size(path: Path) -> Optional[tuple[int, int]]:
+    """The width and height a PNG's header states, or ``None`` for any other file."""
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(24)
+    except OSError:
+        return None
+    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+        return None
+    width, height = struct.unpack(">II", head[16:24])
+    return (width, height) if width and height else None
 
 
 def _sorted_captures(manifest: BundleManifest) -> list[BundleFile]:

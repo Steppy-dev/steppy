@@ -2,11 +2,11 @@
 
 The coordinator's log tailer pushes every line from each worker
 container's stdout (``docker compose logs -f``) into
-:meth:`EventBus.feed_line`. Lines starting with ``STEPPY-EVT::`` are
-parsed into typed events that update an internal state model; every
-other line falls through to a :class:`RawLogChannel` that either prints
-it with the ``[wN]`` prefix (``--verbose``) or writes it only to disk
-for post-mortem.
+:meth:`EventBus.feed_line`. A line is parsed into a typed event from
+where ``STEPPY-EVT::`` starts in it, and updates an internal state model;
+what pytest wrote before it, and every other line, falls through to a
+:class:`RawLogChannel` that either prints it with the ``[wN]`` prefix
+(``--verbose``) or writes it only to disk for post-mortem.
 
 The state model is the single source of truth for the live renderer:
 per-worker current scenario / current test, aggregate pass/fail counts,
@@ -27,7 +27,9 @@ Event grammar (one per line, fields ``::``-separated):
 ``outcome`` ∈ ``passed | failed | skipped | error``. The coordinator may
 synthesise two extra outcomes for in-flight tests when the worker
 container exits abnormally: ``interrupted`` (Ctrl-C) and
-``worker_died``. ``warning`` is a free-form diagnostic surfaced through
+``worker_died``. A test that ``--retries`` runs again in its process starts
+and ends once per attempt; the last attempt is its outcome, and it counts
+once. ``warning`` is a free-form diagnostic surfaced through
 the raw-log sink — used when the events plugin can't load, etc.
 ``worker-done`` is emitted by the worker right before it exits cleanly
 (queue drained); the coordinator-side :meth:`EventBus.mark_worker_finished`
@@ -50,7 +52,8 @@ _EVT_PREFIX = "STEPPY-EVT::"
 
 @dataclass
 class TestRecord:
-    """One test's bookkeeping. Keyed by ``(worker_id, nodeid)`` in the bus."""
+    """One test's bookkeeping, for its latest attempt. Keyed by
+    ``(worker_id, nodeid)`` in the bus."""
 
     nodeid: str
     worker_id: str
@@ -59,6 +62,7 @@ class TestRecord:
     finished_at: Optional[float] = None
     outcome: Optional[str] = None
     fail_tail: Optional[str] = None
+    attempt: int = 1
 
 
 @dataclass
@@ -109,7 +113,6 @@ class EventBus:
         self._tests: dict[tuple[str, str], TestRecord] = {}
         self._scenarios: dict[tuple[str, str], ScenarioRecord] = {}
         self._raw_sink = raw_line_sink
-        self._counts: dict[str, int] = {k: 0 for k in _TERMINAL_OUTCOMES}
         self._started_at = time.time()
         # Subscribers fire after each event apply — used by the milestone
         # renderer to print one line per state change. The callback runs
@@ -121,18 +124,24 @@ class EventBus:
     def feed_line(self, worker_id: str, line: str) -> None:
         """Called by the log tailer for every line received from ``worker_id``."""
         line = line.rstrip("\r\n")
-        if not line.startswith(_EVT_PREFIX):
+        # pytest leaves its line open after a progress letter (``.``, ``F``) or a
+        # test's name, and writes a test's letter before our ``test-end`` hook
+        # runs, so an event often starts in the middle of a line.
+        before, prefix, body = line.partition(_EVT_PREFIX)
+        if not prefix:
             if self._raw_sink is not None:
                 self._raw_sink(worker_id, line)
             return
         try:
-            kind = self._parse_and_apply(worker_id, line[len(_EVT_PREFIX) :])
+            kind = self._parse_and_apply(worker_id, body)
         except Exception:
             # Malformed event — fall through to the raw channel so it's
             # visible somewhere instead of silently dropped.
             if self._raw_sink is not None:
                 self._raw_sink(worker_id, line)
             return
+        if before and self._raw_sink is not None:
+            self._raw_sink(worker_id, before)
         if self._subscribers:
             snap = self.snapshot()
             for sub in list(self._subscribers):
@@ -152,10 +161,17 @@ class EventBus:
         """Return a shallow copy of the current state. Renderers must not
         mutate the returned containers."""
         with self._lock:
+            tests = list(self._tests.values())
+            # Counted from the records rather than tallied event by event, so a
+            # test counts once however many times it ended.
+            counts = {k: 0 for k in _TERMINAL_OUTCOMES}
+            for test in tests:
+                if test.outcome in counts:
+                    counts[test.outcome] += 1
             return EventBusSnapshot(
                 workers=dict(self._workers),
-                counts=dict(self._counts),
-                tests=list(self._tests.values()),
+                counts=counts,
+                tests=tests,
                 scenarios=list(self._scenarios.values()),
                 wall_clock_started=self._started_at,
             )
@@ -183,7 +199,6 @@ class EventBus:
                 if rec is not None and rec.outcome is None:
                     rec.outcome = "worker_died" if died else "interrupted"
                     rec.finished_at = time.time()
-                    self._counts[rec.outcome] += 1
                 ws.current_test = None
                 ws.current_test_started_at = None
 
@@ -240,11 +255,10 @@ class EventBus:
                 #      arrives — we have to fabricate a record from scratch.
                 #
                 #   2. ``test-start`` arrived (the renderer shows the running
-                #      test name) but ``test-end`` never did — observed when
-                #      pytest's stdout capture intercepts the call-phase
-                #      ``pytest_runtest_logreport`` hook, or when buffering
-                #      delays the line past container teardown. In this case
-                #      a TestRecord exists but its ``outcome`` is None.
+                #      test name) but ``test-end`` never did — pytest died
+                #      inside the test, or buffering delayed the line past
+                #      container teardown. In this case a TestRecord exists
+                #      but its ``outcome`` is None.
                 #
                 # Handle both: assign a synthetic outcome to every incomplete
                 # record for this scenario, and create a fresh one only when
@@ -264,7 +278,6 @@ class EventBus:
                 for incomplete in pending_for_scenario:
                     incomplete.outcome = synthetic_outcome
                     incomplete.finished_at = now
-                    self._counts[synthetic_outcome] += 1
                 if not pending_for_scenario and not completed_for_scenario:
                     synthetic_nodeid = f"<synthetic>::{slug}"
                     self._tests[(worker_id, synthetic_nodeid)] = TestRecord(
@@ -275,7 +288,6 @@ class EventBus:
                         finished_at=now,
                         outcome=synthetic_outcome,
                     )
-                    self._counts[synthetic_outcome] += 1
                 if ws.current_scenario == slug:
                     ws.current_scenario = None
                     ws.scenario_started_at = None
@@ -302,7 +314,6 @@ class EventBus:
                     if rec is not None and rec.outcome is None:
                         rec.outcome = "worker_died"
                         rec.finished_at = now
-                        self._counts["worker_died"] += 1
                     ws.current_test = None
                     ws.current_test_started_at = None
 
@@ -324,11 +335,13 @@ class EventBus:
                 started_at = float(ts_str)
                 ws.current_test = nodeid
                 ws.current_test_started_at = started_at
+                previous = self._tests.get((worker_id, nodeid))
                 self._tests[(worker_id, nodeid)] = TestRecord(
                     nodeid=nodeid,
                     worker_id=worker_id,
                     scenario_slug=ws.current_scenario or "",
                     started_at=started_at,
+                    attempt=previous.attempt + 1 if previous is not None else 1,
                 )
 
             elif kind == "test-end":
@@ -348,8 +361,6 @@ class EventBus:
                     self._tests[(worker_id, nodeid)] = rec
                 rec.outcome = outcome
                 rec.finished_at = now
-                if outcome in self._counts:
-                    self._counts[outcome] += 1
                 if ws.current_test == nodeid:
                     ws.current_test = None
                     ws.current_test_started_at = None

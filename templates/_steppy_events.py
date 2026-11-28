@@ -30,6 +30,12 @@ Event grammar (one per line):
 ``outcome`` is one of ``passed|failed|skipped|error``. ``error`` covers
 setup/teardown failures (pytest's own ``E`` status).
 
+A test that ``--retries`` runs again in the same process (pytest-rerunfailures)
+has one ``test-start`` / ``test-end`` pair per attempt, and the last attempt is
+the test's outcome: a reader starts a test over at each ``test-start``. An
+attempt that is run again ends ``failed`` (``error`` for setup/teardown) with
+its tail, never with the plugin's own ``rerun``.
+
 The JSONL sink encodes the SAME vocabulary — same ``kind`` names, same
 ``outcome`` values — so the two are two encodings of one grammar rather than two
 grammars. Four kinds never appear in it (``scenario-start``, ``scenario-end``,
@@ -56,11 +62,11 @@ _FAIL_TAIL_LINES = 15
 #: sidecars follow. Bump only on a breaking change.
 _JSONL_SCHEMA_VERSION = 1
 
-# Tracks which nodeids have already had a terminal event emitted so we
-# don't double-count when teardown also reports. Reset per pytest session
-# (module-level state is fine because the worker spawns one pytest
-# subprocess per scenario).
-_emitted_end: set[str] = set()
+# The outcome each nodeid's current attempt ended with, so we don't
+# double-count when teardown also reports. An entry goes when the next attempt
+# starts, and all of them go with the process (module-level state is fine
+# because the worker spawns one pytest subprocess per scenario).
+_emitted_end: dict = {}
 
 # Set by pytest_configure — the pytest CaptureManager plugin. We use it to
 # suspend fd-level capture around every emit so the ``STEPPY-EVT::*`` lines
@@ -185,6 +191,7 @@ def _tail(text: str, n: int = _FAIL_TAIL_LINES) -> str:
 
 
 def _emit_end(nodeid: str, outcome: str, report) -> None:
+    _emitted_end[nodeid] = outcome
     duration_ms = int((getattr(report, "duration", 0.0) or 0.0) * 1000)
     _emit("test-end", nodeid, outcome, str(duration_ms))
     _record("test-end", nodeid, outcome=outcome, duration_ms=duration_ms)
@@ -247,6 +254,8 @@ def pytest_runtest_protocol(item, nextitem):
 
 
 def pytest_runtest_logstart(nodeid, location) -> None:
+    # pytest-rerunfailures fires this once per attempt: the test starts over.
+    _emitted_end.pop(nodeid, None)
     _emit("test-start", nodeid, f"{time.time():.3f}")
     _record("test-start", nodeid)
 
@@ -254,37 +263,42 @@ def pytest_runtest_logstart(nodeid, location) -> None:
 def pytest_runtest_logreport(report) -> None:
     nodeid = report.nodeid
 
-    # If we already emitted a terminal event for this nodeid, only surface
-    # an additional fail-tail when teardown itself blew up — useful for
-    # debugging fixture cleanup errors. We don't upgrade the outcome.
+    # pytest-rerunfailures relabels a failed phase ``rerun`` when it is about to
+    # run the test again (so ``report.failed`` is False). That attempt failed.
+    rerun = report.outcome == "rerun"
+    failed = report.failed or rerun
+
+    # If this attempt already ended, only surface an additional fail-tail when
+    # teardown itself blew up — useful for debugging fixture cleanup errors. We
+    # don't upgrade the outcome, unless the teardown failure is why the test is
+    # run again: an attempt that passed would not be.
     if nodeid in _emitted_end:
-        if report.when == "teardown" and report.failed and report.longrepr is not None:
-            tail_b64 = _b64(_tail(str(report.longrepr)))
-            _emit("test-fail-tail", nodeid, tail_b64)
-            _record("test-fail-tail", nodeid, tail_b64=tail_b64, phase="teardown")
+        if report.when == "teardown" and failed:
+            if rerun and _emitted_end[nodeid] not in ("failed", "error"):
+                _emit_end(nodeid, "error", report)
+            elif report.longrepr is not None:
+                tail_b64 = _b64(_tail(str(report.longrepr)))
+                _emit("test-fail-tail", nodeid, tail_b64)
+                _record("test-fail-tail", nodeid, tail_b64=tail_b64, phase="teardown")
         return
 
     if report.when == "setup":
-        if report.failed:
+        if failed:
             _emit_end(nodeid, "error", report)
-            _emitted_end.add(nodeid)
         elif report.skipped:
             _emit_end(nodeid, "skipped", report)
-            _emitted_end.add(nodeid)
         # passed setup → wait for the call phase
         return
 
     if report.when == "call":
-        # outcome ∈ {passed, failed, skipped}
-        _emit_end(nodeid, report.outcome, report)
-        _emitted_end.add(nodeid)
+        # outcome ∈ {passed, failed, skipped}, or rerun
+        _emit_end(nodeid, "failed" if rerun else report.outcome, report)
         return
 
     # teardown phase, terminal not yet emitted (rare: setup passed, no call
     # report was produced). Surface teardown failure as error.
-    if report.when == "teardown" and report.failed:
+    if report.when == "teardown" and failed:
         _emit_end(nodeid, "error", report)
-        _emitted_end.add(nodeid)
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:

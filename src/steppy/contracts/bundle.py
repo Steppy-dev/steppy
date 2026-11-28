@@ -155,6 +155,8 @@ class BundleTest(_Wire):
     duration_ms: Optional[int] = None
     locale: Optional[str] = None
     layout: Optional[str] = None
+    #: The last lines of the failure. On a test that passed on a retry, those of
+    #: the failure it recovered from.
     fail_tail_b64: Optional[str] = None
     #: 1-based index of the step that was in flight when the test died — the
     #: scenario's own step number, so it survives steps skipped by ``only-in:``

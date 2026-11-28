@@ -1,0 +1,27 @@
+{# One screenshot with its click hotspot.
+
+   The outlines need a box that is exactly the image, so the image is never cropped or
+   letterboxed by object-fit. Two ways it fits instead:
+
+   - thumb(shot, root)  as wide as its frame; the frame crops its bottom (the run page);
+   - framed(shot, root, w, h)  as large as fits in w by h pixels, never above its own
+     size (a scenario's page).
+
+   The outlines are percentages of the image, so they stay on their target at any size.
+   They are decorative: the step's words already say what it acted on.
+#}
+{% macro marks(shot) -%}
+{% if shot.marks %}<span class="steppy-marks" aria-hidden="true">{% for m in shot.marks %}<span class="steppy-mark-box" style="left:{{ m.left }}%;top:{{ m.top }}%;width:{{ m.width }}%;height:{{ m.height }}%"></span>{% endfor %}</span>{% endif %}
+{%- endmacro %}
+
+{% macro image(shot, root) -%}
+<img src="{{ root }}{{ shot.url }}" alt="{{ shot.alt }}" loading="lazy"{% if shot.width %} width="{{ shot.width }}" height="{{ shot.height }}"{% endif %}>
+{%- endmacro %}
+
+{% macro thumb(shot, root, label, class='steppy-thumb') -%}
+<a class="{{ class }}" href="{{ root }}{{ shot.url }}" target="_blank" rel="noopener" aria-label="{{ label }}"><span class="steppy-shot">{{ image(shot, root) }}{{ marks(shot) }}</span></a>
+{%- endmacro %}
+
+{% macro framed(shot, root, label, w, h) -%}
+<a class="steppy-frame-link" href="{{ root }}{{ shot.url }}" target="_blank" rel="noopener" aria-label="{{ label }}"><span class="steppy-frame-box"><span class="steppy-shot"{% if shot.width %} style="width:min(100%, {{ '%.2f' | format([w, h * shot.width / shot.height, shot.width] | min) }}px)"{% endif %}>{{ image(shot, root) }}{{ marks(shot) }}</span></span></a>
+{%- endmacro %}

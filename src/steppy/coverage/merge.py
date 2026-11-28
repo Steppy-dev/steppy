@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..parser import parse_scenario_file
+from ..safe_paths import is_plain_name, shown, unsafe_reason
 from .normalize import (
     classify_request,
     compile_extra_patterns,
@@ -293,7 +294,11 @@ def count_scenario_asserts(scenarios_dir: Path, scenario_id: str) -> int:
     Counts both ``action: assert`` steps and other actions carrying an
     ``expect:`` — the same set the generated test wraps in ``expect()``.
     """
-    path = Path(scenarios_dir) / f"{scenario_id}.md"
+    name = f"{scenario_id}.md"
+    if unsafe_reason(name):
+        # The id is a record's own text, and a record may come from another machine.
+        return 0
+    path = Path(scenarios_dir) / name
     if not path.is_file():
         return 0
     try:
@@ -326,6 +331,8 @@ def merge_run(settings: CoverageSettings, run_id: str | None = None) -> dict:
                 f"no coverage runs found under {Path(settings.records_dir) / 'raw'} — "
                 "record one with `steppy run --coverage`"
             )
+    if not is_plain_name(run_id):
+        raise MergeError(f"not a coverage run id: {shown(run_id)}")
     run_dir = Path(settings.records_dir) / "raw" / run_id
     if not run_dir.is_dir():
         raise MergeError(f"coverage run directory not found: {run_dir}")

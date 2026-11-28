@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-28
+
 ### Added
 - **`steppy run --upload`** sends the run to Steppy Cloud once the tests are
   done, failed or not, and prints the run's URL. It reads `STEPPY_API_KEY` (the
@@ -51,8 +53,44 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   scenario without a mask generates the same test file as before.
 - **`steppy run` and `steppy rerun` warn when a mask is declared and a trace or a
   video is on**: Playwright can mask neither. Nothing is turned off.
+- **Links into a run report**: `#<scenario>`, `#<scenario>/<locale>/<layout>` and
+  `#<scenario>/<locale>/<layout>/step-<n>` (`-` for no locale or no layout), the
+  same fragment as in Steppy Cloud. Every variant and every step has a link to
+  copy. They are plain anchors on a scenario's page and work there without
+  JavaScript. On the index a small inline script sends them to that page, and a
+  link the run cannot honour opens the closest thing it has and says so. A failure
+  cause has an anchor too, `#cause/<fingerprint>`.
+- **Click targets on the report's screenshots**: each capture is outlined where
+  its step clicked or typed, read from the run's own sidecars, one outline per
+  field of a form. "Hide target" removes them, with no script. A missing,
+  oversized or malformed sidecar only means no outline.
+- **`report.json`'s steps carry `captures`**, one per screenshot in the same
+  order: `url`, `viewport`, `device_scale_factor` and `boxes`, in CSS pixels of
+  the image (additive, `steppy_report: 1` unchanged).
+- **The report's header** shows the branch a pull or merge request targets, the
+  environment, the commit a CI really tested, uncommitted changes, and the CI job,
+  a link only when its recorded address is http or https.
 
 ### Changed
+- **The run report is in Steppy Cloud's design**, in the same order: the run and
+  its verdict, warnings, "Why it failed" with the first screenshots of each cause,
+  every scenario over its layouts (a row opens into its locales), then the first
+  failing variant with its steps; "Previous failing" and "Next failing" walk the
+  others. Scenarios go failing, flaky, passed, skipped, then not run, and a variant
+  that passed on a retry reads as flaky. Each scenario keeps its page, with a table
+  of its variants. Bricolage Grotesque and JetBrains Mono travel with the report
+  (two woff2 files and their OFL texts, 126 KB), and nothing is fetched from a
+  network. Screenshots open in a new tab.
+  **If your project overrides `templates/report/*`, redo it**: the stylesheet's
+  tokens and most class names changed, so an old `report.css` leaves the new pages
+  unstyled, and an old page still renders but not in the new design. The
+  `steppy-template` skill lists the tokens, the classes and the new partials
+  (`_topbar`, `_icons`, `_shot`, `_variant`, `_links`, `fonts/`).
+- **The package's license metadata names every license its files carry**:
+  `Apache-2.0 AND BSD-3-Clause AND MIT AND OFL-1.1` (Steppy, then Lit and Zod in the
+  player bundles, then the report's fonts), and the wheel's `.dist-info/licenses/`
+  holds each text: `LICENSE`, `NOTICE`, the bundles' `THIRD_PARTY_LICENSES.txt` and
+  both fonts' OFL texts. Steppy itself is still Apache-2.0.
 - **`steppy record` writes the masks it finds into the draft's front matter**
   (`mask:`) instead of printing a `screenshot.mask` block to paste.
 - **`steppy bundle upload` speaks the new protocol**: it builds the run's
@@ -105,14 +143,81 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with it.
 
 ### Fixed
+- **A failure cause's headline says what broke.** It could be a line of the
+  generated test (`_steppy_mark_step(3, …)`) or the absolute path of a file on the
+  machine that ran the tests, which a published report then showed. It is now the
+  error and its message (`AssertionError: Locator expected not to contain text
+  'failed'`), and an absolute path in it, Windows or POSIX, is reduced to its last
+  part. The console summary of a parallel run uses the same line. Causes are grouped
+  as before, with the same fingerprints. The failure's last log lines stay verbatim.
+- **The report's links to a failure cause pointed nowhere** (`#cause-…` had no
+  element), and **each warning of the run was listed twice**, on the page and in
+  the site's `report.json`.
+- **The report's table could hide a failure.** Of two tests of one variant it
+  showed the first, so a scenario's passing test hid its tour replay's failure: a
+  cell now shows the worst of them. A variant that ran without the run's layout or
+  locale (one scenario declares `layouts:`, another does not) was in no column: it
+  now has one, "default".
+- **Coverage records bundled under another run id** than the bundle's own are merged
+  into its report. They were left out before.
+- **`steppy run --workers N` could not build its worker image from a source
+  checkout.** `pyproject.toml` names `README.md`, which the `Dockerfile` did not
+  copy and `.dockerignore` excluded, so the image's `pip install` stopped with
+  "Readme file does not exist: README.md". Since 0.3.0; a pip-installed Steppy
+  builds another image and was not affected. The licence files were left out too,
+  without an error: the package in the image now has `LICENSE` and `NOTICE`.
 - **The GitHub Actions workflows run on `ubuntu-24.04`**: the one
   `steppy init --ci` writes and the default `runs-on` of the reusable
   `steppy-e2e.yml`. `ubuntu-latest` is now Ubuntu 26.04, where the Playwright
   Steppy pins (1.60) cannot install Chromium, so the browser step failed before
   any test ran. A workflow that already passes its own `runs-on` is unchanged;
   `steppy update` refreshes an unedited `steppy.yml`.
+- **`--retries` recorded a retried test as `rerun`.** The first attempt was taken
+  as the test's end, so a test that passed on its retry was reported as not
+  passing, in the report, the bundle and the upload, and one that failed every
+  time lost its failure text and its step. Each attempt is now recorded, a
+  retried one as failed (or as an error, in setup or teardown) with its text, and
+  the last one is the test's outcome: the manifest says `passed`, and
+  `report.json`'s `attempt_outcomes` says `["failed", "passed"]`. A test that
+  passed on a retry keeps the text of the failure it recovered from. In the live
+  progress of `--workers N` it counts once, as its last attempt ended.
+  **Run `steppy generate`**: the recorder is in `tests/e2e/`. A run retried by an
+  older suite still reads `rerun`, with a warning that says so.
+- **`--workers N` showed no test's own outcome in its live progress.** pytest writes
+  a progress letter before a test's `test-end` event, on the same line, so the
+  event was taken for log output. Every test of a scenario then got the outcome of
+  the scenario's exit code: one failing variant marked its passing ones failed, in
+  the progress and in the summary's test counts, and a CI log had no line per
+  test. The exit code, the report and the bundle were not affected.
+- **The summary of `--workers N` dropped a test's variant.** A node id such as
+  `test_checkout[fr-mobile]` was printed through Rich markup, which read the
+  brackets as a style and left `test_checkout`, so two failing variants of one
+  scenario looked the same. A cause's headline lost its locator the same way
+  (`[data-testid=save]`), and so did a path or a name with brackets, in the
+  summary and in the live table. Everything is printed as written now.
 
 ### Security
+- **A hostile results bundle could make `steppy report` write and read files
+  outside it.** In every release that has the command, and with nothing more than
+  rendering a bundle somebody else made:
+  - a coverage record's path in the manifest (`…/raw/../../…`) was **written to**
+    unchecked, from an archive as from an unpacked one;
+  - in an unpacked directory, any path in the manifest (`..`, absolute, another
+    drive, an UNC path, a symlink) was **read**, and a screenshot's copied into the
+    site;
+  - the manifest's run id named the directory coverage records were read from, and a
+    record's source-map digest and scenario id were joined to paths too.
+
+  A manifest path is now checked as text before the file system is touched (so an
+  UNC path never makes Windows sign in to its host), and must still be inside the
+  bundle once its links are followed. An entry that does not is never read: the
+  report says which ones it refused, and renders the rest. A `manifest.json` that
+  is itself a link out is an error. A run record (`output/.steppy-run.json`) or a
+  `--run-id` whose id is a path, and a record directory that links out of
+  `output/`, stop `steppy bundle create`, `steppy report` and the upload; symlinked
+  record files and Windows junctions in `output/` are skipped with a warning.
+  **If you rendered a bundle you did not make with an earlier version, upgrade, and
+  look at what that site holds before publishing it.**
 - **Failure screenshots ignored `screenshot.mask`.** The full-page capture of a
   failing test (`output/screenshots/_failures/`) was taken without the masks, in
   every version that has them, although `SECURITY.md` said every screenshot was
@@ -1346,7 +1451,8 @@ individual commit.
   `output:` also gained `extra: forbid`, so a `screenshot_dir:` typo now fails
   loudly instead of being swallowed.
 
-[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/Steppy-dev/steppy/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Steppy-dev/steppy/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/Steppy-dev/steppy/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/Steppy-dev/steppy/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Steppy-dev/steppy/compare/v0.8.1...v0.9.0

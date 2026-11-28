@@ -16,7 +16,15 @@ from typing import Any, Optional
 
 from .. import provenance as _provenance
 from ..contracts.bundle import BundleManifest, parse_manifest
-from ..runmeta import EVENTS_SUBDIR, JUNIT_SUBDIR, bundle_dirs, new_run_id, read_run_sidecar
+from ..runmeta import (
+    EVENTS_SUBDIR,
+    JUNIT_SUBDIR,
+    RUN_SIDECAR_NAME,
+    bundle_dirs,
+    new_run_id,
+    read_run_sidecar,
+)
+from ..safe_paths import UnsafePath, is_plain_name, member_path, shown
 from . import archive as _archive
 from . import manifest as _manifest
 from . import results as _results
@@ -193,13 +201,17 @@ def resolve_run_id(
 
     Explicit wins because a control plane mints its own identity and passes it
     in; everything below it is a convenience for a human at a terminal.
+
+    The id names the directories the run's records are read from and the archive
+    that is written, so it must be one plain name. An error, not a warning: the
+    sidecar that says otherwise is not this machine's (an unpacked bundle, say).
     """
     if explicit:
-        return explicit, "explicit"
+        return _plain_run_id(explicit, "--run-id"), "explicit"
 
     sidecar = read_run_sidecar(project_root)
     if sidecar and sidecar.get("run_id"):
-        return str(sidecar["run_id"]), "sidecar"
+        return _plain_run_id(str(sidecar["run_id"]), f"output/{RUN_SIDECAR_NAME}"), "sidecar"
 
     # Newest recorded run, by name. This is why ids are timestamp-prefixed.
     for parent in (output_dir / EVENTS_SUBDIR, output_dir / coverage_dirname / "raw"):
@@ -209,6 +221,22 @@ def resolve_run_id(
                 return names[-1], "discovered"
 
     return new_run_id(), "minted"
+
+
+def _plain_run_id(run_id: str, where: str) -> str:
+    if not is_plain_name(run_id):
+        raise BundleError(f"refusing the run id {shown(run_id)} ({where}): a run id is one plain name, not a path")
+    return run_id
+
+
+def _check_records_dir(output_dir: Path, directory: Path) -> None:
+    """Refuse a run's record directory that a link takes out of ``output/``."""
+    if not directory.exists():
+        return
+    try:
+        member_path(output_dir, directory.relative_to(output_dir).as_posix())
+    except UnsafePath as e:
+        raise BundleError(f"refusing to read {directory}: {e}") from e
 
 
 def resolve_metadata(
@@ -358,6 +386,9 @@ def plan_bundle(
         # A relocated output dir: bundle_dirs assumes <root>/output.
         events_dir = output_dir / EVENTS_SUBDIR / resolved_run_id
         junit_dir = output_dir / JUNIT_SUBDIR / resolved_run_id
+    for directory in (events_dir, junit_dir):
+        _check_records_dir(output_dir, directory)
+        warnings.extend(_results.linked_files(directory, output_dir))
 
     tests, test_warnings = _results.collect_tests(events_dir, junit_dir)
     warnings.extend(test_warnings)

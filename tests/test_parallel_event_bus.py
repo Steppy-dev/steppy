@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import base64
 
+import pytest
+
 from steppy._parallel.event_bus import EventBus, RawLogChannel
+from tests.test_bundle_events_sink import _PLUGIN_PATH
+from tests.test_reruns import _CONFTEST
+
+pytest_plugins = ["pytester"]
 
 
 def _feed_events(bus: EventBus, worker_id: str, lines: list[str]) -> None:
@@ -26,6 +32,64 @@ def test_non_event_lines_route_to_raw_sink():
     bus.feed_line("w1", "regular pytest line")
     bus.feed_line("w2", "another line")
     assert raw_lines == [("w1", "regular pytest line"), ("w2", "another line")]
+
+
+@pytest.mark.parametrize(
+    "before",
+    [".", "F", "R", "..F [ 50%]", "tests/e2e/test_a.py ", "tests/e2e/test_a.py::t PASSED [ 50%]"],
+)
+def test_an_event_is_read_wherever_pytest_left_the_line(before):
+    """pytest keeps its line open after a progress letter or a test's name."""
+    raw_lines: list[tuple[str, str]] = []
+    bus = EventBus(raw_line_sink=lambda wid, line: raw_lines.append((wid, line)))
+    bus.feed_line("w1", "STEPPY-EVT::test-start::tests/e2e/test_a.py::t::1.0")
+    bus.feed_line("w1", f"{before}STEPPY-EVT::test-end::tests/e2e/test_a.py::t::passed::10\r\n")
+    assert bus.snapshot().counts["passed"] == 1
+    assert raw_lines == [("w1", before)]  # still in the log, without the event
+
+
+def test_a_line_that_only_mentions_the_prefix_is_logged_whole():
+    raw_lines: list[tuple[str, str]] = []
+    bus = EventBus(raw_line_sink=lambda wid, line: raw_lines.append((wid, line)))
+    bus.feed_line("w1", 'E   assert "STEPPY-EVT::" in text')
+    assert raw_lines == [("w1", 'E   assert "STEPPY-EVT::" in text')]
+    assert bus.snapshot().tests == []
+
+
+_VARIANTS = """
+import pytest
+
+@pytest.mark.parametrize("locale", ["fr", "nl", "de"])
+def test_flow(locale):
+    if locale == "de":
+        pytest.skip("not now")
+    assert locale == "fr", "boom"
+"""
+
+
+@pytest.mark.parametrize("verbosity", [["-q"], [], ["-v"], ["-s"]])
+def test_a_real_run_reports_every_test_with_its_own_outcome(pytester, monkeypatch, verbosity):
+    """A failing variant must not take the passing ones down with it: their
+    ``test-end`` used to be lost behind pytest's progress letter, so every test of
+    the scenario took the outcome of its exit code."""
+    monkeypatch.setenv("STEPPY_EMIT_EVENTS", "1")
+    monkeypatch.delenv("STEPPY_EVENTS_DIR", raising=False)
+    pytester.makepyfile(_steppy_events=_PLUGIN_PATH.read_text(encoding="utf-8"), test_flow=_VARIANTS)
+    pytester.makeconftest(_CONFTEST)
+    result = pytester.runpytest_subprocess("-p", "no:cacheprovider", *verbosity)
+
+    bus = EventBus()
+    bus.feed_line("w1", "STEPPY-EVT::scenario-start::flow::w1::1.0")
+    for line in result.outlines:
+        bus.feed_line("w1", line)
+    snap = bus.snapshot()
+    assert {k: n for k, n in snap.counts.items() if n} == {"passed": 1, "failed": 1, "skipped": 1}
+    assert snap.workers["w1"].current_test is None
+
+    bus.feed_line("w1", "STEPPY-EVT::scenario-end::flow::w1::1::100")
+    assert bus.snapshot().counts == snap.counts
+    (failed,) = [t for t in snap.tests if t.outcome == "failed"]
+    assert failed.nodeid.endswith("[nl]") and "boom" in failed.fail_tail
 
 
 def test_malformed_event_falls_through_to_raw_sink():

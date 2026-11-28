@@ -205,6 +205,7 @@ def read_members(
     *,
     into: Optional[dict[str, Path]] = None,
     texts: Optional[set[str]] = None,
+    max_bytes: Optional[int] = None,
 ) -> tuple[dict[str, bytes], list[str]]:
     """Extract selected members in **one** sequential pass.
 
@@ -223,6 +224,9 @@ def read_members(
     writes only to paths a caller already decided on, and refuses anything that
     is not a regular file (a hostile archive can carry symlinks and hardlinks,
     for which ``extractfile`` returns ``None`` anyway).
+
+    A text whose member is over ``max_bytes`` is left out, unread and without a
+    warning: the caller said what it can use.
     """
     wanted_files = dict(into or {})
     wanted_texts = set(texts or ())
@@ -246,6 +250,8 @@ def read_members(
                 continue
             seen.add(name)
             if name in wanted_texts:
+                if max_bytes is not None and member.size > max_bytes:
+                    continue
                 payload = handle.read()
                 fetched[name] = payload
                 target = wanted_files.get(name)

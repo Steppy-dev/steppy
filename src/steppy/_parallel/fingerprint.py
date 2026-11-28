@@ -79,20 +79,137 @@ def fingerprint(tail: str) -> str:
     return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:8]
 
 
+#: pytest's gutter: what follows is the error's own text, not source code.
+_GUTTER = re.compile(r"^E(?:\s+|$)")
+
+#: ``TimeoutError: Page.click: …``, ``playwright._impl._errors.Error: …``, or the bare
+#: name of one: where pytest puts what went wrong.
+_NAMED = re.compile(
+    r"(?:[A-Za-z_]\w*\.)*(\w*(?:Error|Exception|Failure|Failed|Timeout|Interrupt|Exit))(?::\s+(\S.*)|:?\s*)$"
+)
+
+#: pytest's last line, ``tests/e2e/test_pay.py:41: AssertionError``: only its type says
+#: anything, and its path is the machine's.
+_LOCATION = re.compile(r"(?:.*[\\/])?[^\\/:\s]+\.py:\d+:\s+(?:[A-Za-z_]\w*\.)*([A-Za-z_]\w*)\s*$")
+
+#: What Steppy's generated test prints around each step, and the banners above them.
+_GENERATED = re.compile(r"^>?\s*(?:_steppy_\w+\(|#)")
+
+#: The lines of a Playwright call log that say it tried, not why it could not.
+_CALL_LOG_STEP = re.compile(
+    r"^(?:attempting|retrying|scrolling|performing|navigating|done|waiting \d|waiting for element to be"
+    r"|locator resolved to|fill\(|Call log:)",
+    re.IGNORECASE,
+)
+_CALL_LOG_BULLET = re.compile(r"^(?:\d+\s*×\s*|-\s+)+")
+
+# Absolute paths, for :func:`without_paths`. A run report is published, and a headline is
+# the part of a failure everybody reads: it says what broke, never where the checkout is.
+_FILE_URL = re.compile(r"file://[^\s'\"<>]*/")
+_WINDOWS_PATH = re.compile(
+    r"(?<![\w])(?:[A-Za-z]:\\+(?:[^\\/:*?\"'<>|\r\n]+\\+)*|[A-Za-z]:/+(?:[^\\/:*?\"'<>|\s]+/+)*)"
+)
+_UNC_PATH = re.compile(r"(?<![\w\\:])\\\\+(?:[^\\/:*?\"'<>|\s]+\\+)+")
+#: A POSIX path under a directory only a machine has, or one that ends in a source file.
+_POSIX_MACHINE = re.compile(
+    r"(?<![\w/:.~-])/(?:home|Users|root|tmp|private|var|opt|usr|etc|mnt|media|proc|builds|__w)/"
+    r"(?:[^\s/'\"<>()\[\]{},;:|]+/)*"
+)
+_POSIX_SOURCE = re.compile(
+    r"(?<![\w/:.~-])/(?:[^\s/'\"<>()\[\]{},;:|]+/)+(?=[^\s/'\"<>()\[\]{},;:|]+\.(?:py|pyc|so|js|ts)\b)"
+)
+#: One under a directory an app may have too, or any other: only where the line is not
+#: about an address of the app.
+_POSIX_SHARED = re.compile(
+    r"(?<![\w/:.~-])/(?:srv|build|workspaces?|github|runner|steppy|data|app|code|repo|src)/"
+    r"(?:[^\s/'\"<>()\[\]{},;:|]+/)*"
+)
+_POSIX_PATH = re.compile(r"(?<![\w/:.~=@-])/(?:[^\s/'\"<>()\[\]{},;:|]+/)+")
+_ABOUT_AN_ADDRESS = re.compile(r"\burls?\b|https?:|navigat|goto|\bhref\b|\broute|locator|xpath|selector", re.IGNORECASE)
+
+
+def without_paths(line: str) -> str:
+    """*line* with every absolute path reduced to its last part.
+
+    Windows drives and UNC paths, ``file:`` addresses, and POSIX paths. An address of
+    the application (``/checkout/done``) is not a path of the machine: where the line is
+    about one, only a path no address begins like is reduced.
+    """
+    line = _FILE_URL.sub("", line)
+    line = _WINDOWS_PATH.sub("", line)
+    line = _UNC_PATH.sub("", line)
+    line = _POSIX_MACHINE.sub("", line)
+    line = _POSIX_SOURCE.sub("", line)
+    if _ABOUT_AN_ADDRESS.search(line):
+        return line
+    return _POSIX_PATH.sub("", _POSIX_SHARED.sub("", line))
+
+
+def _named(text: str) -> str:
+    """``TimeoutError: Page.click: …`` when *text* is an error with its message, else nothing."""
+    match = _NAMED.match(text)
+    return f"{match.group(1)}: {match.group(2)}" if match and match.group(2) else ""
+
+
+def _named_in_gutter(lines: list[tuple[bool, str]]) -> str:
+    """The error the last block of gutter lines opens with.
+
+    The last block, because a chained error ends with the one that failed the test; its
+    first line, because what follows is that error's own detail, which may name another
+    (Playwright's ``Error: element(s) not found`` under an ``AssertionError``).
+    """
+    found, in_block = "", False
+    for gutter, text in lines:
+        if not gutter:
+            in_block = False
+            continue
+        named = "" if in_block else _named(text)
+        if named:
+            found, in_block = named, True
+    return found
+
+
 def headline(tail: str, max_len: int = 100) -> str:
     """The single most informative line of a failure tail, for the group label.
 
-    Prefers the last line that names an exception (that is where pytest puts the
-    actual error), else the last non-empty line — the bottom of a traceback is
-    almost always more useful than the top.
+    In order: the error pytest names in its gutter (``E   AssertionError: …``), the
+    assertion it rewrote (``E   assert 1 == 2``), an error named anywhere else, the type
+    pytest ends with beside the last thing its detail says, then the last line that
+    speaks. Never a line of the generated test, and no absolute path
+    (:func:`without_paths`). It labels a group and takes no part in making one: the
+    fingerprint reads the whole tail.
     """
-    lines = [ln.strip().lstrip("E").strip() for ln in tail.splitlines() if ln.strip()]
+    lines = []
+    for raw in tail.splitlines():
+        text = raw.strip()
+        gutter = _GUTTER.match(text)
+        if gutter:
+            text = text[gutter.end() :].strip()
+        if text:
+            lines.append((bool(gutter), text))
     if not lines:
         return "(no failure detail captured)"
-    chosen = next(
-        (ln for ln in reversed(lines) if re.search(r"\b(?:Error|Exception|assert|Timeout|Failed)\b", ln)),
-        lines[-1],
+
+    chosen = (
+        _named_in_gutter(lines)
+        or next((t for g, t in lines if g and t.startswith("assert ")), "")
+        or next((named for _g, t in reversed(lines) if (named := _named(t))), "")
     )
+    if not chosen:
+        kind = next((m.group(1) for _g, t in reversed(lines) if (m := _LOCATION.match(t) or _NAMED.match(t))), "")
+        # A long call log pushed the message out of the tail: the last reason it gives.
+        details = [_CALL_LOG_BULLET.sub("", t) for g, t in lines if g]
+        detail = next((d for d in reversed(details) if d and not _CALL_LOG_STEP.match(d) and not _NAMED.match(d)), "")
+        chosen = f"{kind}: {detail}" if kind and detail else kind or detail
+    if not chosen:
+        spoken = [t for _g, t in lines if not _GENERATED.match(t)]
+        chosen = next(
+            (t for t in reversed(spoken) if re.search(r"\b(?:Error|Exception|assert|Timeout|Failed)\b", t)),
+            spoken[-1] if spoken else "",
+        )
+    chosen = without_paths(chosen).strip()
+    if not chosen:
+        return "(no failure detail captured)"
     return chosen if len(chosen) <= max_len else chosen[: max_len - 1] + "…"
 
 

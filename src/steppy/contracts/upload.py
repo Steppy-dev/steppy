@@ -27,9 +27,10 @@ under the bundle contract's rules.
 deduplicate it and store it like a screenshot. Other files of kind ``report``
 can exist (anything under ``output/reports/``); the run's report is the one at
 that path. In it, every capture reference (``ReportStep.screenshots``,
-``ReportVariant.failure_screenshot``) is the file's **manifest path**, resolved
-to bytes through ``manifest.files[].sha256``. The server asked only for the
-files it wanted, so a reader must not assume it holds every file referenced.
+``ReportStep.captures[].url``, ``ReportVariant.failure_screenshot``) is the file's
+**manifest path**, resolved to bytes through ``manifest.files[].sha256``. The
+server asked only for the files it wanted, so a reader must not assume it holds
+every file referenced.
 
 **Idempotent by key.** Creating the run again with the same ``Idempotency-Key``
 returns the same ``run_id`` and the files still missing, which is how an

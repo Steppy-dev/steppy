@@ -108,3 +108,7 @@ private-terms.txt
 
 # Claude Code: per-user permission allowlist (the shared settings.json may be committed)
 .claude/settings.local.json
+# Claude Code: the git worktrees its sessions make. Ignored here and not only in
+# .git/info/exclude, because hatchling reads this file to decide what an sdist holds:
+# without the line, a locally built sdist carries every worktree's files.
+.claude/worktrees/

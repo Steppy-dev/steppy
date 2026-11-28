@@ -67,7 +67,8 @@ _EXTRA_MARKER_RE = re.compile(r"""extra\s*==\s*['"]([^'"]+)['"]""")
 # the new content would never land. Bump = one rebuild for everyone, once.
 #   1 → original
 #   2 → [retry,report] extras baked in
-WORKER_IMAGE_CONTRACT = "2"
+#   3 → the source-checkout build copies README.md, LICENSE and NOTICE
+WORKER_IMAGE_CONTRACT = "3"
 
 # Subdirectory of the coordinator's run tmp dir that holds a synthesized context.
 _CONTEXT_DIRNAME = "worker-build-context"
@@ -251,8 +252,8 @@ def synthesize_installed_context(*, package_root: Path, staging_dir: Path) -> Pa
         pkg/steppy/                 copy of the installed package
         pkg/steppy_dev-<ver>.dist-info/ so importlib.metadata works in the container
 
-    This exists because the repo-root ``Dockerfile`` COPYs ``pyproject.toml``,
-    ``hatch_build.py``, ``src/``, ``templates/``, ``skills/`` and
+    This exists because the repo-root ``Dockerfile`` COPYs ``pyproject.toml``
+    and the files it names, ``src/``, ``templates/``, ``skills/`` and
     ``CHANGELOG.md`` — none of which exist when steppy was installed as a
     wheel. The worker container only runs ``python -m steppy worker`` →
     pytest on the already-generated tests bind-mounted from the project, so a
